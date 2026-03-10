@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scorebot
+      POSTGRES_PASSWORD: scorebot
+      POSTGRES_DB: scorebot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scorebot"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  flyway:
+    image: flyway/flyway:11
+    depends_on:
+      db:
+        condition: service_healthy
+    command: migrate
+    volumes:
+      - ./migrations:/flyway/sql:ro
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/scorebot
+      FLYWAY_USER: scorebot
+      FLYWAY_PASSWORD: scorebot
+
+  bot:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://scorebot:scorebot@db:5432/scorebot
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./messages.yaml:/app/messages.yaml:ro
+
+volumes:
+  pgdata:

@@ -1,0 +1,43 @@
+score:
+  singular: "балл"
+  plural_few: "балла"       # для 2–4
+  plural_many: "баллов"     # для 0, 5+
+  icon: "⭐"
+
+reactions:
+  "❤️‍🔥": +3
+  "🔥": +3
+  "❤️": +2
+  "👍": +1
+  "😁": +1
+  "👎": -1
+  "💩": -2
+  "🤡": -3
+
+self_reaction_allowed: false
+
+limits:
+  daily_reactions_given: 25     # сколько засчитанных реакций А может поставить в сутки (в одном чате)
+  daily_score_received: 50      # сколько очков Б может получить в сутки (в одном чате)
+  max_message_age_hours: 36     # реакции на сообщения старше N часов игнорируются
+
+history:
+  retention_days: 3             # сколько дней хранить историю событий
+
+admin:
+  prefix: "coffee"
+  users:
+    - "shared_mutex"
+    - "ju57_4_cu63"
+
+mute:
+  cost_per_minute: 20           # стоимость 1 минуты мута в баллах
+  min_minutes: 1
+  max_minutes: 120
+
+tag:
+  cost_self: 50                 # сменить тег себе
+  cost_member: 100              # сменить тег обычному участнику
+  cost_admin: 200               # сменить тег админу/модератору
+  cost_owner: 500               # сменить тег создателю чата
+  max_length: 32                # максимальная длина тега

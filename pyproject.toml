@@ -1,0 +1,14 @@
+[project]
+name = "score-bot"
+version = "0.1.0"
+description = "Telegram bot for gamification via reactions"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.26.0",
+    "asyncpg>=0.31.0",
+    "dishka>=1.9.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3",
+]
