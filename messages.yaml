@@ -70,6 +70,7 @@ transfer_not_enough: "Недостаточно баллов. Хотите пер
 transfer_invalid_amount: "Сумма перевода должна быть положительным числом."
 transfer_success: "💸 {sender} → {receiver}: {amount} {score_word}. Ваш баланс: {sender_balance} {score_word_sender}."
 protect_usage: "🛡 Защита от мута на {hours} ч. — {cost} {score_word}.\nИспользование: /protect"
+protect_confirm: "🛡 Купить защиту от мута на {hours} ч. за <b>{cost} {score_word}</b>?\nВаш баланс: {balance} {score_word_balance}."
 protect_not_enough: "Недостаточно баллов. Нужно: {cost} {score_word}, у вас: {balance} {score_word_balance}."
 protect_success: "🛡 {user} купил защиту от мута на {hours} ч. за {cost} {score_word}. Баланс: {balance} {score_word_balance}."
 protect_extended: "🛡 Защита продлена до {until}. Списано: {cost} {score_word}. Баланс: {balance} {score_word_balance}."

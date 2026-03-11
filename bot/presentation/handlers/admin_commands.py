@@ -977,7 +977,7 @@ def create_admin_router(prefix: str) -> Router:  # prefix оставлен дл�
         if target.id == message.from_user.id:
             await message.reply(formatter._t["mute_self"])
             return
-        if minutes < mute_cfg.min_minutes or minutes > mute_cfg.max_minutes:
+        if minutes < 1:
             await message.reply(formatter._t["mute_invalid_minutes"].format(
                 min=mute_cfg.min_minutes, max=mute_cfg.max_minutes,
             ))
@@ -1422,7 +1422,6 @@ def create_admin_router(prefix: str) -> Router:  # prefix оставлен дл�
         message: Message,
         command: CommandObject,
         score_service: FromDishka[ScoreService],
-        protection_repo: FromDishka[IMuteProtectionRepository],
         formatter: FromDishka[MessageFormatter],
         config: FromDishka[AppConfig],
     ) -> None:
@@ -1436,15 +1435,6 @@ def create_admin_router(prefix: str) -> Router:  # prefix оставлен дл�
         cost = mute_cfg.protection_cost
         hours = mute_cfg.protection_duration_hours
 
-        if command.args:
-            # Если передали аргументы — показываем справку
-            await message.reply(formatter._t["protect_usage"].format(
-                hours=hours,
-                cost=cost,
-                score_word=p.pluralize(cost),
-            ))
-            return
-
         score = await score_service.get_score(user_id, chat_id)
         if score.value < cost:
             await message.reply(formatter._t["protect_not_enough"].format(
@@ -1455,9 +1445,68 @@ def create_admin_router(prefix: str) -> Router:  # prefix оставлен дл�
             ))
             return
 
-        existing = await protection_repo.get(user_id, chat_id)
-        now = datetime.now(TZ_MSK)
-        new_until = (existing if existing and existing > now else now) + timedelta(hours=hours)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(
+                text=f"✅ Да, потратить {cost} {p.pluralize(cost)}",
+                callback_data=f"protect:confirm:{user_id}:{chat_id}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data=f"protect:cancel:{user_id}",
+            ),
+        ]])
+        await message.reply(
+            formatter._t["protect_confirm"].format(
+                hours=hours,
+                cost=cost,
+                score_word=p.pluralize(cost),
+                balance=score.value,
+                score_word_balance=p.pluralize(score.value),
+            ),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+            reply_markup=kb,
+        )
+
+    @router.callback_query(F.data.startswith("protect:"))
+    @inject
+    async def cb_protect(
+        callback: CallbackQuery,
+        score_service: FromDishka[ScoreService],
+        protection_repo: FromDishka[IMuteProtectionRepository],
+        formatter: FromDishka[MessageFormatter],
+        config: FromDishka[AppConfig],
+    ) -> None:
+        async def safe_answer(text: str = "", alert: bool = False) -> None:
+            try:
+                await callback.answer(text, show_alert=alert)
+            except Exception:
+                pass
+
+        parts = callback.data.split(":")
+        action = parts[1]
+
+        # Только тот, кто вызвал /protect
+        owner_id = int(parts[2])
+        if callback.from_user.id != owner_id:
+            await safe_answer("Это не твоя кнопка.", alert=True)
+            return
+
+        if action == "cancel":
+            try:
+                await callback.message.edit_text("❌ Защита отменена.")
+            except Exception:
+                pass
+            await safe_answer()
+            return
+
+        # action == "confirm"
+        chat_id = int(parts[3])
+        mute_cfg = config.mute
+        p = formatter._p
+        cost = mute_cfg.protection_cost
+        hours = mute_cfg.protection_duration_hours
+        user_id = owner_id
 
         result = await score_service.spend_score(
             actor_id=user_id,
@@ -1467,43 +1516,51 @@ def create_admin_router(prefix: str) -> Router:  # prefix оставлен дл�
             emoji=SPECIAL_EMOJI["protect"],
         )
         if not result.success:
-            await message.reply(formatter._t["protect_not_enough"].format(
-                cost=cost,
-                score_word=p.pluralize(cost),
-                balance=result.current_balance,
-                score_word_balance=p.pluralize(result.current_balance),
-            ))
+            try:
+                await callback.message.edit_text(
+                    formatter._t["protect_not_enough"].format(
+                        cost=cost,
+                        score_word=p.pluralize(cost),
+                        balance=result.current_balance,
+                        score_word_balance=p.pluralize(result.current_balance),
+                    )
+                )
+            except Exception:
+                pass
+            await safe_answer()
             return
 
+        existing = await protection_repo.get(user_id, chat_id)
+        now = datetime.now(TZ_MSK)
+        new_until = (existing if existing and existing > now else now) + timedelta(hours=hours)
         await protection_repo.save(user_id, chat_id, new_until)
-        user_link_str = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
+
         until_str = new_until.strftime("%H:%M %d.%m")
+        user_link_str = user_link(callback.from_user.username, callback.from_user.full_name or "", user_id)
 
         if existing and existing > now:
-            await message.reply(
-                formatter._t["protect_extended"].format(
-                    until=until_str,
-                    cost=cost,
-                    score_word=p.pluralize(cost),
-                    balance=result.new_balance,
-                    score_word_balance=p.pluralize(result.new_balance),
-                ),
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
+            text = formatter._t["protect_extended"].format(
+                until=until_str,
+                cost=cost,
+                score_word=p.pluralize(cost),
+                balance=result.new_balance,
+                score_word_balance=p.pluralize(result.new_balance),
             )
         else:
-            await message.reply(
-                formatter._t["protect_success"].format(
-                    user=user_link_str,
-                    hours=hours,
-                    cost=cost,
-                    score_word=p.pluralize(cost),
-                    balance=result.new_balance,
-                    score_word_balance=p.pluralize(result.new_balance),
-                ),
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
+            text = formatter._t["protect_success"].format(
+                user=user_link_str,
+                hours=hours,
+                cost=cost,
+                score_word=p.pluralize(cost),
+                balance=result.new_balance,
+                score_word_balance=p.pluralize(result.new_balance),
             )
+
+        try:
+            await callback.message.edit_text(text, parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+        await safe_answer()
 
     # ── /help ─────────────────────────────────────────────────────
 
