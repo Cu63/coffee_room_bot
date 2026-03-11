@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 from bot.application.slots_service import SlotsConfig, SpinResult, SpinOutcome
 
@@ -15,6 +15,10 @@ _daily_spins: dict[tuple[int, int], tuple[date, int]] = defaultdict(
     lambda: (date.min, 0)
 )
 MAX_DAILY_SPINS = 20
+
+
+_last_spin: dict[tuple[int, int], datetime] = {}
+COOLDOWN = timedelta(hours=1)
 
 
 def guard_daily_limit(user_id: int, chat_id: int, bet: int) -> bool:
@@ -27,6 +31,16 @@ def guard_daily_limit(user_id: int, chat_id: int, bet: int) -> bool:
     if count >= MAX_DAILY_SPINS:
         return False
     _daily_spins[key] = (today, count + 1)
+    return True
+
+
+def guard_cooldown(user_id: int, chat_id: int, bet: int) -> bool:
+    key = (user_id, chat_id)
+    now = datetime.now(TZ_MSK)
+    last = _last_spin.get(key)
+    if last is not None and now - last < COOLDOWN:
+        return False
+    _last_spin[key] = now
     return True
 
 
@@ -76,6 +90,7 @@ def modifier_progressive_jackpot(
 
 def apply_custom_functions(cfg: SlotsConfig) -> None:
     """Вызвать в di.py при создании SlotsConfig."""
+    cfg.register_guard(guard_cooldown)
     cfg.register_guard(guard_daily_limit)
     cfg.register_modifier(modifier_lucky_hour)
     cfg.register_modifier(modifier_progressive_jackpot)

@@ -14,6 +14,7 @@ RTP (Return to Player) — процент возврата от всех ста�
 
 from __future__ import annotations
 
+from datetime import timedelta
 import random
 from dataclasses import dataclass, field
 from enum import Enum
@@ -210,3 +211,16 @@ class SlotsService:
 
         result.new_balance = new_balance
         return result
+    
+        # slots_service.py
+    def cooldown_remaining(self, user_id: int, chat_id: int) -> timedelta | None:
+        """Возвращает оставшееся время до следующего кручения или None если можно."""
+        from bot.application.slots_custom_functions import _last_spin, COOLDOWN
+        from datetime import datetime
+        from bot.domain.tz import TZ_MSK
+        key = (user_id, chat_id)
+        last = _last_spin.get(key)
+        if last is None:
+            return None
+        remaining = COOLDOWN - (datetime.now(TZ_MSK) - last)
+        return remaining if remaining.total_seconds() > 0 else None
