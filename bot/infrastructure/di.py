@@ -206,8 +206,8 @@ class RequestProvider(Provider):
         return MuteService(mute_repo)
 
     @provide
-    def get_giveaway_service(self, repo: IGiveawayRepository) -> GiveawayService:
-        return GiveawayService(repo)
+    def get_giveaway_service(self, repo: IGiveawayRepository, score_repo: IScoreRepository) -> GiveawayService:
+        return GiveawayService(repo, score_repo)
 
     @provide
     def get_slots_service(

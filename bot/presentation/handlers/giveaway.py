@@ -437,13 +437,13 @@ async def _finish_mute_roulette(
             await mute_service.save_mute(MuteEntry(
                 user_id=user_id,
                 chat_id=chat_id,
-                muted_by=0,
+                muted_by=data["creator_id"],
                 until_at=until,
             ))
             lines.append(f"🔇 {name} — мут {mute_minutes} мин")
         except TelegramBadRequest as e:
             err = str(e).lower()
-            if "not enough rights" in err or "creator" in err or "can't restrict" in err or "administrator" in err:
+            if any(w in err for w in ("not enough rights", "creator", "owner", "can't restrict", "administrator")):
                 lines.append(f"🛡️ {name} — администратор, мут невозможен")
             else:
                 logger.exception("Failed to mute %d in roulette", user_id)
