@@ -72,7 +72,7 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
                 mute_service = await scope.get(MuteService)
                 # Сканируем все ключи мут-рулеток
                 keys = []
-                async for key in store._r.scan_iter("muteroulette:*"):
+                async for key in store._r.scan_iter("mutegiveaway:*"):
                     keys.append(key)
                 now = _time.time()
                 for key in keys:
@@ -82,10 +82,12 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
                     import json
                     data = json.loads(raw)
                     if data["ends_at"] <= now:
-                        chat_id = int(key.split(":")[1])
-                        data = await store.mute_roulette_delete(chat_id)
+                        parts = key.split(":")
+                        chat_id = int(parts[1])
+                        roulette_id = parts[2]
+                        data = await store.mute_roulette_delete(chat_id, roulette_id)
                         if data:
-                            logger.info("Auto-finishing mute roulette in chat %d", chat_id)
+                            logger.info("Auto-finishing mutegiveaway %s in chat %d", roulette_id, chat_id)
                             await _finish_mute_roulette(bot, chat_id, data, mute_service)
         except Exception:
             logger.exception("Mute roulette loop failed")
