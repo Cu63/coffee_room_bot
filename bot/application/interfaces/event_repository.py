@@ -20,6 +20,11 @@ class IEventRepository(ABC):
     async def get_history(self, chat_id: int, since: datetime) -> list[ScoreEvent]: ...
 
     @abstractmethod
+    async def get_history_by_user(self, chat_id: int, user_id: int, since: datetime) -> list[ScoreEvent]:
+        """Все события где пользователь был актором или целью."""
+        ...
+
+    @abstractmethod
     async def delete_before(self, cutoff: datetime) -> int:
         """Удаляет события старше cutoff. Возвращает количество удалённых."""
         ...

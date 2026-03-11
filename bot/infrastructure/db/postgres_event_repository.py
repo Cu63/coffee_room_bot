@@ -65,6 +65,22 @@ class PostgresEventRepository(IEventRepository):
         )
         return [self._to_entity(r) for r in rows]
 
+    async def get_history_by_user(self, chat_id: int, user_id: int, since: datetime) -> list[ScoreEvent]:
+        rows = await self._conn.fetch(
+            """
+            SELECT id, chat_id, actor_id, target_id, message_id, emoji, delta, direction, created_at
+            FROM score_events
+            WHERE chat_id = $1
+              AND (actor_id = $2 OR target_id = $2)
+              AND created_at >= $3
+            ORDER BY created_at DESC
+            """,
+            chat_id,
+            user_id,
+            since,
+        )
+        return [self._to_entity(r) for r in rows]
+
     async def delete_before(self, cutoff: datetime) -> int:
         result = await self._conn.execute(
             "DELETE FROM score_events WHERE created_at < $1",

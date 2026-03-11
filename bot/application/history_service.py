@@ -13,3 +13,7 @@ class HistoryService:
     async def get_history(self, chat_id: int) -> list[ScoreEvent]:
         since = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
         return await self._event_repo.get_history(chat_id, since)
+
+    async def get_user_history(self, chat_id: int, user_id: int) -> list[ScoreEvent]:
+        since = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
+        return await self._event_repo.get_history_by_user(chat_id, user_id, since)

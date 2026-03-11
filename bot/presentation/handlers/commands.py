@@ -206,3 +206,146 @@ async def cmd_limits(
         f"  Ставка: {bjc.min_bet}–{bjc.max_bet} {p.pluralize(bjc.max_bet)}"
     )
     await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+
+
+# ── Кэш для пагинации истории пользователя ───────────────────────
+_uhistory_pages: TTLCache = TTLCache(maxsize=500, ttl=600)
+
+
+def _uhistory_kb(page: int, total: int, chat_id: int, uid: int, target_id: int) -> InlineKeyboardMarkup | None:
+    if total <= 1:
+        return None
+    buttons = []
+    if page > 0:
+        buttons.append(InlineKeyboardButton(text="◀️", callback_data=f"uhist:{chat_id}:{uid}:{target_id}:{page - 1}"))
+    buttons.append(InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="uhist:noop"))
+    if page < total - 1:
+        buttons.append(InlineKeyboardButton(text="▶️", callback_data=f"uhist:{chat_id}:{uid}:{target_id}:{page + 1}"))
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+
+
+@router.message(Command("uhistory"))
+@inject
+async def cmd_uhistory(
+    message: Message,
+    command: CommandObject,
+    history_service: FromDishka[HistoryService],
+    user_repo: FromDishka[IUserRepository],
+    formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
+) -> None:
+    """История всех операций с конкретным пользователем."""
+    if message.from_user is None:
+        return
+    chat_id = message.chat.id
+    uid = message.from_user.id
+
+    # Определяем цель: reply или @username
+    target = None
+    if message.reply_to_message and message.reply_to_message.from_user:
+        ru = message.reply_to_message.from_user
+        target = await user_repo.get_by_id(ru.id)
+    elif command.args:
+        username = command.args.strip().lstrip("@")
+        target = await user_repo.get_by_username(username)
+
+    if target is None:
+        await message.reply(
+            "Использование: <code>/uhistory @username</code> или реплай на сообщение.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    events = await history_service.get_user_history(chat_id, target.id)
+    target_link = user_link(target.username, target.full_name, target.id)
+
+    if not events:
+        await message.reply(
+            f"Нет событий для {target_link} за последние {config.history.retention_days} дн.",
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+        )
+        return
+
+    event_dicts: list[dict] = []
+    for e in events:
+        actor = await user_repo.get_by_id(e.actor_id)
+        tgt = await user_repo.get_by_id(e.target_id)
+        sign = "+" if e.delta > 0 else ""
+        event_dicts.append({
+            "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
+            "actor": user_link(actor.username, actor.full_name, actor.id) if actor else str(e.actor_id),
+            "target": user_link(tgt.username, tgt.full_name, tgt.id) if tgt else str(e.target_id),
+            "emoji": e.emoji,
+            "delta": f"{sign}{e.delta}",
+        })
+
+    page_size = config.system.history_page_size
+    pages = [event_dicts[i:i + page_size] for i in range(0, max(1, len(event_dicts)), page_size)]
+    _uhistory_pages[(chat_id, uid, target.id)] = pages
+
+    rows = [formatter._t["history_row"].format(**e) for e in pages[0]]
+    title = f"📋 История операций: {target_link}\n<i>За последние {config.history.retention_days} дн., всего {len(events)} событий</i>"
+    body = "\n".join(rows)
+    text = f"{title}\n<blockquote expandable>{body}</blockquote>"
+
+    kb = _uhistory_kb(0, len(pages), chat_id, uid, target.id)
+    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("uhist:"))
+@inject
+async def cb_uhistory(
+    callback: CallbackQuery,
+    user_repo: FromDishka[IUserRepository],
+    formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
+) -> None:
+    async def safe_answer() -> None:
+        try:
+            await callback.answer()
+        except Exception:
+            pass
+
+    if callback.data == "uhist:noop":
+        await safe_answer()
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) != 5:
+        await safe_answer()
+        return
+    _, chat_id_str, uid_str, target_id_str, page_str = parts
+    try:
+        chat_id, uid, target_id, page = int(chat_id_str), int(uid_str), int(target_id_str), int(page_str)
+    except ValueError:
+        await safe_answer()
+        return
+
+    if callback.from_user.id != uid:
+        try:
+            await callback.answer("Это не твой запрос.", show_alert=True)
+        except Exception:
+            pass
+        return
+
+    pages = _uhistory_pages.get((chat_id, uid, target_id))
+    if not pages or page < 0 or page >= len(pages):
+        await safe_answer()
+        return
+
+    target = await user_repo.get_by_id(target_id)
+    target_link = user_link(target.username, target.full_name, target.id) if target else str(target_id)
+    total_events = sum(len(p) for p in pages)
+
+    rows = [formatter._t["history_row"].format(**e) for e in pages[page]]
+    title = f"📋 История операций: {target_link}\n<i>За последние {config.history.retention_days} дн., всего {total_events} событий</i>"
+    body = "\n".join(rows)
+    text = f"{title}\n<blockquote expandable>{body}</blockquote>"
+
+    kb = _uhistory_kb(page, len(pages), chat_id, uid, target_id)
+    try:
+        await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW)
+    except Exception:
+        pass
+    await safe_answer()
