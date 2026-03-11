@@ -8,6 +8,7 @@ from dishka.integrations.aiogram import setup_dishka
 
 from bot.infrastructure.config_loader import Settings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
+from bot.infrastructure.giveaway_loop import giveaway_loop
 from bot.presentation.handlers.reactions import router as reactions_router
 from bot.presentation.handlers.commands import router as commands_router
 from bot.presentation.handlers.blackjack import router as blackjack_router
@@ -97,6 +98,8 @@ async def main() -> None:
 
     cleanup_task = asyncio.create_task(cleanup_loop(container))
     unmute_task = asyncio.create_task(unmute_loop(container, bot))
+
+    asyncio.create_task(giveaway_loop(bot, container))
 
     logger.info("Bot starting…")
     try:
