@@ -1,7 +1,7 @@
 score:
-  singular: "балл"
-  plural_few: "балла"       # для 2–4
-  plural_many: "баллов"     # для 0, 5+
+  singular: "кирчик"
+  plural_few: "кирчика"       # для 2–4
+  plural_many: "кирчиков"     # для 0, 5+
   icon: "⭐"
 
 reactions:
