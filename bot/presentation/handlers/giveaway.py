@@ -1,17 +1,3 @@
-"""Handlers for /giveaway and /giveaway_end commands.
-
-Registration in di.py / router setup:
-    from bot.presentation.handlers.giveaway import router as giveaway_router
-    dp.include_router(giveaway_router)
-
-Required in di.py (RequestProvider):
-    - GiveawayService  →  depends on IGiveawayRepository + IScoreRepository
-    - PostgresGiveawayRepository bound to IGiveawayRepository
-
-Required in AppProvider (singleton):
-    - ScorePluralizer (already present via config)
-"""
-
 from __future__ import annotations
 
 import re
@@ -25,7 +11,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
-from dishka.integrations.aiogram import FromDishka
+from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.giveaway_service import GiveawayService
 from bot.domain.giveaway_entities import Giveaway
@@ -67,8 +53,8 @@ def _join_kb(giveaway_id: int, count: int) -> InlineKeyboardMarkup:
 
 
 def _format_prizes(prizes: list[int], pluralizer: ScorePluralizer) -> str:
-    parts = []
     medals = ["🥇", "🥈", "🥉"]
+    parts = []
     for i, prize in enumerate(prizes):
         medal = medals[i] if i < len(medals) else f"{i + 1}."
         parts.append(f"{medal} {prize} {pluralizer.pluralize(prize)}")
@@ -84,6 +70,7 @@ def _format_end_time(ends_at: datetime | None) -> str:
 # ─── /giveaway ──────────────────────────────────────────────────────────────
 
 @router.message(Command("giveaway"))
+@inject
 async def cmd_giveaway(
     message: Message,
     bot: Bot,
@@ -95,7 +82,7 @@ async def cmd_giveaway(
         await message.answer("⛔ Только администраторы могут создавать розыгрыши.")
         return
 
-    args = (message.text or "").split()[1:]  # drop "/giveaway"
+    args = (message.text or "").split()[1:]
     if not args:
         await message.answer(
             "Использование: <code>/giveaway 500 100 50 [30m|2h]</code>\n"
@@ -104,7 +91,6 @@ async def cmd_giveaway(
         )
         return
 
-    # Последний аргумент — возможная длительность
     ends_at: datetime | None = None
     duration = _parse_duration(args[-1])
     if duration is not None:
@@ -135,19 +121,20 @@ async def cmd_giveaway(
         f"⏰ Завершение: <b>{_format_end_time(ends_at)}</b>\n"
         f"🆔 ID: <code>{giveaway.id}</code>"
     )
-    sent = await message.answer(text, parse_mode="HTML", reply_markup=_join_kb(giveaway.id, 0))  # type: ignore[arg-type]
-    await service.set_message_id(giveaway.id, sent.message_id)  # type: ignore[arg-type]
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=_join_kb(giveaway.id, 0))
+    await service.set_message_id(giveaway.id, sent.message_id)
 
 
 # ─── /giveaway_end ──────────────────────────────────────────────────────────
 
 @router.message(Command("giveaway_end"))
+@inject
 async def cmd_giveaway_end(
     message: Message,
+    bot: Bot,
     service: FromDishka[GiveawayService],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
-    bot: Bot,
 ) -> None:
     if not _is_admin(message.from_user and message.from_user.username, config):
         await message.answer("⛔ Только администраторы могут завершать розыгрыши.")
@@ -155,7 +142,6 @@ async def cmd_giveaway_end(
 
     args = (message.text or "").split()[1:]
 
-    # Определяем giveaway_id
     giveaway_id: int | None = None
     if args and args[0].isdigit():
         giveaway_id = int(args[0])
@@ -185,11 +171,12 @@ async def cmd_giveaway_end(
 # ─── Callback: кнопка «Участвовать» ─────────────────────────────────────────
 
 @router.callback_query(F.data.startswith("giveaway:join:"))
+@inject
 async def cb_join(
     cb: CallbackQuery,
     service: FromDishka[GiveawayService],
 ) -> None:
-    giveaway_id = int(cb.data.split(":")[2])  # type: ignore[union-attr]
+    giveaway_id = int(cb.data.split(":")[2])
     user_id = cb.from_user.id
 
     joined = await service.join(giveaway_id, user_id)
@@ -200,11 +187,10 @@ async def cb_join(
     count = await service.count_participants(giveaway_id)
     await cb.answer("✅ Ты в игре!", show_alert=False)
 
-    # Обновляем счётчик на кнопке
     try:
-        await cb.message.edit_reply_markup(reply_markup=_join_kb(giveaway_id, count))  # type: ignore[union-attr]
+        await cb.message.edit_reply_markup(reply_markup=_join_kb(giveaway_id, count))
     except Exception:
-        pass  # сообщение могло быть удалено
+        pass
 
 
 # ─── Общая функция публикации результатов ───────────────────────────────────
@@ -227,9 +213,7 @@ async def _post_results(
             prize_str = f"{prize} {pluralizer.pluralize(prize)}"
             try:
                 chat_member = await bot.get_chat_member(giveaway.chat_id, user_id)
-                user = chat_member.user
-                name = user.full_name
-                mention = f'<a href="tg://user?id={user_id}">{name}</a>'
+                mention = f'<a href="tg://user?id={user_id}">{chat_member.user.full_name}</a>'
             except Exception:
                 mention = f"<code>{user_id}</code>"
             lines.append(f"{medal} {mention} — +{prize_str}")
@@ -237,7 +221,6 @@ async def _post_results(
 
     await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
 
-    # Убираем кнопку «Участвовать» из оригинального анонса
     if giveaway.message_id:
         try:
             await bot.edit_message_reply_markup(
