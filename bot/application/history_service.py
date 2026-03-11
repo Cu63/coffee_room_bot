@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from bot.domain.tz import TZ_MSK
 
 from bot.domain.entities import ScoreEvent
 from bot.application.interfaces.event_repository import IEventRepository
@@ -10,5 +11,5 @@ class HistoryService:
         self._retention_days = retention_days
 
     async def get_history(self, chat_id: int) -> list[ScoreEvent]:
-        since = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        since = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
         return await self._event_repo.get_history(chat_id, since)

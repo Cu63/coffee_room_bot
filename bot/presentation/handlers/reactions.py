@@ -7,6 +7,7 @@ from aiogram.types import MessageReactionUpdated, ReactionTypeEmoji
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.domain.entities import User
+from bot.domain.emoji_utils import normalize_emoji
 from bot.application.score_service import ScoreService
 from bot.application.interfaces.user_repository import IUserRepository
 
@@ -78,5 +79,5 @@ def _extract_emojis(reactions: list | None) -> set[str]:
     result: set[str] = set()
     for r in reactions:
         if isinstance(r, ReactionTypeEmoji):
-            result.add(r.emoji)
+            result.add(normalize_emoji(r.emoji))
     return result

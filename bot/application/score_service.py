@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
+from bot.domain.tz import TZ_MSK
 import time
 
 from bot.domain.entities import (
@@ -10,6 +11,7 @@ from bot.domain.entities import (
     ScoreEvent,
 )
 from bot.domain.reaction_registry import ReactionRegistry
+from bot.domain.emoji_utils import normalize_emoji
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.event_repository import IEventRepository
@@ -65,6 +67,7 @@ class ScoreService:
         message_id: int,
         emoji: str,
     ) -> ApplyResult:
+        emoji = normalize_emoji(emoji)
         # 1. Реакция в реестре?
         reaction = self._registry.get(emoji)
         if reaction is None:
@@ -90,7 +93,7 @@ class ScoreService:
                 return ApplyResult(applied=False, reason=IgnoreReason.NEGATIVE_SCORE_ACTOR)
 
         # 5. Возраст сообщения
-        now = datetime.now(timezone.utc)
+        now = datetime.now(TZ_MSK)
         age = now - msg.sent_at
         if age > timedelta(hours=self._max_message_age_hours):
             return ApplyResult(applied=False, reason=IgnoreReason.MESSAGE_TOO_OLD)
@@ -138,6 +141,7 @@ class ScoreService:
         message_id: int,
         emoji: str,
     ) -> ApplyResult:
+        emoji = normalize_emoji(emoji)
         # Найти и удалить оригинальное событие
         event = await self._event_repo.find_and_delete(actor_id, message_id, emoji)
         if event is None:

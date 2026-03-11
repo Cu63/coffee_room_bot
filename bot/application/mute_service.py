@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from bot.domain.tz import TZ_MSK
 
 from bot.domain.entities import MuteEntry
 from bot.application.interfaces.mute_repository import IMuteRepository
@@ -18,4 +19,4 @@ class MuteService:
         await self._repo.delete(user_id, chat_id)
 
     async def get_expired_mutes(self) -> list[MuteEntry]:
-        return await self._repo.get_expired(datetime.now(timezone.utc))
+        return await self._repo.get_expired(datetime.now(TZ_MSK))

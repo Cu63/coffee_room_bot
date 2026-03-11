@@ -9,6 +9,7 @@ from bot.infrastructure.config_loader import Settings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
 from bot.presentation.handlers.reactions import router as reactions_router
 from bot.presentation.handlers.commands import router as commands_router
+from bot.presentation.handlers.blackjack import router as blackjack_router
 from bot.presentation.handlers.admin_commands import create_admin_router, _unmute_user
 
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
@@ -70,17 +71,17 @@ async def main() -> None:
     # Outer: фильтр только групповых чатов (до dishka)
     dp.message.outer_middleware(ChatContextMiddleware())
     dp.message_reaction.outer_middleware(ChatContextMiddleware())
+    dp.callback_query.outer_middleware(ChatContextMiddleware())
 
     dp.include_router(commands_router)
+    dp.include_router(blackjack_router)
     dp.include_router(reactions_router)
 
-    # Команды с динамическим префиксом из конфига
+    # Команды бота (без префикса)
     admin_router = create_admin_router(config.admin.prefix)
     dp.include_router(admin_router)
-    p = config.admin.prefix
     logger.info(
-        "Prefixed commands: /%s_add, /%s_sub, /%s_set, /%s_reset, /%s_mute, /%s_tag, /%s_save, /%s_restore, /%s_help",
-        p, p, p, p, p, p, p, p, p,
+        "Commands: /add, /sub, /set, /reset, /op, /mute, /selfmute, /tag, /save, /restore, /help, /limits"
     )
 
     # Dishka DI — регистрирует свой middleware

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from bot.domain.tz import TZ_MSK
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
@@ -43,7 +44,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                     message_id=event.message_id,
                     chat_id=event.chat.id,
                     user_id=event.from_user.id,
-                    sent_at=event.date or datetime.now(timezone.utc),
+                    sent_at=event.date or datetime.now(TZ_MSK),
                 )
             )
 

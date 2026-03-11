@@ -1,4 +1,5 @@
 from bot.domain.entities import Reaction
+from bot.domain.emoji_utils import normalize_emoji
 
 
 class ReactionRegistry:
@@ -6,9 +7,9 @@ class ReactionRegistry:
 
     def __init__(self, reactions: dict[str, int]) -> None:
         self._reactions = {
-            emoji: Reaction(emoji=emoji, weight=weight)
+            normalize_emoji(emoji): Reaction(emoji=normalize_emoji(emoji), weight=weight)
             for emoji, weight in reactions.items()
         }
 
     def get(self, emoji: str) -> Reaction | None:
-        return self._reactions.get(emoji)
+        return self._reactions.get(normalize_emoji(emoji))

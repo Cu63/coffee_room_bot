@@ -61,6 +61,12 @@ class TagConfig:
 
 
 @dataclass
+class BlackjackConfig:
+    min_bet: int = 1
+    max_bet: int = 500
+
+
+@dataclass
 class AppConfig:
     score: ScoreConfig = field(default_factory=ScoreConfig)
     reactions: dict[str, int] = field(default_factory=dict)
@@ -70,6 +76,7 @@ class AppConfig:
     admin: AdminConfig = field(default_factory=AdminConfig)
     mute: MuteConfig = field(default_factory=MuteConfig)
     tag: TagConfig = field(default_factory=TagConfig)
+    blackjack: BlackjackConfig = field(default_factory=BlackjackConfig)
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
@@ -82,6 +89,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
     admin_raw = raw.get("admin", {})
     mute_raw = raw.get("mute", {})
     tag_raw = raw.get("tag", {})
+    blackjack_raw = raw.get("blackjack", {})
 
     # Нормализуем username: убираем @ если есть, приводим к lower
     users = [u.lstrip("@").lower() for u in admin_raw.get("users", [])]
@@ -98,6 +106,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         ),
         mute=MuteConfig(**mute_raw),
         tag=TagConfig(**tag_raw),
+        blackjack=BlackjackConfig(**blackjack_raw),
     )
 
 

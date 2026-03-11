@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from bot.domain.tz import TZ_MSK
 import logging
 
 from bot.application.interfaces.event_repository import IEventRepository
@@ -12,7 +13,7 @@ class CleanupService:
         self._retention_days = retention_days
 
     async def delete_expired_events(self) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
+        cutoff = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
         deleted = await self._event_repo.delete_before(cutoff)
         if deleted:
             logger.info("Deleted %d expired score events", deleted)

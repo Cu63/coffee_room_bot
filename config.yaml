@@ -41,3 +41,7 @@ tag:
   cost_admin: 200               # сменить тег админу/модератору
   cost_owner: 500               # сменить тег создателю чата
   max_length: 32                # максимальная длина тега
+
+blackjack:
+  min_bet: 1
+  max_bet: 500
