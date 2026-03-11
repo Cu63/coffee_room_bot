@@ -13,15 +13,19 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.application.interfaces.mute_repository import IMuteRepository
 from bot.application.interfaces.saved_permissions_repository import ISavedPermissionsRepository
+from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.score_service import ScoreService
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.history_service import HistoryService
 from bot.application.cleanup_service import CleanupService
 from bot.application.mute_service import MuteService
+from bot.application.llm_service import LlmService
 
 from bot.infrastructure.config_loader import AppConfig, Settings, load_config, load_messages
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.infrastructure.aitunnel_client import AiTunnelClient
+from bot.infrastructure.search_engine import SearchEngine
 from bot.infrastructure.db.transaction_manager import PostgresTransactionManager
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
@@ -32,6 +36,7 @@ from bot.infrastructure.db.postgres_mute_repository import PostgresMuteRepositor
 from bot.infrastructure.db.postgres_saved_permissions_repository import PostgresSavedPermissionsRepository
 from bot.application.slots_service import SlotsConfig, SlotsMachine, SlotsService
 from bot.application.slots_custom_functions import apply_custom_functions
+from bot.infrastructure.db.postgres_llm_repository import PostgresLlmRepository
 
 
 class AppProvider(Provider):
@@ -61,6 +66,23 @@ class AppProvider(Provider):
     @provide
     def get_reaction_registry(self, config: AppConfig) -> ReactionRegistry:
         return ReactionRegistry(config.reactions)
+
+    @provide
+    def get_search_engine(self, settings: Settings) -> SearchEngine:
+        return SearchEngine(base_url=settings.openserp_url)
+
+    @provide
+    async def get_aitunnel_client(
+        self, settings: Settings, config: AppConfig,
+    ) -> AsyncIterable[AiTunnelClient]:
+        client = AiTunnelClient(
+            api_key=settings.aitunnel_api_key,
+            base_url=config.llm.base_url,
+            model=config.llm.model,
+            max_output_tokens=config.llm.max_output_tokens,
+        )
+        yield client
+        await client.close()
 
     @provide
     async def get_pool(self, settings: Settings) -> AsyncIterable[asyncpg.Pool]:
@@ -167,8 +189,31 @@ class RequestProvider(Provider):
     @provide
     def get_mute_service(self, mute_repo: IMuteRepository) -> MuteService:
         return MuteService(mute_repo)
-    
+
     # в RequestProvider:
     @provide
     def get_slots_service(self, machine: SlotsMachine, cfg: SlotsConfig, score_service: ScoreService) -> SlotsService:
         return SlotsService(machine, cfg, score_service)
+
+    @provide
+    def get_llm_repo(self, tm: ITransactionManager) -> ILlmRepository:
+        return PostgresLlmRepository(tm.get_connection())
+
+    @provide
+    def get_llm_service(
+        self,
+        client: AiTunnelClient,
+        search_engine: SearchEngine,
+        llm_repo: ILlmRepository,
+        config: AppConfig,
+    ) -> LlmService:
+        return LlmService(
+            client=client,
+            search_engine=search_engine,
+            llm_repo=llm_repo,
+            system_prompt=config.llm.system_prompt,
+            search_system_prompt=config.llm.search_system_prompt,
+            daily_limit=config.llm.daily_limit_per_user,
+            search_max_results=config.llm.search_max_results,
+            admin_users=config.admin.users,
+        )

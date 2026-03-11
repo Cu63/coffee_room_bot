@@ -23,11 +23,18 @@ services:
         condition: service_healthy
     command: migrate
     volumes:
-      - ./migrations:/flyway/sql:ro
+      - ./migrations:/flyway/sql:ro,z
     environment:
       FLYWAY_URL: jdbc:postgresql://db:5432/scorebot
       FLYWAY_USER: scorebot
       FLYWAY_PASSWORD: scorebot
+
+  openserp:
+    image: karust/openserp
+    restart: unless-stopped
+    command: serve -a 0.0.0.0 -p 7000
+    ports:
+      - "127.0.0.1:7000:7000"
 
   bot:
     build: .
@@ -35,13 +42,16 @@ services:
     depends_on:
       flyway:
         condition: service_completed_successfully
+      openserp:
+        condition: service_started
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://scorebot:scorebot@db:5432/scorebot
+      OPENSERP_URL: http://openserp:7000
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./messages.yaml:/app/messages.yaml:ro
+      - ./config.yaml:/app/config.yaml:ro,z
+      - ./messages.yaml:/app/messages.yaml:ro,z
 
  
 volumes:

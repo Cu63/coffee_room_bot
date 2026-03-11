@@ -29,6 +29,7 @@ admin:
   users:
     - "shared_mutex"
     - "ju57_4_cu63"
+    - "meganjard"
 
 mute:
   cost_per_minute: 20           # стоимость 1 минуты мута в баллах
@@ -45,3 +46,10 @@ tag:
 blackjack:
   min_bet: 1
   max_bet: 500
+
+llm:
+  model: "gemini-2.5-flash-lite"
+  base_url: "https://api.aitunnel.ru/v1"
+  max_output_tokens: 2048       # лимит токенов на ответ
+  daily_limit_per_user: 4       # запросов /llm + /search на пользователя в сутки
+  search_max_results: 7         # сколько результатов поиска парсить

@@ -10,6 +10,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     bot_token: str = ""
     database_url: str = "postgresql://scorebot:scorebot@db:5432/scorebot"
+    aitunnel_api_key: str = ""
+    openserp_url: str = "http://openserp:7000"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -67,6 +69,43 @@ class BlackjackConfig:
 
 
 @dataclass
+class LlmConfig:
+    model: str = "gemini-2.5-flash-lite"
+    base_url: str = "https://api.aitunnel.ru/v1"
+    max_output_tokens: int = 1024
+    daily_limit_per_user: int = 10
+    search_max_results: int = 5
+    system_prompt: str = (
+        "Отвечай кратко и по делу на русском языке. "
+        "Форматируй в Telegram HTML. Допустимые теги: "
+        "<b>, <i>, <u>, <s>, <code>, <pre>, <blockquote>, <a href=\"URL\">текст</a>. "
+        "ВСЕ теги ОБЯЗАТЕЛЬНО закрывай."
+    )
+    search_system_prompt: str = (
+        "Ты — поисковый ассистент. Тебе даны результаты поиска "
+        "с извлечённым контентом страниц.\n\n"
+        "Дай развёрнутый ответ на русском, используя ТОЛЬКО факты "
+        "из предоставленных источников. Если данных недостаточно, "
+        "так и напиши.\n\n"
+        "ССЫЛКИ — ОБЯЗАТЕЛЬНО:\n"
+        "- КАЖДЫЙ упомянутый товар/модель/факт ДОЛЖЕН иметь ссылку.\n"
+        "- НЕ упоминай товар без ссылки. Если нет URL — не упоминай.\n"
+        "- Вставляй ссылки ИНЛАЙН: "
+        "«<a href=\"URL\">Dyson V15</a> имеет мощность 230 Вт»\n"
+        "- Текст ссылки — КОРОТКИЙ: название модели или домен.\n"
+        "- Используй ТОЛЬКО URL из предоставленных источников.\n"
+        "- В конце добавь блок:\n<b>Источники:</b>\n"
+        "— <a href=\"URL\">короткое название</a>\n\n"
+        "ЛИМИТ: ответ НЕ БОЛЕЕ 3500 символов.\n\n"
+        "ФОРМАТ — строго Telegram HTML:\n"
+        "- <b>жирный</b>, <i>курсив</i>, <a href=\"URL\">текст</a>\n"
+        "- Списки: «— » или «1. »\n"
+        "- ЗАПРЕЩЕНО: **, *, <sup>, <sub>, <span>, <div>, [текст](url)\n"
+        "- ВСЕ теги ОБЯЗАТЕЛЬНО закрывай."
+    )
+
+
+@dataclass
 class AppConfig:
     score: ScoreConfig = field(default_factory=ScoreConfig)
     reactions: dict[str, int] = field(default_factory=dict)
@@ -77,6 +116,7 @@ class AppConfig:
     mute: MuteConfig = field(default_factory=MuteConfig)
     tag: TagConfig = field(default_factory=TagConfig)
     blackjack: BlackjackConfig = field(default_factory=BlackjackConfig)
+    llm: LlmConfig = field(default_factory=LlmConfig)
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
@@ -90,6 +130,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
     mute_raw = raw.get("mute", {})
     tag_raw = raw.get("tag", {})
     blackjack_raw = raw.get("blackjack", {})
+    llm_raw = raw.get("llm", {})
 
     # Нормализуем username: убираем @ если есть, приводим к lower
     users = [u.lstrip("@").lower() for u in admin_raw.get("users", [])]
@@ -107,6 +148,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         mute=MuteConfig(**mute_raw),
         tag=TagConfig(**tag_raw),
         blackjack=BlackjackConfig(**blackjack_raw),
+        llm=LlmConfig(**llm_raw),
     )
 
 

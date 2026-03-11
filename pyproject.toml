@@ -5,6 +5,7 @@ description = "Telegram bot for gamification via reactions"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.26.0",
+    "aiohttp>=3.13.3",
     "asyncpg>=0.31.0",
     "cachetools>=7.0.5",
     "dishka>=1.9.1",
@@ -12,4 +13,5 @@ dependencies = [
     "pydantic-settings>=2.13.1",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
+    "trafilatura>=2.0.0",
 ]
