@@ -271,13 +271,12 @@ async def cmd_uhistory(
     for e in events:
         actor = await user_repo.get_by_id(e.actor_id)
         tgt = await user_repo.get_by_id(e.target_id)
-        sign = "+" if e.delta > 0 else ""
         event_dicts.append({
             "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
             "actor": user_link(actor.username, actor.full_name, actor.id) if actor else str(e.actor_id),
             "target": user_link(tgt.username, tgt.full_name, tgt.id) if tgt else str(e.target_id),
             "emoji": e.emoji,
-            "delta": f"{sign}{e.delta}",
+            "delta": e.delta,
         })
 
     page_size = config.system.history_page_size
