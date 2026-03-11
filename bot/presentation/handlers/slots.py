@@ -1,111 +1,240 @@
-"""Хендлер слотов: /slots <ставка>"""
+"""Сервис слотов.
+
+Архитектура:
+- SlotsConfig      — настройки (символы, ставки, RTP, кастомные функции)
+- SlotsMachine     — логика барабанов и подсчёта выигрыша
+- SlotsService     — оркестрация: крутим, считаем, списываем/начисляем баллы
+
+RTP (Return to Player) — процент возврата от всех ставок игрокам.
+Управляется через веса символов + множитель rtp_bias:
+  rtp_bias = 1.0  → честная игра (только веса символов)
+  rtp_bias < 1.0  → казино в плюсе
+  rtp_bias > 1.0  → игроки в плюсе
+"""
 
 from __future__ import annotations
 
-import logging
-
-from aiogram import Bot, Router
-from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandObject
-from aiogram.types import LinkPreviewOptions, Message
-from dishka.integrations.aiogram import FromDishka, inject
-
-from bot.application.slots_service import SlotsService, SlotsConfig, SpinOutcome
-from bot.infrastructure.config_loader import AppConfig
-from bot.infrastructure.message_formatter import MessageFormatter
-from bot.presentation.utils import schedule_delete
-
-logger = logging.getLogger(__name__)
-router = Router(name="slots")
-NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
+from datetime import timedelta
+import random
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Callable
 
 
-def _render_reels(reels: list[str]) -> str:
-    return " | ".join(reels)
+# ── Типы кастомных функций ────────────────────────────────────────
+
+# Функция-фильтр: можно ли вообще крутить (антиспам, особые условия)
+# Принимает user_id, chat_id, ставку → True если разрешено
+SpinGuard = Callable[[int, int, int], bool]
+
+# Функция-модификатор выигрыша: можно изменить итоговый delta перед начислением
+# Принимает user_id, chat_id, delta, результат → новый delta
+PayoutModifier = Callable[[int, int, int, "SpinResult"], int]
 
 
-_OUTCOME_TEXT = {
-    SpinOutcome.JACKPOT:   "🎰 ДЖЕКПОТ! Ты выиграл {win} {sw}!",
-    SpinOutcome.WIN:       "🏆 Выигрыш! +{win} {sw}!",
-    SpinOutcome.NEAR_MISS: "😬 Почти! Потерял {loss} {sw}.",
-    SpinOutcome.LOSS:      "💸 Мимо. Потерял {loss} {sw}.",
-}
+# ── Конфиг ───────────────────────────────────────────────────────
+
+@dataclass
+class SlotSymbol:
+    emoji: str
+    weight: int        # вероятностный вес (чем больше — тем чаще выпадает)
+    multiplier: float  # множитель ставки при 3 одинаковых
 
 
-@router.message(Command("slots"))
-@inject
-async def cmd_slots(
-    message: Message,
-    bot: Bot,
-    command: CommandObject,
-    slots_service: FromDishka[SlotsService],
-    slots_config: FromDishka[SlotsConfig],
-    formatter: FromDishka[MessageFormatter],
-) -> None:
-    if message.from_user is None:
-        return
+@dataclass
+class SlotsConfig:
+    min_bet: int = 1
+    max_bet: int = 200
+    reels: int = 3          # количество барабанов
+    rtp_bias: float = 1.0   # 1.0 = нейтрально; RTP управляется через near_miss_multiplier
 
-    p = formatter._p
-    cfg = slots_config
+    # Множитель ставки при near miss (2 из 3 совпали).
+    # Именно этот параметр определяет итоговый RTP:
+    #   0.45  → ~121%  |  0.40 → ~118%  |  0.0 → ~95%  |  -1.0 → ~35% (старое поведение)
+    near_miss_multiplier: float = 0.45
 
-    if not command.args:
-        await message.reply(
-            f"🎰 <b>Слоты</b>\n\n"
-            f"Использование: /slots &lt;ставка&gt;\n"
-            f"Ставка: от {cfg.min_bet} до {cfg.max_bet} {p.pluralize(cfg.max_bet)}\n\n"
-            f"Символы:\n" +
-            "\n".join(
-                f"  {s.emoji} × {s.multiplier:.0f} (три в ряд)"
-                for s in sorted(cfg.symbols, key=lambda x: x.multiplier)
-            ),
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
+    symbols: list[SlotSymbol] = field(default_factory=lambda: [
+        SlotSymbol("🍒", weight=40, multiplier=2.0),
+        SlotSymbol("🍋", weight=30, multiplier=3.0),
+        SlotSymbol("🍊", weight=20, multiplier=5.0),
+        SlotSymbol("⭐", weight=8,  multiplier=10.0),
+        SlotSymbol("💎", weight=2,  multiplier=50.0),
+    ])
+
+    # Кастомные функции (подключаются снаружи)
+    spin_guards: list[SpinGuard] = field(default_factory=list)
+    payout_modifiers: list[PayoutModifier] = field(default_factory=list)
+
+    def register_guard(self, fn: SpinGuard) -> SpinGuard:
+        """Декоратор для регистрации guard-функции."""
+        self.spin_guards.append(fn)
+        return fn
+
+    def register_modifier(self, fn: PayoutModifier) -> PayoutModifier:
+        """Декоратор для регистрации модификатора выплаты."""
+        self.payout_modifiers.append(fn)
+        return fn
+
+
+# ── Результат ─────────────────────────────────────────────────────
+
+class SpinOutcome(str, Enum):
+    JACKPOT   = "jackpot"    # все одинаковые + топ символ
+    WIN       = "win"        # все одинаковые
+    NEAR_MISS = "near_miss"  # 2 одинаковых
+    LOSS      = "loss"       # ничего
+
+
+@dataclass
+class SpinResult:
+    reels: list[str]          # итоговые символы, напр. ["🍒", "🍒", "🍒"]
+    outcome: SpinOutcome
+    multiplier: float         # итоговый множитель
+    bet: int
+    delta: int                # изменение баланса (отриц. при проигрыше)
+    new_balance: int = 0      # заполняется после начисления
+
+
+# ── Машина ───────────────────────────────────────────────────────
+
+class SlotsMachine:
+    def __init__(self, config: SlotsConfig) -> None:
+        self._cfg = config
+
+    def _spin_reel(self) -> SlotSymbol:
+        """Крутим один барабан с учётом rtp_bias."""
+        symbols = self._cfg.symbols
+        # Применяем bias к весам: топовые символы (высокий multiplier) получают
+        # сниженный вес при bias < 1, и повышенный при bias > 1
+        adjusted_weights = []
+        for s in symbols:
+            # Чем выше multiplier, тем сильнее bias влияет на вес
+            bias_effect = self._cfg.rtp_bias ** (s.multiplier / 10)
+            adjusted_weights.append(s.weight * bias_effect)
+
+        return random.choices(symbols, weights=adjusted_weights, k=1)[0]
+
+    def spin(self, bet: int) -> SpinResult:
+        """Крутим все барабаны и считаем результат."""
+        landed = [self._spin_reel() for _ in range(self._cfg.reels)]
+        emojis = [s.emoji for s in landed]
+
+        # Все одинаковые?
+        if len(set(emojis)) == 1:
+            symbol = landed[0]
+            # Джекпот — топ символ (наименьший вес)
+            top_symbol = min(self._cfg.symbols, key=lambda s: s.weight)
+            is_jackpot = (symbol.emoji == top_symbol.emoji)
+            outcome = SpinOutcome.JACKPOT if is_jackpot else SpinOutcome.WIN
+            multiplier = symbol.multiplier
+            delta = int(bet * multiplier)
+        elif len(set(emojis)) == self._cfg.reels - 1:
+            # Near miss — почти выиграл (2 из 3 одинаковых).
+            # Платим near_miss_multiplier × ставку — это основной рычаг RTP.
+            # 0.45 → RTP ≈ 121% при стандартных весах символов.
+            outcome = SpinOutcome.NEAR_MISS
+            multiplier = self._cfg.near_miss_multiplier
+            delta = int(bet * multiplier)
+        else:
+            outcome = SpinOutcome.LOSS
+            multiplier = 0.0
+            delta = -bet
+
+        return SpinResult(
+            reels=emojis,
+            outcome=outcome,
+            multiplier=multiplier,
+            bet=bet,
+            delta=delta,
         )
-        return
 
-    try:
-        bet = int(command.args.strip())
-    except ValueError:
-        await message.reply("Ставка должна быть числом.")
-        return
+    @property
+    def theoretical_rtp(self) -> float:
+        """Считает теоретический RTP с учётом near_miss_multiplier."""
+        total_weight = sum(s.weight for s in self._cfg.symbols)
+        p = [s.weight / total_weight for s in self._cfg.symbols]
 
-    result = await slots_service.spin(
-        user_id=message.from_user.id,
-        chat_id=message.chat.id,
-        bet=bet,
-    )
+        p_win = sum(pi ** self._cfg.reels for pi in p)
+        p_near = self._cfg.reels * sum(pi**2 * (1 - pi) for pi in p)
+        p_loss = 1.0 - p_win - p_near
 
-    # Обработка ошибок
-    if result == "invalid_bet":
-        await message.reply(
-            f"Ставка: от {cfg.min_bet} до {cfg.max_bet} {p.pluralize(cfg.max_bet)}."
+        ev_win = sum((pi ** self._cfg.reels) * s.multiplier
+                     for pi, s in zip(p, self._cfg.symbols))
+        ev_near = p_near * self._cfg.near_miss_multiplier
+        ev_loss = p_loss * (-1.0)
+
+        return 1.0 + ev_win + ev_near + ev_loss
+
+
+# ── Сервис ────────────────────────────────────────────────────────
+
+class SlotsService:
+    def __init__(
+        self,
+        machine: SlotsMachine,
+        config: SlotsConfig,
+        score_service,   # ScoreService — не импортируем напрямую чтобы не было цикла
+    ) -> None:
+        self._machine = machine
+        self._cfg = config
+        self._score_service = score_service
+
+    async def spin(
+        self,
+        user_id: int,
+        chat_id: int,
+        bet: int,
+    ) -> SpinResult | str:
+        """Крутим слоты.
+
+        Возвращает SpinResult или строку-ошибку если нельзя крутить.
+        """
+        # Проверка ставки
+        if bet < self._cfg.min_bet or bet > self._cfg.max_bet:
+            return "invalid_bet"
+
+        # Проверка кастомных guard-функций
+        for guard in self._cfg.spin_guards:
+            if not guard(user_id, chat_id, bet):
+                return "guard_rejected"
+
+        # Проверка баланса
+        score = await self._score_service.get_score(user_id, chat_id)
+        if score.value < bet:
+            return "not_enough"
+
+        # Крутим
+        result = self._machine.spin(bet)
+
+        # Применяем кастомные модификаторы выплаты
+        for modifier in self._cfg.payout_modifiers:
+            result.delta = modifier(user_id, chat_id, result.delta, result)
+
+        # Начисляем/списываем
+        from bot.application.score_service import SPECIAL_EMOJI
+        new_balance = await self._score_service._score_repo.add_delta(
+            user_id, chat_id, result.delta,
         )
-        return
-    if result == "not_enough":
-        await message.reply("Недостаточно баллов.")
-        return
-    if result == "guard_rejected":
-        remaining = slots_service.cooldown_remaining(message.from_user.id, message.chat.id)
-        if remaining:
-            minutes = int(remaining.total_seconds() // 60)
-            seconds = int(remaining.total_seconds() % 60)
-            await message.reply(f"Следующее кручение через {minutes}м {seconds}с.")
-        return
-        # Рендерим результат
-    reels_str = _render_reels(result.reels)
-    outcome_tpl = _OUTCOME_TEXT[result.outcome]
-    outcome_str = outcome_tpl.format(
-        win=abs(result.delta),
-        loss=abs(result.delta),
-        sw=p.pluralize(abs(result.delta)),
-    )
+        await self._score_service._save_special_event(
+            actor_id=user_id,
+            target_id=user_id,
+            chat_id=chat_id,
+            delta=result.delta,
+            emoji="🎰",
+        )
 
-    text = (
-        f"🎰 <b>Слоты</b> — ставка {bet} {p.pluralize(bet)}\n\n"
-        f"┌ {reels_str} ┐\n\n"
-        f"{outcome_str}\n"
-        f"Баланс: {result.new_balance} {p.pluralize(result.new_balance)}"
-    )
-
-    reply = await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
-    schedule_delete(bot, message, reply)
+        result.new_balance = new_balance
+        return result
+    
+        # slots_service.py
+    def cooldown_remaining(self, user_id: int, chat_id: int) -> timedelta | None:
+        """Возвращает оставшееся время до следующего кручения или None если можно."""
+        from bot.application.slots_custom_functions import _last_spin, COOLDOWN
+        from datetime import datetime
+        from bot.domain.tz import TZ_MSK
+        key = (user_id, chat_id)
+        last = _last_spin.get(key)
+        if last is None:
+            return None
+        remaining = COOLDOWN - (datetime.now(TZ_MSK) - last)
+        return remaining if remaining.total_seconds() > 0 else None

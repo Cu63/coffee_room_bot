@@ -110,7 +110,6 @@ class AppProvider(Provider):
         cfg = SlotsConfig(
             min_bet=config.blackjack.min_bet,
             max_bet=config.blackjack.max_bet,
-            rtp_bias=0.95,
         )
         apply_custom_functions(cfg)
         return cfg
