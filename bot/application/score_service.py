@@ -134,6 +134,47 @@ class ScoreService:
 
         return ApplyResult(applied=True, delta=delta, new_value=new_value)
 
+    async def apply_reaction_no_limits(
+        self,
+        actor_id: int,
+        chat_id: int,
+        message_id: int,
+        emoji: str,
+    ) -> ApplyResult:
+        """То же что apply_reaction, но без проверки дневных лимитов.
+        Используется для авто-реакций бота."""
+        emoji = normalize_emoji(emoji)
+        reaction = self._registry.get(emoji)
+        if reaction is None:
+            return ApplyResult(applied=False, reason=IgnoreReason.UNKNOWN_REACTION)
+        if reaction.weight == 0:
+            return ApplyResult(applied=False, reason=IgnoreReason.ZERO_WEIGHT)
+
+        msg = await self._message_repo.get(chat_id, message_id)
+        if msg is None:
+            return ApplyResult(applied=False, reason=IgnoreReason.UNKNOWN_MESSAGE)
+
+        target_id = msg.user_id
+
+        if await self._event_repo.exists(actor_id, message_id, emoji):
+            return ApplyResult(applied=False, reason=IgnoreReason.DUPLICATE)
+
+        delta = reaction.weight
+        new_value = await self._score_repo.add_delta(target_id, chat_id, delta)
+
+        await self._event_repo.save(
+            ScoreEvent(
+                chat_id=chat_id,
+                actor_id=actor_id,
+                target_id=target_id,
+                message_id=message_id,
+                emoji=emoji,
+                delta=delta,
+                direction=Direction.ADD,
+            )
+        )
+        return ApplyResult(applied=True, delta=delta, new_value=new_value)
+
     async def remove_reaction(
         self,
         actor_id: int,

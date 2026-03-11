@@ -95,9 +95,19 @@ class TrackMessageMiddleware(BaseMiddleware):
             logger.debug("auto_react: failed to set reaction: %s", e)
             return
 
-        # Засчитываем реакцию вручную — бот не получает события о своих реакциях
+        # Засчитываем реакцию вручную — бот не получает события о своих реакциях.
+        # Сначала upsert бота в users (иначе FK на score_events упадёт),
+        # затем применяем реакцию без лимитов (бот не ограничен).
+        user_repo = await container.get(IUserRepository)
+        bot_info = await message.bot.get_me()
+        await user_repo.upsert(User(
+            id=message.bot.id,
+            username=bot_info.username,
+            full_name=bot_info.full_name,
+        ))
+
         score_service = await container.get(ScoreService)
-        result = await score_service.apply_reaction(
+        result = await score_service.apply_reaction_no_limits(
             actor_id=message.bot.id,
             chat_id=message.chat.id,
             message_id=message.message_id,
