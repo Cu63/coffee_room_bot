@@ -44,10 +44,10 @@ if [[ -n "$CHANGED_SCRIPTS" ]]; then
     exec bash "$SCRIPT_PATH"
 fi
 
-# Пересобираем и перезапускаем бота
-echo "[deploy] rebuilding bot..."
-docker compose stop bot
-docker compose build bot
-docker compose up -d bot
+# Пересобираем и перезапускаем весь стек
+echo "[deploy] rebuilding all services..."
+docker compose down
+docker compose build
+docker compose up -d
 
 echo "[deploy] done"
