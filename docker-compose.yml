@@ -16,6 +16,18 @@ services:
       timeout: 3s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   flyway:
     image: flyway/flyway:11
     depends_on:
@@ -44,14 +56,17 @@ services:
         condition: service_completed_successfully
       openserp:
         condition: service_started
+      redis:
+        condition: service_healthy
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://scorebot:scorebot@db:5432/scorebot
       OPENSERP_URL: http://openserp:7000
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./configs:/app/configs:ro,z
 
- 
 volumes:
   pgdata:
+  redisdata:

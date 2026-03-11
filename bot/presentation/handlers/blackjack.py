@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
-from datetime import datetime, timedelta
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
@@ -13,7 +11,6 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    LinkPreviewOptions,
     Message,
 )
 from dishka.integrations.aiogram import FromDishka, inject
@@ -26,53 +23,26 @@ from bot.application.blackjack_service import (
 from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.utils import schedule_delete, NO_PREVIEW
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="blackjack")
 
-# Активные раунды: (user_id, chat_id) -> BlackjackRound
-_active_games: dict[tuple[int, int], BlackjackRound] = {}
-
-# Лимиты игр берутся из config.blackjack (max_games_per_window, window_hours)
-_bj_history: dict[tuple[int, int], deque] = {}
-
-
-def _check_bj_limit(user_id: int, chat_id: int, max_games: int = 5, window_hours: int = 1) -> timedelta | None:
-    """Sliding window: возвращает None если можно играть,
-    или timedelta до освобождения слота если лимит исчерпан."""
-    key = (user_id, chat_id)
-    now = datetime.now()
-    # NOTE: лимиты читаются из конфига в cmd_bj и передаются сюда
-    window = timedelta(hours=window_hours)
-    dq = _bj_history.setdefault(key, deque())
-
-    # Выкидываем устаревшие записи
-    while dq and now - dq[0] >= window:
-        dq.popleft()
-
-    if len(dq) < _BJ_MAX_GAMES:
-        return None
-
-    # Ждать до тех пор, пока самая старая запись не выйдет из окна
-    return window - (now - dq[0])
-
-
-def _record_bj_game(user_id: int, chat_id: int) -> None:
-    key = (user_id, chat_id)
-    _bj_history.setdefault(key, deque()).append(datetime.now())
 
 # ── Inline-клавиатура ────────────────────────────────────────────
 
-_BJ_KB = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🃏 Ещё", callback_data="bj_hit"),
-            InlineKeyboardButton(text="🛑 Хватит", callback_data="bj_stand"),
+def _bj_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура с user_id в callback_data для защиты от чужих нажатий."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🃏 Ещё", callback_data=f"bj_hit:{user_id}"),
+                InlineKeyboardButton(text="🛑 Хватит", callback_data=f"bj_stand:{user_id}"),
+            ]
         ]
-    ]
-)
+    )
 
 
 # ── Вспомогательные ─────────────────────────────────────────────
@@ -173,33 +143,36 @@ async def cmd_blackjack(
     score_service: FromDishka[ScoreService],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
+    store: FromDishka[RedisStore],
 ) -> None:
     if message.from_user is None:
         return
 
     user_id = message.from_user.id
     chat_id = message.chat.id
-    key = (user_id, chat_id)
 
-    if key in _active_games:
+    if await store.bj_exists(user_id, chat_id):
         await message.reply("У тебя уже есть активная игра. Доиграй текущую!")
         return
 
-    # Sliding window: 5 игр в час
-    wait = _check_bj_limit(user_id, chat_id, config.blackjack.max_games_per_window, config.blackjack.window_hours)
+    # Sliding window
+    bjc = config.blackjack
+    window_seconds = bjc.window_hours * 3600
+    wait = await store.bj_history_check(
+        user_id, chat_id, bjc.max_games_per_window, window_seconds,
+    )
     if wait is not None:
-        total = int(wait.total_seconds())
+        total = int(wait)
         mins, secs = divmod(total, 60)
         await message.reply(
-            f"⏳ Лимит: {_BJ_MAX_GAMES} игр в час. "
+            f"⏳ Лимит: {bjc.max_games_per_window} игр в час. "
             f"Следующая игра через {mins}м {secs}с."
         )
         return
 
     # Парсим ставку
-    bj_cfg = getattr(config, "blackjack", None)
-    min_bet = bj_cfg.min_bet if bj_cfg else 1
-    max_bet = bj_cfg.max_bet if bj_cfg else 500
+    min_bet = bjc.min_bet
+    max_bet = bjc.max_bet
 
     if not command.args:
         await message.reply(
@@ -230,10 +203,9 @@ async def cmd_blackjack(
         return
 
     # Записываем игру в sliding window и создаём раунд
-    _record_bj_game(user_id, chat_id)
+    await store.bj_history_record(user_id, chat_id, window_seconds)
     rnd = BlackjackRound(player_id=user_id, chat_id=chat_id, bet=bet)
     rnd.deal()
-    _active_games[key] = rnd
 
     if rnd.finished:
         # Натуральный блекджек — сразу результат
@@ -242,7 +214,6 @@ async def cmd_blackjack(
             await score_service.add_score(
                 user_id, chat_id, delta, admin_id=user_id,
             )
-        del _active_games[key]
         text = _render_table(
             rnd,
             reveal=True,
@@ -252,7 +223,8 @@ async def cmd_blackjack(
         schedule_delete(bot, message, reply)
         return
 
-    # Обычное начало — показываем стол с кнопками
+    # Сохраняем в Redis и показываем стол с кнопками
+    await store.bj_set(user_id, chat_id, rnd)
     text = (
         f"🃏 <b>Блекджек</b> — ставка {bet} {formatter._p.pluralize(bet)}\n\n"
         + _render_table(rnd)
@@ -260,7 +232,7 @@ async def cmd_blackjack(
     game_msg = await message.reply(
         text,
         parse_mode=ParseMode.HTML,
-        reply_markup=_BJ_KB,
+        reply_markup=_bj_kb(user_id),
         link_preview_options=NO_PREVIEW,
     )
     schedule_delete(bot, message, game_msg)
@@ -268,19 +240,24 @@ async def cmd_blackjack(
 
 # ── Callback: Hit ────────────────────────────────────────────────
 
-@router.callback_query(F.data == "bj_hit")
+@router.callback_query(F.data.startswith("bj_hit:"))
 @inject
 async def cb_hit(
     callback: CallbackQuery,
     bot: Bot,
     score_service: FromDishka[ScoreService],
     formatter: FromDishka[MessageFormatter],
+    store: FromDishka[RedisStore],
 ) -> None:
     user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
-    key = (user_id, chat_id)
+    owner_id = int(callback.data.split(":")[1])
+    if user_id != owner_id:
+        await callback.answer("Это не твоя игра!", show_alert=True)
+        return
 
-    rnd = _active_games.get(key)
+    chat_id = callback.message.chat.id
+
+    rnd = await store.bj_get(user_id, chat_id)
     if rnd is None:
         await callback.answer("Нет активной игры.", show_alert=True)
         return
@@ -293,7 +270,7 @@ async def cb_hit(
             await score_service.add_score(
                 user_id, chat_id, delta, admin_id=user_id,
             )
-        del _active_games[key]
+        await store.bj_delete(user_id, chat_id)
         text = _render_table(
             rnd,
             reveal=True,
@@ -309,7 +286,8 @@ async def cb_hit(
         await callback.answer()
         return
 
-    # Продолжаем
+    # Продолжаем — сохраняем обновлённое состояние
+    await store.bj_set(user_id, chat_id, rnd)
     text = (
         f"🃏 <b>Блекджек</b> — ставка {rnd.bet} {formatter._p.pluralize(rnd.bet)}\n\n"
         + _render_table(rnd)
@@ -317,7 +295,7 @@ async def cb_hit(
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
-        reply_markup=_BJ_KB,
+        reply_markup=_bj_kb(user_id),
         link_preview_options=NO_PREVIEW,
     )
     await callback.answer()
@@ -325,19 +303,24 @@ async def cb_hit(
 
 # ── Callback: Stand ──────────────────────────────────────────────
 
-@router.callback_query(F.data == "bj_stand")
+@router.callback_query(F.data.startswith("bj_stand:"))
 @inject
 async def cb_stand(
     callback: CallbackQuery,
     bot: Bot,
     score_service: FromDishka[ScoreService],
     formatter: FromDishka[MessageFormatter],
+    store: FromDishka[RedisStore],
 ) -> None:
     user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
-    key = (user_id, chat_id)
+    owner_id = int(callback.data.split(":")[1])
+    if user_id != owner_id:
+        await callback.answer("Это не твоя игра!", show_alert=True)
+        return
 
-    rnd = _active_games.get(key)
+    chat_id = callback.message.chat.id
+
+    rnd = await store.bj_get(user_id, chat_id)
     if rnd is None:
         await callback.answer("Нет активной игры.", show_alert=True)
         return
@@ -349,7 +332,7 @@ async def cb_stand(
         await score_service.add_score(
             user_id, chat_id, delta, admin_id=user_id,
         )
-    del _active_games[key]
+    await store.bj_delete(user_id, chat_id)
 
     text = _render_table(
         rnd,

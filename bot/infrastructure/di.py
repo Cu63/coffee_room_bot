@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterable
 
 import asyncpg
+import redis.asyncio as aioredis
 from dishka import Provider, Scope, provide
 
 from bot.domain.pluralizer import ScorePluralizer
@@ -23,7 +24,8 @@ from bot.application.history_service import HistoryService
 from bot.application.cleanup_service import CleanupService
 from bot.application.mute_service import MuteService
 from bot.application.giveaway_service import GiveawayService
-from bot.application.slots_service import SlotsService, SlotsConfig
+from bot.application.slots_service import SlotsService, SlotsConfig, SlotsMachine
+from bot.application.slots_custom_functions import apply_custom_functions
 from bot.application.llm_service import LlmService
 
 from bot.infrastructure.config_loader import AppConfig, Settings, load_config, load_messages, load_help_config
@@ -40,6 +42,7 @@ from bot.infrastructure.db.postgres_saved_permissions_repository import Postgres
 from bot.infrastructure.db.postgres_mute_protection_repository import PostgresMuteProtectionRepository
 from bot.infrastructure.db.postgres_giveaway_repository import PostgresGiveawayRepository
 from bot.infrastructure.db.postgres_llm_repository import PostgresLlmRepository
+from bot.infrastructure.redis_store import RedisStore
 
 from bot.presentation.handlers.help_renderer import HelpRenderer
 
@@ -82,6 +85,29 @@ class AppProvider(Provider):
         pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         yield pool
         await pool.close()
+
+    @provide
+    async def get_redis(self, settings: Settings) -> AsyncIterable[aioredis.Redis]:
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        yield r
+        await r.aclose()
+
+    @provide
+    def get_redis_store(self, redis: aioredis.Redis) -> RedisStore:
+        return RedisStore(redis)
+
+    @provide
+    def get_slots_config(self, config: AppConfig, store: RedisStore) -> SlotsConfig:
+        cfg = SlotsConfig(
+            min_bet=config.blackjack.min_bet,
+            max_bet=config.blackjack.max_bet,
+        )
+        apply_custom_functions(cfg, store)
+        return cfg
+
+    @provide
+    def get_slots_machine(self, config: SlotsConfig) -> SlotsMachine:
+        return SlotsMachine(config)
 
 
 class RequestProvider(Provider):
@@ -183,15 +209,10 @@ class RequestProvider(Provider):
         return GiveawayService(repo)
 
     @provide
-    def get_slots_config(self, config: AppConfig) -> SlotsConfig:
-        return SlotsConfig(
-            min_bet=config.blackjack.min_bet,
-            max_bet=config.blackjack.max_bet,
-        )
-
-    @provide
-    def get_slots_service(self, score_repo: IScoreRepository, config: SlotsConfig) -> SlotsService:
-        return SlotsService(score_repo, config)
+    def get_slots_service(
+        self, machine: SlotsMachine, config: SlotsConfig, score_service: ScoreService,
+    ) -> SlotsService:
+        return SlotsService(machine, config, score_service)
 
     @provide
     def get_aitunnel_client(self, settings: Settings, config: AppConfig) -> AitunnelClient:

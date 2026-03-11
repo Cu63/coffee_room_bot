@@ -19,17 +19,18 @@ import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
+from collections.abc import Awaitable
 
 
 # ── Типы кастомных функций ────────────────────────────────────────
 
 # Функция-фильтр: можно ли вообще крутить (антиспам, особые условия)
-# Принимает user_id, chat_id, ставку → True если разрешено
-SpinGuard = Callable[[int, int, int], bool]
+# Принимает user_id, chat_id, ставку → True если разрешено (async)
+SpinGuard = Callable[[int, int, int], Awaitable[bool]]
 
 # Функция-модификатор выигрыша: можно изменить итоговый delta перед начислением
-# Принимает user_id, chat_id, delta, результат → новый delta
-PayoutModifier = Callable[[int, int, int, "SpinResult"], int]
+# Принимает user_id, chat_id, delta, результат → новый delta (async)
+PayoutModifier = Callable[[int, int, int, "SpinResult"], Awaitable[int]]
 
 
 # ── Конфиг ───────────────────────────────────────────────────────
@@ -193,9 +194,9 @@ class SlotsService:
         if bet < self._cfg.min_bet or bet > self._cfg.max_bet:
             return "invalid_bet"
 
-        # Проверка кастомных guard-функций
+        # Проверка кастомных guard-функций (async)
         for guard in self._cfg.spin_guards:
-            if not guard(user_id, chat_id, bet):
+            if not await guard(user_id, chat_id, bet):
                 return "guard_rejected"
 
         # Проверка баланса
@@ -206,9 +207,9 @@ class SlotsService:
         # Крутим
         result = self._machine.spin(bet)
 
-        # Применяем кастомные модификаторы выплаты
+        # Применяем кастомные модификаторы выплаты (async)
         for modifier in self._cfg.payout_modifiers:
-            result.delta = modifier(user_id, chat_id, result.delta, result)
+            result.delta = await modifier(user_id, chat_id, result.delta, result)
 
         # Начисляем/списываем
         from bot.application.score_service import SPECIAL_EMOJI
@@ -225,16 +226,3 @@ class SlotsService:
 
         result.new_balance = new_balance
         return result
-    
-        # slots_service.py
-    def cooldown_remaining(self, user_id: int, chat_id: int) -> timedelta | None:
-        """Возвращает оставшееся время до следующего кручения или None если можно."""
-        from bot.application.slots_custom_functions import _last_spin, COOLDOWN
-        from datetime import datetime
-        from bot.domain.tz import TZ_MSK
-        key = (user_id, chat_id)
-        last = _last_spin.get(key)
-        if last is None:
-            return None
-        remaining = COOLDOWN - (datetime.now(TZ_MSK) - last)
-        return remaining if remaining.total_seconds() > 0 else None

@@ -84,11 +84,7 @@ async def cmd_slots(
         await message.reply("Недостаточно баллов.")
         return
     if result == "guard_rejected":
-        remaining = slots_service.cooldown_remaining(message.from_user.id, message.chat.id)
-        if remaining:
-            minutes = int(remaining.total_seconds() // 60)
-            seconds = int(remaining.total_seconds() % 60)
-            await message.reply(f"Следующее кручение через {minutes}м {seconds}с.")
+        await message.reply("Подождите перед следующим кручением (кулдаун или дневной лимит).")
         return
         # Рендерим результат
     reels_str = _render_reels(result.reels)

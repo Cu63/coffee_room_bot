@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import re
 from datetime import datetime, timedelta
 
@@ -9,6 +10,7 @@ from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
+    ChatPermissions,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -17,11 +19,17 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.giveaway_service import GiveawayService
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.domain.entities import User
+from bot.application.mute_service import MuteService
+from bot.domain.entities import MuteEntry, User
 from bot.domain.giveaway_entities import Giveaway
 from bot.domain.pluralizer import ScorePluralizer
+from bot.domain.bot_utils import is_admin, parse_duration
 from bot.infrastructure.config_loader import AppConfig
-from bot.domain.bot_utils import is_admin
+from bot.infrastructure.redis_store import RedisStore
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="giveaway")
 
@@ -240,3 +248,179 @@ async def _post_results(
             )
         except Exception:
             pass
+
+
+# ─── Мут-рулетка ────────────────────────────────────────────────────────────
+
+
+def _mute_roulette_kb(chat_id: int, count: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🎰 Испытать удачу ({count})",
+                    callback_data=f"muteroulette:join:{chat_id}",
+                )
+            ]
+        ]
+    )
+
+
+@router.message(Command("muteroulette"))
+@inject
+async def cmd_mute_roulette(
+    message: Message,
+    bot: Bot,
+    config: FromDishka[AppConfig],
+    store: FromDishka[RedisStore],
+) -> None:
+    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+        await message.answer("Только администраторы могут запускать мут-рулетку.")
+        return
+
+    args = (message.text or "").split()[1:]
+    # /muteroulette <время_мута> <кол-во_проигравших> <время_сбора>
+    # /muteroulette 10m 2 5m
+    if len(args) < 3:
+        await message.answer(
+            "Использование: <code>/muteroulette &lt;мут&gt; &lt;кол-во&gt; &lt;сбор&gt;</code>\n"
+            "Пример: <code>/muteroulette 10m 2 5m</code>\n"
+            "= мут 10 минут, 2 проигравших, сбор участников 5 минут.",
+            parse_mode="HTML",
+        )
+        return
+
+    mute_secs = parse_duration(args[0])
+    if mute_secs is None or mute_secs < 60:
+        await message.answer("Неверное время мута (мин. 1m).")
+        return
+
+    try:
+        losers_count = int(args[1])
+        if losers_count < 1:
+            raise ValueError
+    except ValueError:
+        await message.answer("Кол-во проигравших должно быть >= 1.")
+        return
+
+    collect_secs = parse_duration(args[2])
+    if collect_secs is None or collect_secs < 30:
+        await message.answer("Время сбора минимум 30 секунд.")
+        return
+
+    chat_id = message.chat.id
+    existing = await store.mute_roulette_get(chat_id)
+    if existing:
+        await message.answer("В этом чате уже идёт мут-рулетка!")
+        return
+
+    import time
+    ends_at = time.time() + collect_secs
+    mute_minutes = mute_secs // 60
+
+    await store.mute_roulette_create(
+        chat_id=chat_id,
+        creator_id=message.from_user.id,
+        mute_minutes=mute_minutes,
+        losers_count=losers_count,
+        ends_at=ends_at,
+    )
+
+    collect_str = f"{collect_secs // 60}м" if collect_secs >= 60 else f"{collect_secs}с"
+    text = (
+        f"🎰 <b>Мут-рулетка!</b>\n\n"
+        f"Время мута: <b>{mute_minutes} мин</b>\n"
+        f"Проигравших: <b>{losers_count}</b>\n"
+        f"Сбор: <b>{collect_str}</b>\n\n"
+        f"Жми кнопку, если не трус!"
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, 0))
+
+
+@router.callback_query(F.data.startswith("muteroulette:join:"))
+@inject
+async def cb_mute_roulette_join(
+    cb: CallbackQuery,
+    store: FromDishka[RedisStore],
+) -> None:
+    chat_id = int(cb.data.split(":")[2])
+    user_id = cb.from_user.id
+
+    joined = await store.mute_roulette_join(chat_id, user_id)
+    if not joined:
+        await cb.answer("Ты уже участвуешь или рулетка завершена.", show_alert=False)
+        return
+
+    count = await store.mute_roulette_count(chat_id)
+    await cb.answer("Ты в игре! Удачи...", show_alert=False)
+
+    try:
+        await cb.message.edit_reply_markup(reply_markup=_mute_roulette_kb(chat_id, count))
+    except Exception:
+        pass
+
+
+@router.message(Command("muteroulette_end"))
+@inject
+async def cmd_mute_roulette_end(
+    message: Message,
+    bot: Bot,
+    config: FromDishka[AppConfig],
+    store: FromDishka[RedisStore],
+    mute_service: FromDishka[MuteService],
+) -> None:
+    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+        await message.answer("Только администраторы.")
+        return
+
+    chat_id = message.chat.id
+    data = await store.mute_roulette_delete(chat_id)
+    if data is None:
+        await message.answer("Нет активной мут-рулетки.")
+        return
+
+    await _finish_mute_roulette(bot, chat_id, data, mute_service)
+
+
+async def _finish_mute_roulette(
+    bot: Bot, chat_id: int, data: dict, mute_service: MuteService,
+) -> None:
+    """Завершение мут-рулетки: выбор проигравших и применение мутов."""
+    participants = data["participants"]
+    losers_count = data["losers_count"]
+    mute_minutes = data["mute_minutes"]
+
+    if not participants:
+        await bot.send_message(chat_id, "🎰 Мут-рулетка завершена, но никто не участвовал.")
+        return
+
+    losers = random.sample(participants, min(losers_count, len(participants)))
+    until = datetime.now(TZ_MSK) + timedelta(minutes=mute_minutes)
+
+    lines = [f"🎰 <b>Мут-рулетка завершена!</b> Участников: {len(participants)}\n"]
+    for user_id in losers:
+        try:
+            member = await bot.get_chat_member(chat_id, user_id)
+            name = f'<a href="tg://user?id={user_id}">{member.user.full_name}</a>'
+        except Exception:
+            name = f"<code>{user_id}</code>"
+
+        try:
+            await bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=ChatPermissions(can_send_messages=False),
+                until_date=until,
+            )
+            await mute_service.save_mute(MuteEntry(
+                user_id=user_id,
+                chat_id=chat_id,
+                muted_by=0,
+                until_at=until,
+            ))
+            lines.append(f"🔇 {name} — мут {mute_minutes} мин")
+        except Exception:
+            logger.exception("Failed to mute %d in roulette", user_id)
+            lines.append(f"⚠️ {name} — не удалось замутить")
+
+    await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")

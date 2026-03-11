@@ -57,6 +57,40 @@ async def unmute_loop(container, bot: Bot, interval_seconds: int) -> None:
             logger.exception("Unmute task failed")
 
 
+async def mute_roulette_loop(container, bot: Bot) -> None:
+    """Фоновая задача: завершает истёкшие мут-рулетки."""
+    from bot.infrastructure.redis_store import RedisStore
+    from bot.application.mute_service import MuteService
+    from bot.presentation.handlers.giveaway import _finish_mute_roulette
+    import time as _time
+
+    while True:
+        await asyncio.sleep(10)
+        try:
+            async with container() as scope:
+                store = await scope.get(RedisStore)
+                mute_service = await scope.get(MuteService)
+                # Сканируем все ключи мут-рулеток
+                keys = []
+                async for key in store._r.scan_iter("muteroulette:*"):
+                    keys.append(key)
+                now = _time.time()
+                for key in keys:
+                    raw = await store._r.get(key)
+                    if raw is None:
+                        continue
+                    import json
+                    data = json.loads(raw)
+                    if data["ends_at"] <= now:
+                        chat_id = int(key.split(":")[1])
+                        data = await store.mute_roulette_delete(chat_id)
+                        if data:
+                            logger.info("Auto-finishing mute roulette in chat %d", chat_id)
+                            await _finish_mute_roulette(bot, chat_id, data, mute_service)
+        except Exception:
+            logger.exception("Mute roulette loop failed")
+
+
 async def main() -> None:
     settings = Settings()
     config = load_config()
@@ -64,6 +98,18 @@ async def main() -> None:
     container = make_async_container(AppProvider(), RequestProvider())
 
     bot = Bot(token=settings.bot_token)
+
+    # Мониторинг: отправка логов в Telegram-чат
+    tg_log_handler = None
+    if settings.log_chat_id:
+        from bot.infrastructure.telegram_log_handler import TelegramLogHandler
+        log_level = getattr(logging, settings.log_level.upper(), logging.ERROR)
+        tg_log_handler = TelegramLogHandler(bot, settings.log_chat_id, level=log_level)
+        tg_log_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        logging.getLogger().addHandler(tg_log_handler)
+        tg_log_handler.start()
+        logger.info("Telegram log handler enabled (chat_id=%d, level=%s)", settings.log_chat_id, settings.log_level)
+
     dp = Dispatcher()
 
     dp.message.outer_middleware(ChatContextMiddleware())
@@ -88,6 +134,7 @@ async def main() -> None:
     cleanup_task = asyncio.create_task(cleanup_loop(container, sys_cfg.cleanup_interval_hours))
     unmute_task = asyncio.create_task(unmute_loop(container, bot, sys_cfg.unmute_check_interval_seconds))
     asyncio.create_task(giveaway_loop(bot, container))
+    mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
 
     logger.info("Bot starting…")
     try:
@@ -98,6 +145,9 @@ async def main() -> None:
     finally:
         cleanup_task.cancel()
         unmute_task.cancel()
+        mute_roulette_task.cancel()
+        if tg_log_handler:
+            tg_log_handler.stop()
         await container.close()
         await bot.session.close()
 
