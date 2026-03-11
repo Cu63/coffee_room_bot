@@ -10,7 +10,7 @@ from aiogram.types import Message
 
 logger = logging.getLogger(__name__)
 
-AUTO_DELETE_SECONDS = 300  # 5 минут
+AUTO_DELETE_SECONDS = 120  # секунды
 
 
 async def _delete_after(bot: Bot, chat_id: int, message_id: int, delay: int) -> None:
