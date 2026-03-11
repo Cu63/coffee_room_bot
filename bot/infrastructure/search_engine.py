@@ -16,7 +16,7 @@ _BLOCKED_DOMAINS = frozenset({
     "mvideo.ru", "citilink.ru",
 })
 
-_SEARCH_TIMEOUT = aiohttp.ClientTimeout(total=15)
+_SEARCH_TIMEOUT = aiohttp.ClientTimeout(total=90)
 
 
 @dataclass(slots=True)
@@ -65,8 +65,12 @@ class SearchEngine:
         return results
 
     async def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
-        """Ищет через Google."""
+        """Ищет через Google с одним retry при неудаче."""
         results = await self._query_openserp("google", query, max_results)
+        if not results:
+            logger.info("Google returned 0 results, retrying once...")
+            await asyncio.sleep(2)
+            results = await self._query_openserp("google", query, max_results)
         results = results[:max_results]
         logger.info("OpenSERP search for %r returned %d results", query, len(results))
         return results
