@@ -53,8 +53,6 @@ fi
 
 # Пересобираем и перезапускаем весь стек
 echo "[deploy] rebuilding all services..."
-docker compose down
-docker compose build
-docker compose up -d
+docker compose up -d --build
 
 echo "[deploy] done"
