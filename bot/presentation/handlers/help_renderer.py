@@ -65,7 +65,7 @@ class HelpRenderer:
 
         # Плейсхолдеры для секций с динамическими значениями
         ctx = dict(
-            daily_reactions_given=lc.daily_reactions_given,
+            daily_reactions_given=lc.daily_negative_given,
             daily_score_received=lc.daily_score_received,
             max_message_age_hours=lc.max_message_age_hours,
             retention_days=config.history.retention_days,
