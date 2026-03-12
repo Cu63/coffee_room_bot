@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
