@@ -12,7 +12,7 @@ cd "$PROJECT_DIR"
 CRON_JOB="*/1 * * * * $SCRIPT_PATH >> /var/log/deploy.log 2>&1"
 if ! crontab -l 2>/dev/null | grep -qF "$SCRIPT_PATH"; then
     echo "[deploy] installing cron job..."
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    (echo "HOME=/home/bot"; echo "$CRON_JOB") | crontab -
     echo "[deploy] cron job installed"
 fi
 
