@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -17,9 +17,7 @@ from aiogram.types import (
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
-from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
-from bot.domain.bot_utils import is_admin
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -167,47 +165,19 @@ async def cb_protect(
 @inject
 async def cmd_unprotect(
     message: Message,
-    command: CommandObject,
-    user_repo: FromDishka[IUserRepository],
     protection_repo: FromDishka[IMuteProtectionRepository],
-    formatter: FromDishka[MessageFormatter],
-    config: FromDishka[AppConfig],
 ) -> None:
+    """Снять свою защиту от мута. Работает только для себя."""
     if message.from_user is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
-        await message.reply("⛔ Только администраторы могут снимать защиту.")
-        return
 
-    target = None
-    if message.reply_to_message and message.reply_to_message.from_user:
-        ru = message.reply_to_message.from_user
-        target = await user_repo.get_by_id(ru.id)
-    elif command.args:
-        username = command.args.strip().lstrip("@")
-        target = await user_repo.get_by_username(username)
+    user_id = message.from_user.id
+    chat_id = message.chat.id
 
-    if target is None:
-        await message.reply(
-            "Использование: <code>/unprotect @username</code> или реплай на сообщение.",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
-    existing = await protection_repo.get(target.id, message.chat.id)
+    existing = await protection_repo.get(user_id, chat_id)
     if existing is None:
-        target_link = user_link(target.username, target.full_name, target.id)
-        await message.reply(
-            f"{target_link} не имеет активной защиты.",
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-        )
+        await message.reply("У тебя нет активной защиты.")
         return
 
-    await protection_repo.delete(target.id, message.chat.id)
-    target_link = user_link(target.username, target.full_name, target.id)
-    await message.reply(
-        f"🔓 Защита снята с {target_link}.",
-        parse_mode=ParseMode.HTML,
-        link_preview_options=NO_PREVIEW,
-    )
+    await protection_repo.delete(user_id, chat_id)
+    await message.reply("🔓 Защита снята.")
