@@ -1,62 +1,43 @@
-# Score Bot — Telegram-бот системы начисления очков
+# Coffee Room Bot
 
-Telegram-бот на базе **aiogram 3**, реализующий систему геймификации через реакции.
-Участники чата получают и теряют очки, когда другие пользователи ставят эмодзи-реакции на их сообщения.
+Telegram-бот для геймификации групповых чатов через реакции на сообщения. Пользователи зарабатывают и теряют очки (кирчики ⭐), участвуют в играх и борются за место в лидерборде.
+
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
+[![aiogram](https://img.shields.io/badge/aiogram-3.x-blue.svg)](https://aiogram.dev)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-green.svg)](https://cu63.github.io/coffee_room_bot)
+
 ---
-
-## Deploy
-p.s. лучше всего деплоить так
-p.s.s это работает -- ура
-```sh
-./scripts/deploy.sh --force
-```
 
 ## Возможности
 
-- Начисление/списание очков по реакциям с настраиваемыми весами
-- Независимые счета в каждом чате
-- Дневные лимиты на количество реакций и получаемых очков
-- Игнорирование реакций на старые сообщения
-- Защита от самонакрутки
-- Автоматическая очистка устаревшей истории
-- Команды `/score`, `/top`, `/history`
+| Категория | Описание |
+|-----------|----------|
+| **Реакции** | Emoji-реакции → ±очки. Настраиваемые веса. |
+| **Лидерборд** | `/top` — топ участников чата |
+| **История** | `/history` — лента начислений |
+| **Мут** | `/mute @user 10m` — мут за очки. `/selfmute`. Защита `/protect`. |
+| **Тег** | `/tag новый_тег` — персональный тег за очки |
+| **Блекджек** | `/bj 50` — игра против дилера |
+| **Слоты** | `/slots 25` — однорукий бандит с прогрессивным джекпотом |
+| **Кости** | `/dice 10 2m` — мультиплеерная игра, победитель по наибольшему броску |
+| **Гивэвей** | `/giveaway 500 100` — розыгрыш очков |
+| **LLM** | `/llm вопрос`, `/search запрос` — AI-ответы через AiTunnel |
 
 ---
 
-## Стек
+## Быстрый старт
 
-| Компонент          | Технология                |
-|--------------------|---------------------------|
-| Фреймворк бота     | aiogram 3                 |
-| База данных         | PostgreSQL 16             |
-| Драйвер БД         | asyncpg (чистый SQL)      |
-| Миграции            | Flyway                    |
-| DI-контейнер        | dishka                    |
-| Пакетный менеджер   | uv                        |
-| Контейнеризация     | Docker + Docker Compose   |
+### Требования
 
----
-
-## Требования
-
-- Docker и Docker Compose (v2)
-- Telegram Bot Token (получить у [@BotFather](https://t.me/BotFather))
-
-Для локальной разработки без Docker:
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) — пакетный менеджер
-- PostgreSQL 16+
-
----
-
-## Быстрый старт (Docker)
+- Docker и Docker Compose
+- Telegram-бот (создать через [@BotFather](https://t.me/BotFather))
+- (Опционально) AiTunnel API-ключ для LLM-команд
 
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone <your-repo-url>
-cd score-bot
+git clone https://github.com/Cu63/coffee_room_bot.git
+cd coffee_room_bot
 ```
 
 ### 2. Создать `.env`
@@ -65,253 +46,174 @@ cd score-bot
 cp .env.example .env
 ```
 
-Открыть `.env` и вписать токен бота:
+Открыть `.env` и заполнить (минимум — `BOT_TOKEN`):
 
-```
-BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+```dotenv
+BOT_TOKEN=1234567890:AAxxxx...          # Обязательно
 DATABASE_URL=postgresql+asyncpg://scorebot:scorebot@db:5432/scorebot
+AITUNNEL_API_KEY=sk-aitunnel-xxx        # Опционально, для /llm и /search
+REDIS_URL=redis://redis:6379/0
+LOG_CHAT_ID=0                           # ID чата для логов (0 = выключено)
+LOG_LEVEL=ERROR
 ```
 
-### 3. Запустить
+### 3. Настроить бота в BotFather
+
+```
+/setprivacy → Disable        (бот видит все сообщения)
+/setjoingroups → Enable
+```
+
+<details>
+<summary>Список команд для /setcommands</summary>
+
+```
+score - Мой счёт
+top - Топ участников
+history - История начислений
+bj - Блекджек (/bj <ставка>)
+slots - Слоты (/slots <ставка>)
+dice - Кости (/dice <ставка> <время>)
+mute - Замутить пользователя
+selfmute - Замутить себя
+protect - Купить защиту от мута
+tag - Изменить тег
+transfer - Перевести очки
+giveaway - Создать розыгрыш
+llm - Вопрос к AI
+search - Поиск с AI-ответом
+help - Справка
+```
+</details>
+
+### 4. Запустить
 
 ```bash
-docker compose up --build -d
+docker compose up -d --build
 ```
 
-Порядок запуска автоматический:
-1. **db** — PostgreSQL поднимается, проходит healthcheck
-2. **flyway** — применяет миграции из `migrations/`
-3. **bot** — стартует после успешной миграции
-
-### 4. Проверить логи
-
-```bash
-docker compose logs -f bot
-```
-
-### 5. Остановить
-
-```bash
-docker compose down
-```
-
-Для полного сброса (включая данные БД):
-
-```bash
-docker compose down -v
-```
+Миграции применяются автоматически через Flyway при старте.
 
 ---
 
-## Локальная разработка (без Docker)
+## Локальная разработка
 
-### 1. Установить зависимости
+### Требования
 
-```bash
-uv sync
-```
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
+- PostgreSQL 16 и Redis 7 (или через Docker)
 
-### 2. Поднять PostgreSQL
-
-Любым удобным способом — локально, через Docker или облачный сервис.
-
-Пример через Docker (только БД):
+### Установка и запуск
 
 ```bash
-docker run -d \
-  --name scorebot-db \
-  -e POSTGRES_USER=scorebot \
-  -e POSTGRES_PASSWORD=scorebot \
-  -e POSTGRES_DB=scorebot \
-  -p 5432:5432 \
-  postgres:16-alpine
-```
+uv sync                              # установить зависимости
 
-### 3. Применить миграции
+docker compose up -d db redis        # поднять инфраструктуру
 
-Через Flyway CLI:
-
-```bash
-flyway -url=jdbc:postgresql://localhost:5432/scorebot \
-       -user=scorebot \
-       -password=scorebot \
-       -locations=filesystem:./migrations \
-       migrate
-```
-
-Или через Flyway в Docker:
-
-```bash
+# применить миграции
 docker run --rm --network=host \
   -v $(pwd)/migrations:/flyway/sql \
   flyway/flyway:11 \
   -url=jdbc:postgresql://localhost:5432/scorebot \
-  -user=scorebot \
-  -password=scorebot \
-  migrate
+  -user=scorebot -password=scorebot migrate
+
+uv run python -m bot                 # запустить бота
 ```
 
-### 4. Настроить `.env`
-
-```
-BOT_TOKEN=your-token-here
-DATABASE_URL=postgresql+asyncpg://scorebot:scorebot@localhost:5432/scorebot
-```
-
-### 5. Запустить бота
+### Полезные команды
 
 ```bash
-uv run python -m bot
+just lint        # ruff format + ruff check --fix
+just test        # pytest
+just docs        # mkdocs dev-сервер (http://localhost:8000)
+just docs-build  # собрать документацию в site/
 ```
-
----
-
-## Настройка бота в BotFather
-
-Чтобы бот видел реакции в чатах, необходимо:
-
-1. Открыть [@BotFather](https://t.me/BotFather)
-2. `/mybots` → выбрать бота → **Bot Settings** → **Group Privacy** → отключить (**Turn off**)
-3. Добавить бота в чат как администратора (необязательно, но рекомендуется для стабильной работы)
-
-> **Важно:** без отключения Group Privacy бот не будет видеть обычные сообщения и не сможет отслеживать их авторов для начисления очков по реакциям.
 
 ---
 
 ## Конфигурация
 
-### `config.yaml` — основные настройки
+### `configs/config.yaml` — основные параметры
 
-```yaml
-score:
-  singular: "балл"        # 1 балл
-  plural_few: "балла"     # 2-4 балла
-  plural_many: "баллов"   # 5+ баллов
-  icon: "⭐"
+Реакции и их веса, лимиты, стоимость мута/тега, параметры игр, интервалы фоновых задач. Редактировать без перезапуска кода (требуется перезапуск контейнера).
 
-reactions:
-  "👍": +1
-  "❤️": +2
-  "🔥": +3
-  "👎": -1
-  "💩": -2
+### `configs/messages.yaml` — тексты сообщений
 
-self_reaction_allowed: false
+Все пользовательские сообщения на русском. Редактировать без изменений Python-кода.
 
-limits:
-  daily_reactions_given: 10     # макс. реакций от одного пользователя в сутки
-  daily_score_received: 20      # макс. очков одному пользователю в сутки
-  max_message_age_hours: 48     # реакции на сообщения старше N часов игнорируются
+### `configs/help.yaml` — структура /help
 
-history:
-  retention_days: 7             # сколько дней хранить историю событий
-```
-
-Добавление новой реакции — только правка `config.yaml` и перезапуск бота. Код менять не нужно.
-
-### `messages.yaml` — тексты ответов
-
-Все пользовательские тексты вынесены в отдельный файл. Можно локализовать или менять формулировки без правки кода.
+Разделы, кнопки и тексты интерактивного меню `/help`.
 
 ### `.env` — секреты
 
-| Переменная    | Описание                                           |
-|---------------|----------------------------------------------------|
-| `BOT_TOKEN`   | Токен Telegram-бота                                |
-| `DATABASE_URL` | DSN подключения к PostgreSQL                       |
-
----
-
-## Команды бота
-
-| Команда              | Описание                                              |
-|----------------------|-------------------------------------------------------|
-| `/score`             | Показать свой счёт в текущем чате                     |
-| `/score @username`   | Показать счёт указанного пользователя                 |
-| `/top`               | Топ-10 участников чата по очкам                       |
-| `/top N`             | Топ-N участников (макс. 50)                           |
-| `/history`           | История начислений за последние N дней (из конфига)   |
-
----
-
-## Миграции
-
-Миграции хранятся в `migrations/` в формате Flyway:
-
-```
-migrations/
-└── V001__initial_schema.sql
-```
-
-Для добавления новой миграции создайте файл по шаблону `V002__description.sql`.
-
-При запуске через `docker compose` миграции применяются автоматически сервисом `flyway` до старта бота.
+| Переменная | Обязательна | Описание |
+|------------|-------------|----------|
+| `BOT_TOKEN` | ✅ | Токен бота от BotFather |
+| `DATABASE_URL` | ✅ | `postgresql+asyncpg://user:pass@host:port/db` |
+| `REDIS_URL` | ✅ | `redis://host:port/db` |
+| `AITUNNEL_API_KEY` | — | API-ключ для `/llm` и `/search` |
+| `OPENSERP_URL` | — | URL openserp для `/search` |
+| `LOG_CHAT_ID` | — | Telegram chat ID для логов (0 = выключено) |
+| `LOG_LEVEL` | — | `ERROR` / `WARNING` / `INFO` |
 
 ---
 
 ## Структура проекта
 
 ```
-score-bot/
+coffee_room_bot/
 ├── bot/
-│   ├── domain/                    # Сущности и бизнес-правила
-│   │   ├── entities.py
-│   │   ├── pluralizer.py
-│   │   └── reaction_registry.py
-│   ├── application/               # Use cases и интерфейсы
-│   │   ├── interfaces/
-│   │   │   ├── transaction_manager.py
-│   │   │   ├── score_repository.py
-│   │   │   ├── event_repository.py
-│   │   │   ├── daily_limits_repository.py
-│   │   │   ├── user_repository.py
-│   │   │   └── message_repository.py
-│   │   ├── score_service.py
-│   │   ├── leaderboard_service.py
-│   │   ├── history_service.py
-│   │   └── cleanup_service.py
-│   ├── infrastructure/            # БД, конфиг, DI
-│   │   ├── db/
-│   │   │   ├── transaction_manager.py
-│   │   │   ├── postgres_score_repository.py
-│   │   │   ├── postgres_event_repository.py
-│   │   │   ├── postgres_daily_limits_repository.py
-│   │   │   ├── postgres_user_repository.py
-│   │   │   └── postgres_message_repository.py
-│   │   ├── config_loader.py
-│   │   ├── message_formatter.py
-│   │   └── di.py
-│   ├── presentation/              # aiogram-хэндлеры
-│   │   ├── handlers/
-│   │   │   ├── reactions.py
-│   │   │   └── commands.py
-│   │   └── middlewares/
-│   │       ├── chat_context.py
-│   │       └── track_message.py
-│   ├── main.py
-│   └── __main__.py
-├── migrations/
-│   └── V001__initial_schema.sql
-├── tests/
-├── config.yaml
-├── messages.yaml
-├── .env.example
-├── Dockerfile
-├── docker-compose.yml
-└── pyproject.toml
+│   ├── domain/          # Чистая бизнес-логика (без фреймворков)
+│   ├── application/     # Сервисы + интерфейсы репозиториев
+│   │   └── interfaces/
+│   ├── infrastructure/  # PostgreSQL, Redis, DI, конфиги, фоновые задачи
+│   │   └── db/
+│   └── presentation/    # aiogram хендлеры и middleware
+│       ├── handlers/
+│       └── middlewares/
+├── configs/             # YAML-конфиги
+├── docs/                # Документация (mkdocs)
+├── migrations/          # SQL-миграции Flyway (V001__description.sql)
+└── tests/
 ```
 
-### Слоистая архитектура
+Архитектура: **Domain ← Application ← Infrastructure ← Presentation**
 
-- **Domain** и **Application** не импортируют ничего из aiogram, asyncpg или dishka — тестируются изолированно.
-- **Infrastructure** реализует интерфейсы из Application. Транзакции управляются исключительно через `ITransactionManager` (не в репозиториях, не в use cases).
-- **Presentation** — единственный слой, знающий об aiogram. Зависимости прокидываются через dishka (`FromDishka[T]`).
+Подробнее — в [документации](https://cu63.github.io/coffee_room_bot/architecture/).
+
+---
+
+## Миграции
+
+Новая миграция — создать `migrations/V00N__description.sql`.
+
+Применить вручную (локально):
+```bash
+docker run --rm --network=host \
+  -v $(pwd)/migrations:/flyway/sql \
+  flyway/flyway:11 \
+  -url=jdbc:postgresql://localhost:5432/scorebot \
+  -user=scorebot -password=scorebot migrate
+```
+
+---
+
+## Технологии
+
+- **Python 3.12** + async/await
+- **aiogram 3** — Telegram Bot API
+- **PostgreSQL 16** + asyncpg (raw SQL)
+- **Redis 7** — состояние игровых сессий
+- **Flyway** — миграции БД
+- **dishka** — Dependency Injection
+- **uv** — пакетный менеджер
+- **ruff** — линтер / форматтер
+- **mkdocs Material** — документация
 
 ---
 
 ## Лицензия
 
-created by t.me/shared_mutex. На момент создания вообще всё полностью навайбкоженно, но по идее это надо будет исправить.
-Справедливости ради оно и с учётом этого работает очень круто, поэтому да.
-
-MIT
+MIT — см. [LICENSE](LICENSE).
