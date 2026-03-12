@@ -9,7 +9,7 @@ SCRIPT_PATH="${SCRIPT_DIR}/deploy.sh"
 cd "$PROJECT_DIR"
 
 # Самоустановка в крон при первом запуске
-CRON_JOB="*/5 * * * * $SCRIPT_PATH >> /var/log/deploy.log 2>&1"
+CRON_JOB="*/1 * * * * $SCRIPT_PATH >> /var/log/deploy.log 2>&1"
 if ! crontab -l 2>/dev/null | grep -qF "$SCRIPT_PATH"; then
     echo "[deploy] installing cron job..."
     (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
@@ -48,7 +48,7 @@ fi
 CHANGED_SCRIPTS=$(git diff --name-only "$BEFORE" "$AFTER" -- scripts/deploy.sh)
 if [[ -n "$CHANGED_SCRIPTS" ]]; then
     echo "[deploy] script itself updated, re-executing new version"
-    exec bash "$SCRIPT_PATH" "$@"
+    exec bash "$SCRIPT_PATH" --force
 fi
 
 # Пересобираем и перезапускаем весь стек
