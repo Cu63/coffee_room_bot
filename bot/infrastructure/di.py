@@ -5,9 +5,11 @@ import redis.asyncio as aioredis
 from dishka import Provider, Scope, provide
 
 from bot.application.cleanup_service import CleanupService
+from bot.application.dice_service import DiceService
 from bot.application.giveaway_service import GiveawayService
 from bot.application.history_service import HistoryService
 from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
+from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.llm_repository import ILlmRepository
@@ -30,6 +32,7 @@ from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.config_loader import AppConfig, Settings, load_config, load_help_config, load_messages
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
+from bot.infrastructure.db.postgres_dice_repository import PostgresDiceRepository
 from bot.infrastructure.db.postgres_giveaway_repository import PostgresGiveawayRepository
 from bot.infrastructure.db.postgres_llm_repository import PostgresLlmRepository
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
@@ -160,6 +163,10 @@ class RequestProvider(Provider):
         return PostgresMuteProtectionRepository(tm.get_connection())
 
     @provide
+    def get_dice_repo(self, tm: ITransactionManager) -> IDiceRepository:
+        return PostgresDiceRepository(tm.get_connection())
+
+    @provide
     def get_giveaway_repo(self, tm: ITransactionManager) -> IGiveawayRepository:
         return PostgresGiveawayRepository(tm.get_connection())
 
@@ -204,6 +211,10 @@ class RequestProvider(Provider):
     @provide
     def get_mute_service(self, mute_repo: IMuteRepository) -> MuteService:
         return MuteService(mute_repo)
+
+    @provide
+    def get_dice_service(self, dice_repo: IDiceRepository, score_repo: IScoreRepository) -> DiceService:
+        return DiceService(dice_repo, score_repo)
 
     @provide
     def get_giveaway_service(self, repo: IGiveawayRepository, score_repo: IScoreRepository) -> GiveawayService:

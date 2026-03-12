@@ -54,6 +54,12 @@ blackjack:
   max_games_per_window: 5      # максимум игр в окне
   window_hours: 1              # размер временного окна в часах
 
+dice:
+  min_bet: 1
+  max_bet: 1000
+  min_wait_seconds: 10         # минимальное время сбора участников
+  max_wait_seconds: 3600       # максимальное время сбора (1 час)
+
 llm:
   model: "gemini-2.5-flash-lite"
   base_url: "https://api.aitunnel.ru/v1"

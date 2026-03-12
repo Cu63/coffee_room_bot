@@ -8,10 +8,12 @@ from dishka.integrations.aiogram import setup_dishka
 
 from bot.infrastructure.config_loader import Settings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
+from bot.infrastructure.dice_loop import dice_loop
 from bot.infrastructure.giveaway_loop import giveaway_loop
 from bot.presentation.handlers.admin_commands import _unmute_user, create_admin_router
 from bot.presentation.handlers.blackjack import router as blackjack_router
 from bot.presentation.handlers.commands import router as commands_router
+from bot.presentation.handlers.dice import router as dice_router
 from bot.presentation.handlers.giveaway import router as giveaway_router
 from bot.presentation.handlers.llm_commands import router as llm_router
 from bot.presentation.handlers.reactions import router as reactions_router
@@ -125,6 +127,7 @@ async def main() -> None:
 
     dp.include_router(commands_router)
     dp.include_router(blackjack_router)
+    dp.include_router(dice_router)
     dp.include_router(llm_router)
     dp.include_router(reactions_router)
     dp.include_router(slots_router)
@@ -145,6 +148,7 @@ async def main() -> None:
     cleanup_task = asyncio.create_task(cleanup_loop(container, sys_cfg.cleanup_interval_hours))
     unmute_task = asyncio.create_task(unmute_loop(container, bot, sys_cfg.unmute_check_interval_seconds))
     asyncio.create_task(giveaway_loop(bot, container))
+    asyncio.create_task(dice_loop(bot, container))
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
 
     logger.info("Bot starting…")

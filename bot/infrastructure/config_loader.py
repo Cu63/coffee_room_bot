@@ -88,6 +88,14 @@ class BlackjackConfig:
 
 
 @dataclass
+class DiceConfig:
+    min_bet: int = 1
+    max_bet: int = 1000
+    min_wait_seconds: int = 10
+    max_wait_seconds: int = 3600  # 1 час
+
+
+@dataclass
 class SystemConfig:
     """Системные интервалы и технические параметры."""
 
@@ -146,6 +154,7 @@ class AppConfig:
     auto_react: AutoReactConfig = field(default_factory=AutoReactConfig)
     tag: TagConfig = field(default_factory=TagConfig)
     blackjack: BlackjackConfig = field(default_factory=BlackjackConfig)
+    dice: DiceConfig = field(default_factory=DiceConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
     system: SystemConfig = field(default_factory=SystemConfig)
 
@@ -173,6 +182,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         auto_react=AutoReactConfig(**raw.get("auto_react", {})),
         tag=TagConfig(**raw.get("tag", {})),
         blackjack=BlackjackConfig(**blackjack_raw),
+        dice=DiceConfig(**raw.get("dice", {})),
         llm=LlmConfig(**raw.get("llm", {})),
         system=SystemConfig(**system_raw),
     )
