@@ -177,4 +177,4 @@ async def cmd_slots(
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
     )
-    schedule_delete(bot, message, result_msg)
+    schedule_delete(bot, message, result_msg, delay=30)

@@ -229,7 +229,7 @@ async def cmd_blackjack(
             result_line=_result_line(rnd, formatter._p),
         )
         reply = await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
-        schedule_delete(bot, message, reply)
+        schedule_delete(bot, message, reply, delay=30)
         return
 
     # Сохраняем в Redis и показываем стол с кнопками
@@ -241,7 +241,8 @@ async def cmd_blackjack(
         reply_markup=_bj_kb(user_id),
         link_preview_options=NO_PREVIEW,
     )
-    schedule_delete(bot, message, game_msg)
+    # Удаляем только команду; game_msg удалится по завершении игры (cb_hit / cb_stand)
+    schedule_delete(bot, message, delay=30)
 
 
 # ── Callback: Hit ────────────────────────────────────────────────
@@ -295,7 +296,7 @@ async def cb_hit(
             reply_markup=None,
             link_preview_options=NO_PREVIEW,
         )
-        schedule_delete(bot, callback.message)
+        schedule_delete(bot, callback.message, delay=30)
         await callback.answer()
         return
 
@@ -362,5 +363,5 @@ async def cb_stand(
         reply_markup=None,
         link_preview_options=NO_PREVIEW,
     )
-    schedule_delete(bot, callback.message)
+    schedule_delete(bot, callback.message, delay=30)
     await callback.answer()
