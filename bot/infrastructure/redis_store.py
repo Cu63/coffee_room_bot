@@ -146,6 +146,35 @@ class RedisStore:
         key = f"{_SLOTS_LAST}{user_id}:{chat_id}"
         await self._r.set(key, str(time.time()), ex=cooldown_seconds + 10)
 
+    # ── Mute: дневной лимит и кулдаун ───────────────────────────────
+
+    _MUTE_DAILY = "mute:daily:"   # mute:daily:{actor_id}:{chat_id}
+    _MUTE_TARGET = "mute:target:" # mute:target:{actor_id}:{target_id}:{chat_id}
+
+    async def mute_daily_count(self, actor_id: int, chat_id: int) -> int:
+        """Сколько мутов выдано сегодня данным актором."""
+        key = f"{self._MUTE_DAILY}{actor_id}:{chat_id}"
+        raw = await self._r.get(key)
+        return int(raw or 0)
+
+    async def mute_daily_increment(self, actor_id: int, chat_id: int) -> None:
+        """Записать ещё один мут. TTL — 24 часа."""
+        key = f"{self._MUTE_DAILY}{actor_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 86400)
+        await pipe.execute()
+
+    async def mute_target_cooldown_ok(self, actor_id: int, target_id: int, chat_id: int) -> bool:
+        """True если кулдаун прошёл (можно снова мутить этого участника)."""
+        key = f"{self._MUTE_TARGET}{actor_id}:{target_id}:{chat_id}"
+        return not bool(await self._r.exists(key))
+
+    async def mute_target_cooldown_set(self, actor_id: int, target_id: int, chat_id: int, hours: int) -> None:
+        """Установить кулдаун между мутами одного участника."""
+        key = f"{self._MUTE_TARGET}{actor_id}:{target_id}:{chat_id}"
+        await self._r.set(key, "1", ex=hours * 3600)
+
     # ── Slots: прогрессивный джекпот ─────────────────────────────
 
     async def jackpot_add(self, chat_id: int, amount: int) -> None:

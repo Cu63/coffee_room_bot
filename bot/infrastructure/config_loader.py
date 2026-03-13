@@ -71,9 +71,11 @@ class AutoReactConfig(_BaseConfig):
 
 
 class MuteConfig(_BaseConfig):
-    cost_per_minute: int = 20
+    cost_per_minute: int = 3
     min_minutes: int = 1
-    max_minutes: int = 120
+    max_minutes: int = 15
+    daily_limit: int = 3             # сколько мутов в сутки может выдать один пользователь
+    target_cooldown_hours: int = 2   # кулдаун между мутами одного и того же человека
     selfmute_min_minutes: int = 1
     selfmute_max_minutes: int = 1440
     protection_cost: int = 200

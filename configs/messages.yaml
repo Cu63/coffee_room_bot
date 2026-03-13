@@ -76,3 +76,5 @@ protect_not_enough: "Недостаточно баллов. Нужно: {cost} {
 protect_success: "🛡 {user} купил защиту от мута на {hours} ч. за {cost} {score_word}. Баланс: {balance} {score_word_balance}."
 protect_extended: "🛡 Защита продлена до {until}. Списано: {cost} {score_word}. Баланс: {balance} {score_word_balance}."
 slots_cooldown: "⏳ Следующий спин доступен через {minutes} мин."
+mute_daily_limit: "🚫 Сегодня уже выдано {count} из {limit} мутов. Лимит исчерпан."
+mute_target_cooldown: "⏳ Ты недавно уже мутил {target}. Подожди {hours} ч."

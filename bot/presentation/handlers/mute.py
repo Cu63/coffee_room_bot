@@ -26,6 +26,7 @@ from bot.domain.entities import MuteEntry
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
+from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import (
     _ADMIN_PERM_FIELDS,
     _extract_admin_permissions,
@@ -49,6 +50,7 @@ async def cmd_mute(
     mute_service: FromDishka[MuteService],
     protection_repo: FromDishka[IMuteProtectionRepository],
     user_repo: FromDishka[IUserRepository],
+    store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
@@ -72,9 +74,28 @@ async def cmd_mute(
             formatter._t["mute_invalid_minutes"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
         )
         return
+    # Дневной лимит мутов
+    if mute_cfg.daily_limit > 0:
+        daily_count = await store.mute_daily_count(message.from_user.id, message.chat.id)
+        if daily_count >= mute_cfg.daily_limit:
+            await message.reply(
+                formatter._t["mute_daily_limit"].format(count=daily_count, limit=mute_cfg.daily_limit)
+            )
+            return
+    # Кулдаун между мутами одного участника
+    target_link = user_link(target.username, target.full_name, target.id)
+    if mute_cfg.target_cooldown_hours > 0:
+        if not await store.mute_target_cooldown_ok(message.from_user.id, target.id, message.chat.id):
+            await message.reply(
+                formatter._t["mute_target_cooldown"].format(
+                    target=target_link, hours=mute_cfg.target_cooldown_hours
+                ),
+                parse_mode=ParseMode.HTML,
+                link_preview_options=NO_PREVIEW,
+            )
+            return
     protected_until = await protection_repo.get(target.id, message.chat.id)
     if protected_until is not None:
-        target_link = user_link(target.username, target.full_name, target.id)
         until_str = protected_until.astimezone(TZ_MSK).strftime("%H:%M %d.%m")
         await message.reply(
             formatter._t["mute_target_protected"].format(target=target_link, until=until_str),
@@ -163,8 +184,12 @@ async def cmd_mute(
             )
         )
         return
+    # Фиксируем мут в Redis (счётчик и кулдаун)
+    if mute_cfg.daily_limit > 0:
+        await store.mute_daily_increment(message.from_user.id, chat_id)
+    if mute_cfg.target_cooldown_hours > 0:
+        await store.mute_target_cooldown_set(message.from_user.id, target.id, chat_id, mute_cfg.target_cooldown_hours)
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
-    target_link = user_link(target.username, target.full_name, target.id)
     await message.reply(
         formatter._t["mute_success"].format(
             actor=actor_link,
