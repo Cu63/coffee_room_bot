@@ -251,6 +251,7 @@ class RedisStore:
                 "losers_count": losers_count,
                 "ends_at": ends_at,
                 "participants": [],
+                "message_id": 0,
             }
         )
         ttl = int(ends_at - time.time()) + 300
@@ -298,6 +299,17 @@ class RedisStore:
         if raw is None:
             return None
         return json.loads(raw)
+
+    async def mute_roulette_set_message_id(self, chat_id: int, roulette_id: str, message_id: int) -> None:
+        """Сохранить message_id лобби-сообщения рулетки."""
+        key = self._mg_key(chat_id, roulette_id)
+        raw = await self._r.get(key)
+        if raw is None:
+            return
+        data = json.loads(raw)
+        data["message_id"] = message_id
+        ttl = await self._r.ttl(key)
+        await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
 
     async def mute_roulette_count(self, chat_id: int, roulette_id: str) -> int:
         key = self._mg_key(chat_id, roulette_id)

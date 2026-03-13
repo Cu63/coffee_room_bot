@@ -32,6 +32,11 @@ def schedule_delete(bot: Bot, *messages: Message, delay: int = 120) -> None:
         asyncio.create_task(_delete_after(bot, msg.chat.id, msg.message_id, delay))
 
 
+def schedule_delete_id(bot: Bot, chat_id: int, message_id: int, delay: int = 120) -> None:
+    """Планирует удаление сообщения по chat_id и message_id через delay секунд."""
+    asyncio.create_task(_delete_after(bot, chat_id, message_id, delay))
+
+
 async def reply_and_delete(message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any) -> Message:
     """Отправляет reply и планирует его удаление через delay секунд."""
     reply = await message.reply(*args, **kwargs)

@@ -26,7 +26,7 @@ from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
 
 _WIN_RESULTS = {GameResult.PLAYER_WIN, GameResult.DEALER_BUST, GameResult.PLAYER_BLACKJACK}
 
@@ -136,7 +136,7 @@ async def cmd_help_bj(
         "Удачи! 🍀"
     )
 
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 # ── /bj <ставка> ────────────────────────────────────────────────
@@ -161,7 +161,7 @@ async def cmd_blackjack(
     chat_id = message.chat.id
 
     if await store.bj_exists(user_id, chat_id):
-        await message.reply("У тебя уже есть активная игра. Доиграй текущую!")
+        await reply_and_delete(message, "У тебя уже есть активная игра. Доиграй текущую!")
         return
 
     # Sliding window
@@ -176,7 +176,7 @@ async def cmd_blackjack(
     if wait is not None:
         total = int(wait)
         mins, secs = divmod(total, 60)
-        await message.reply(f"⏳ Лимит: {bjc.max_games_per_window} игр в час. Следующая игра через {mins}м {secs}с.")
+        await reply_and_delete(message, f"⏳ Лимит: {bjc.max_games_per_window} игр в час. Следующая игра через {mins}м {secs}с.")
         return
 
     # Парсим ставку
@@ -184,7 +184,8 @@ async def cmd_blackjack(
     max_bet = bjc.max_bet
 
     if not command.args:
-        await message.reply(
+        await reply_and_delete(
+            message,
             f"Использование: /bj &lt;ставка&gt;\nСтавка: от {min_bet} до {max_bet} {formatter._p.pluralize(max_bet)}.",
             parse_mode=ParseMode.HTML,
         )
@@ -193,17 +194,17 @@ async def cmd_blackjack(
     try:
         bet = int(command.args.strip())
     except ValueError:
-        await message.reply("Ставка должна быть числом.")
+        await reply_and_delete(message, "Ставка должна быть числом.")
         return
 
     if bet < min_bet or bet > max_bet:
-        await message.reply(f"Ставка: от {min_bet} до {max_bet} {formatter._p.pluralize(max_bet)}.")
+        await reply_and_delete(message, f"Ставка: от {min_bet} до {max_bet} {formatter._p.pluralize(max_bet)}.")
         return
 
     # Проверяем баланс
     score = await score_service.get_score(user_id, chat_id)
     if score.value < bet:
-        await message.reply(f"Недостаточно баллов. У тебя: {score.value} {formatter._p.pluralize(score.value)}.")
+        await reply_and_delete(message, f"Недостаточно баллов. У тебя: {score.value} {formatter._p.pluralize(score.value)}.")
         return
 
     # Записываем игру в sliding window и создаём раунд

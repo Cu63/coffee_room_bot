@@ -9,10 +9,12 @@ from datetime import datetime
 from aiogram import Bot
 
 from bot.domain.tz import TZ_MSK
+from bot.presentation.utils import schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 
 _DICE_EMOJI = "🎲"
+_GAME_DELETE_DELAY = 30  # секунд после завершения игры
 
 
 async def dice_loop(bot: Bot, container) -> None:
@@ -47,19 +49,23 @@ async def _resolve_game(bot: Bot, game, container) -> None:
         async with container() as scope:
             service = await scope.get(DiceService)
             await service.finish(game.id, {})
-        await bot.send_message(game.chat_id, "🎲 Игра в кости отменена: нет участников.")
-        await _remove_join_button(bot, game.chat_id, game.message_id)
+        cancel_msg = await bot.send_message(game.chat_id, "🎲 Игра в кости отменена: нет участников.")
+        schedule_delete(bot, cancel_msg, delay=_GAME_DELETE_DELAY)
+        await _remove_lobby(bot, game.chat_id, game.message_id)
         return
+
+    # Объявляем начало бросков
+    announce_msg = await bot.send_message(game.chat_id, "🎲 Бросаем кости!")
+    schedule_delete(bot, announce_msg, delay=_GAME_DELETE_DELAY)
 
     # Бросаем кости за каждого участника
     dice_results: dict[int, int] = {}
-
-    await bot.send_message(game.chat_id, "🎲 Бросаем кости!")
 
     for user_id in participants:
         try:
             msg = await bot.send_dice(chat_id=game.chat_id, emoji=_DICE_EMOJI)
             dice_results[user_id] = msg.dice.value  # type: ignore[union-attr]
+            schedule_delete(bot, msg, delay=_GAME_DELETE_DELAY)
             await asyncio.sleep(0.5)
         except Exception:
             logger.warning("Failed to send dice for user %d in game %d", user_id, game.id)
@@ -75,7 +81,7 @@ async def _resolve_game(bot: Bot, game, container) -> None:
         return
 
     await _post_dice_results(bot, result, pluralizer)
-    await _remove_join_button(bot, game.chat_id, game.message_id)
+    await _remove_lobby(bot, game.chat_id, game.message_id)
 
 
 async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
@@ -122,10 +128,12 @@ async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
             f"💰 Приз: <b>{result.prize_per_winner} {score_word}</b> каждому"
         )
 
-    await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    schedule_delete(bot, result_msg, delay=_GAME_DELETE_DELAY)
 
 
-async def _remove_join_button(bot: Bot, chat_id: int, message_id: int | None) -> None:
+async def _remove_lobby(bot: Bot, chat_id: int, message_id: int | None) -> None:
+    """Убирает кнопку у лобби-сообщения и планирует его удаление."""
     if not message_id:
         return
     try:
@@ -136,3 +144,4 @@ async def _remove_join_button(bot: Bot, chat_id: int, message_id: int | None) ->
         )
     except Exception:
         pass
+    schedule_delete_id(bot, chat_id, message_id, delay=_GAME_DELETE_DELAY)

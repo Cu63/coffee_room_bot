@@ -17,7 +17,7 @@ from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="slots")
@@ -84,7 +84,8 @@ async def cmd_slots(
             if sc.cooldown_minutes > 0
             else ""
         )
-        await message.reply(
+        await reply_and_delete(
+            message,
             f"🎰 <b>Слоты</b>\n\n"
             f"Использование: /slots &lt;ставка&gt;\n"
             f"Ставка: от {sc.min_bet} до {sc.max_bet} {p.pluralize(sc.max_bet)}"
@@ -102,11 +103,11 @@ async def cmd_slots(
     try:
         bet = int(command.args.strip())
     except ValueError:
-        await message.reply("Ставка должна быть числом.")
+        await reply_and_delete(message, "Ставка должна быть числом.")
         return
 
     if bet < sc.min_bet or bet > sc.max_bet:
-        await message.reply(f"Ставка: от {sc.min_bet} до {sc.max_bet} {p.pluralize(sc.max_bet)}.")
+        await reply_and_delete(message, f"Ставка: от {sc.min_bet} до {sc.max_bet} {p.pluralize(sc.max_bet)}.")
         return
 
     # Проверяем кулдаун перед списанием ставки
@@ -122,14 +123,15 @@ async def cmd_slots(
                 remaining = math.ceil((cooldown_seconds - elapsed) / 60)
             else:
                 remaining = sc.cooldown_minutes
-            await message.reply(
+            await reply_and_delete(
+                message,
                 formatter._t["slots_cooldown"].format(minutes=remaining),
             )
             return
 
     score = await score_service.get_score(user_id, chat_id)
     if score.value < bet:
-        await message.reply(f"Недостаточно баллов. У тебя: {score.value} {p.pluralize(score.value)}.")
+        await reply_and_delete(message, f"Недостаточно баллов. У тебя: {score.value} {p.pluralize(score.value)}.")
         return
 
     # Устанавливаем кулдаун сразу после всех проверок
@@ -177,4 +179,4 @@ async def cmd_slots(
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
     )
-    schedule_delete(bot, message, result_msg, delay=30)
+    schedule_delete(bot, message, dice_msg, result_msg, delay=30)

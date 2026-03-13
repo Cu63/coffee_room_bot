@@ -28,6 +28,7 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +91,13 @@ async def cmd_giveaway(
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("⛔ Только администраторы могут создавать розыгрыши.")
+        await reply_and_delete(message, "⛔ Только администраторы могут создавать розыгрыши.")
         return
 
     args = (message.text or "").split()[1:]
     if not args:
-        await message.answer(
+        await reply_and_delete(
+            message,
             "Использование: <code>/giveaway 500 100 50 [30m|2h]</code>\n"
             "Призовые места через пробел, в конце опционально — время.",
             parse_mode="HTML",
@@ -111,12 +113,12 @@ async def cmd_giveaway(
     prizes: list[int] = []
     for token in args:
         if not token.isdigit() or int(token) <= 0:
-            await message.answer(f"❌ Неверное значение приза: <code>{token}</code>", parse_mode="HTML")
+            await reply_and_delete(message, f"❌ Неверное значение приза: <code>{token}</code>", parse_mode="HTML")
             return
         prizes.append(int(token))
 
     if not prizes:
-        await message.answer("❌ Укажи хотя бы один приз.")
+        await reply_and_delete(message, "❌ Укажи хотя бы один приз.")
         return
 
     giveaway = await service.create(
@@ -149,7 +151,7 @@ async def cmd_giveaway_end(
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("⛔ Только администраторы могут завершать розыгрыши.")
+        await reply_and_delete(message, "⛔ Только администраторы могут завершать розыгрыши.")
         return
 
     args = (message.text or "").split()[1:]
@@ -160,7 +162,7 @@ async def cmd_giveaway_end(
     else:
         active = await service.get_active_in_chat(message.chat.id)
         if not active:
-            await message.answer("Нет активных розыгрышей.")
+            await reply_and_delete(message, "Нет активных розыгрышей.")
             return
         if len(active) == 1:
             giveaway_id = active[0].id
@@ -169,12 +171,12 @@ async def cmd_giveaway_end(
             for g in active:
                 prizes_str = " / ".join(f"{p} {pluralizer.pluralize(p)}" for p in g.prizes)
                 lines.append(f"<code>/giveaway_end {g.id}</code> — {prizes_str}")
-            await message.answer("\n".join(lines), parse_mode="HTML")
+            await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
             return
 
     result = await service.finish(giveaway_id)
     if result is None:
-        await message.answer("❌ Розыгрыш не найден или уже завершён.")
+        await reply_and_delete(message, "❌ Розыгрыш не найден или уже завершён.")
         return
 
     await _post_results(bot, result.giveaway, result.winners, result.participants_count, pluralizer)
@@ -243,7 +245,8 @@ async def _post_results(
             lines.append(f"{medal} {mention} — +{prize_str}")
         text = "\n".join(lines)
 
-    await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
+    result_msg = await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
+    schedule_delete(bot, result_msg, delay=30)
 
     if giveaway.message_id:
         try:
@@ -254,6 +257,7 @@ async def _post_results(
             )
         except Exception:
             pass
+        schedule_delete_id(bot, giveaway.chat_id, giveaway.message_id, delay=30)
 
 
 # ─── Мут-рулетка ────────────────────────────────────────────────────────────
@@ -281,14 +285,15 @@ async def cmd_mute_roulette(
     store: FromDishka[RedisStore],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("Только администраторы могут запускать мут-гивэвей.")
+        await reply_and_delete(message, "Только администраторы могут запускать мут-гивэвей.")
         return
 
     args = (message.text or "").split()[1:]
     # /mutegiveaway <время_мута> <кол-во_проигравших> <время_сбора>
     # /mutegiveaway 10m 2 5m
     if len(args) < 3:
-        await message.answer(
+        await reply_and_delete(
+            message,
             "Использование: <code>/mutegiveaway &lt;мут&gt; &lt;кол-во&gt; &lt;сбор&gt;</code>\n"
             "Пример: <code>/mutegiveaway 10m 2 5m</code>\n"
             "= мут 10 минут, 2 проигравших, сбор участников 5 минут.",
@@ -298,7 +303,7 @@ async def cmd_mute_roulette(
 
     mute_secs = parse_duration(args[0])
     if mute_secs is None or mute_secs < 60:
-        await message.answer("Неверное время мута (мин. 1m).")
+        await reply_and_delete(message, "Неверное время мута (мин. 1m).")
         return
 
     try:
@@ -306,12 +311,12 @@ async def cmd_mute_roulette(
         if losers_count < 1:
             raise ValueError
     except ValueError:
-        await message.answer("Кол-во проигравших должно быть >= 1.")
+        await reply_and_delete(message, "Кол-во проигравших должно быть >= 1.")
         return
 
     collect_secs = parse_duration(args[2])
     if collect_secs is None or collect_secs < 30:
-        await message.answer("Время сбора минимум 30 секунд.")
+        await reply_and_delete(message, "Время сбора минимум 30 секунд.")
         return
 
     chat_id = message.chat.id
@@ -337,7 +342,8 @@ async def cmd_mute_roulette(
         f"🆔 ID: <code>{roulette_id}</code>\n\n"
         f"Жми кнопку, если не трус!"
     )
-    await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0))
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0))
+    await store.mute_roulette_set_message_id(chat_id, roulette_id, sent.message_id)
 
 
 @router.callback_query(F.data.startswith("mutegiveaway:join:"))
@@ -375,7 +381,7 @@ async def cmd_mute_roulette_end(
     mute_service: FromDishka[MuteService],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("Только администраторы.")
+        await reply_and_delete(message, "Только администраторы.")
         return
 
     chat_id = message.chat.id
@@ -386,7 +392,7 @@ async def cmd_mute_roulette_end(
     if roulette_id is None:
         active = await store.mute_roulette_list(chat_id)
         if not active:
-            await message.answer("Нет активных мут-гивэвеев.")
+            await reply_and_delete(message, "Нет активных мут-гивэвеев.")
             return
         if len(active) == 1:
             roulette_id = active[0][0]
@@ -399,12 +405,12 @@ async def cmd_mute_roulette_end(
                     f"проигравших {data['losers_count']}, "
                     f"участников {len(data['participants'])}"
                 )
-            await message.answer("\n".join(lines), parse_mode="HTML")
+            await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
             return
 
     data = await store.mute_roulette_delete(chat_id, roulette_id)
     if data is None:
-        await message.answer("❌ Мут-гивэвей не найден или уже завершён.")
+        await reply_and_delete(message, "❌ Мут-гивэвей не найден или уже завершён.")
         return
 
     await _finish_mute_roulette(bot, chat_id, data, mute_service)
@@ -422,8 +428,13 @@ async def _finish_mute_roulette(
     mute_minutes = data["mute_minutes"]
     creator_id = data["creator_id"]
 
+    lobby_message_id: int = data.get("message_id", 0)
+
     if not participants:
-        await bot.send_message(chat_id, "🎰 Мут-гивэвей завершён, но никто не участвовал.")
+        result_msg = await bot.send_message(chat_id, "🎰 Мут-гивэвей завершён, но никто не участвовал.")
+        schedule_delete(bot, result_msg, delay=30)
+        if lobby_message_id:
+            schedule_delete_id(bot, chat_id, lobby_message_id, delay=30)
         return
 
     losers = random.sample(participants, min(losers_count, len(participants)))
@@ -502,4 +513,7 @@ async def _finish_mute_roulette(
             logger.exception("Failed to mute %d in roulette", user_id)
             lines.append(f"⚠️ {name} — не удалось замутить")
 
-    await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    schedule_delete(bot, result_msg, delay=30)
+    if lobby_message_id:
+        schedule_delete_id(bot, chat_id, lobby_message_id, delay=30)
