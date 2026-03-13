@@ -21,7 +21,7 @@ from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 router = Router(name="protect")
@@ -89,24 +89,18 @@ async def cb_protect(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    async def safe_answer(text: str = "", alert: bool = False) -> None:
-        try:
-            await callback.answer(text, show_alert=alert)
-        except Exception:
-            pass
-
     parts = callback.data.split(":")
     action = parts[1]
     owner_id = int(parts[2])
     if callback.from_user.id != owner_id:
-        await safe_answer("Это не твоя кнопка.", alert=True)
+        await safe_callback_answer(callback, "Это не твоя кнопка.", show_alert=True)
         return
     if action == "cancel":
         try:
             await callback.message.edit_text("❌ Защита отменена.")
         except Exception:
             pass
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     chat_id = int(parts[3])
     mute_cfg = config.mute
@@ -129,7 +123,7 @@ async def cb_protect(
             )
         except Exception:
             pass
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     existing = await protection_repo.get(user_id, chat_id)
     now = datetime.now(TZ_MSK)
@@ -158,7 +152,7 @@ async def cb_protect(
         await callback.message.edit_text(text, parse_mode=ParseMode.HTML)
     except Exception:
         pass
-    await safe_answer()
+    await safe_callback_answer(callback)
 
 
 @router.message(Command("unprotect"))

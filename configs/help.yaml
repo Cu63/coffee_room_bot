@@ -36,10 +36,19 @@ sections:
   limits:
     header: "⚙️ <b>Лимиты</b>"
     rows:
-      - "  Реакций в сутки (от одного): {daily_reactions_given}"
+      - "<b>Реакции:</b>"
+      - "  Положительных одному участнику в сутки: {daily_reactions_given}"
       - "  Макс. баллов получателю в сутки: {daily_score_received}"
       - "  Возраст сообщения: не старше {max_message_age_hours} ч."
       - "  История хранится: {retention_days} дн."
+      - ""
+      - "<b>Блекджек:</b>"
+      - "  Макс. {bj_max_games} игр за {bj_window} ч."
+      - ""
+      - "<b>Слоты:</b>"
+      - "  Кулдаун между спинами: {slots_cooldown} мин."
+      - ""
+      - "  /renew — сбросить лимиты за {renew_cost} (до {renew_limit} раз/сутки)"
 
   mute:
     header: "🔇 <b>Мут</b>"
@@ -51,6 +60,7 @@ sections:
     protect_header: "<b>Защита от мута:</b>"
     protect_rows:
       - "  /protect — купить защиту на {protection_hours} ч. за {protection_cost} б."
+      - "  /unprotect — снять свою защиту досрочно"
       - "  Защита блокирует /mute от любого участника"
       - "  Повторный /protect продлевает защиту"
       - "  <b>/amute от админа обходит защиту</b>"
@@ -75,9 +85,11 @@ sections:
     rules:
       - "  Блекджек (21 с двух карт): ×1.5"
       - "  Выигрыш: ×1, ничья: возврат ставки"
+      - "  Лимит: {bj_max_games} игр за {bj_window} ч."
     commands:
       - "  /bj &lt;ставка&gt; — начать игру"
       - "  /help_bj — подробные правила"
+      - "  /renew — сбросить лимит за {renew_cost}"
 
   commands:
     header: "📋 <b>Команды</b>"
@@ -85,12 +97,20 @@ sections:
       - "  /score — твой счёт"
       - "  /score @user — счёт пользователя"
       - "  /top [N] — таблица лидеров"
+      - "  /stats — статистика реакций и побед"
       - "  /history — история начислений"
+      - "  /uhistory @user — история операций с участником"
       - "  /limits — текущие лимиты бота"
+      - ""
       - "  /bj &lt;ставка&gt; — блекджек ({bj_min}–{bj_max})"
+      - "  /slots &lt;ставка&gt; — слоты ({slots_min}–{slots_max})"
+      - "  /dice &lt;ставка&gt; — кубики ({dice_min}–{dice_max})"
+      - "  /renew — сбросить лимиты игр за {renew_cost}"
+      - ""
       - "  /mute @user N — платный мут ({mute_min}–{mute_max} мин)"
       - "  /selfmute N — самомут бесплатно ({selfmute_min}–{selfmute_max} мин)"
       - "  /protect — защита от /mute на {protection_hours} ч. за {protection_cost} б."
+      - "  /unprotect — снять свою защиту"
       - "  /transfer @user N — перевести N баллов"
       - "  /tag [тег] — сменить свой тег"
       - "  /tag @user [тег] — сменить чужой тег"
@@ -110,3 +130,8 @@ sections:
       - "  /unmute @user — снять мут досрочно"
       - "  /save @user — сохранить права админа"
       - "  /restore @user — восстановить права ботом"
+      - ""
+      - "  /giveaway &lt;призы&gt; [время] — запустить розыгрыш"
+      - "  /giveaway_end [ID] — завершить розыгрыш"
+      - "  /mutegiveaway &lt;мут&gt; &lt;кол-во&gt; &lt;сбор&gt; — мут-рулетка"
+      - "  /mutegiveaway_end [ID] — завершить мут-рулетку"

@@ -13,7 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.handlers.help_renderer import HelpRenderer
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 router = Router(name="help")
@@ -49,26 +49,20 @@ async def cb_help(
     config: FromDishka[AppConfig],
     renderer: FromDishka[HelpRenderer],
 ) -> None:
-    async def safe_answer(text: str = "", show_alert: bool = False) -> None:
-        try:
-            await callback.answer(text, show_alert=show_alert)
-        except Exception:
-            pass
-
     parts = callback.data.split(":")
     if len(parts) != 3:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     _, section, caller_uid_str = parts
     try:
         caller_uid = int(caller_uid_str)
     except ValueError:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     if callback.from_user.id != caller_uid:
-        await safe_answer("Это не твоя справка.", show_alert=True)
+        await safe_callback_answer(callback, "Это не твоя справка.", show_alert=True)
         return
 
     uid = caller_uid
@@ -80,7 +74,7 @@ async def cb_help(
         kb = renderer.back_kb(uid)
 
     if not text:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     try:
@@ -90,4 +84,4 @@ async def cb_help(
     except Exception:
         pass
 
-    await safe_answer()
+    await safe_callback_answer(callback)

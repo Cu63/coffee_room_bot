@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from aiogram import Bot
-from aiogram.types import LinkPreviewOptions, Message
+from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,16 @@ def schedule_delete(bot: Bot, *messages: Message, delay: int = 120) -> None:
 def schedule_delete_id(bot: Bot, chat_id: int, message_id: int, delay: int = 120) -> None:
     """Планирует удаление сообщения по chat_id и message_id через delay секунд."""
     asyncio.create_task(_delete_after(bot, chat_id, message_id, delay))
+
+
+async def safe_callback_answer(
+    callback: CallbackQuery, text: str = "", show_alert: bool = False
+) -> None:
+    """Отвечает на callback-запрос, игнорируя ошибки устаревших запросов."""
+    try:
+        await callback.answer(text, show_alert=show_alert)
+    except Exception:
+        pass
 
 
 async def reply_and_delete(message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any) -> Message:

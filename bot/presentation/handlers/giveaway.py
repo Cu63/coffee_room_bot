@@ -28,6 +28,7 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers._admin_utils import _ADMIN_PERM_FIELDS, _extract_admin_permissions
 from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
@@ -440,23 +441,6 @@ async def _finish_mute_roulette(
     losers = random.sample(participants, min(losers_count, len(participants)))
     until = datetime.now(TZ_MSK) + timedelta(minutes=mute_minutes)
 
-    _ADMIN_PERM_FIELDS = (
-        "can_manage_chat",
-        "can_change_info",
-        "can_delete_messages",
-        "can_invite_users",
-        "can_restrict_members",
-        "can_pin_messages",
-        "can_manage_video_chats",
-        "can_promote_members",
-        "can_post_messages",
-        "can_edit_messages",
-        "can_post_stories",
-        "can_edit_stories",
-        "can_delete_stories",
-        "can_manage_topics",
-    )
-
     lines = [f"🎰 <b>Мут-гивэвей завершён!</b> Участников: {len(participants)}\n"]
     for user_id in losers:
         try:
@@ -470,9 +454,7 @@ async def _finish_mute_roulette(
         was_admin = isinstance(member, ChatMemberAdministrator)
         admin_perms: dict | None = None
         if was_admin:
-            admin_perms = {f: getattr(member, f, False) or False for f in _ADMIN_PERM_FIELDS}
-            if member.custom_title:
-                admin_perms["custom_title"] = member.custom_title
+            admin_perms = _extract_admin_permissions(member)
 
         try:
             # Если админ — сначала снимаем права, потом мутим

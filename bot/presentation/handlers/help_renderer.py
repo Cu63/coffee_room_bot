@@ -61,6 +61,9 @@ class HelpRenderer:
         mc = config.mute
         tc = config.tag
         bjc = config.blackjack
+        sc = config.slots
+        dc = config.dice
+        rc = config.renew
         lc = config.limits
 
         # Плейсхолдеры для секций с динамическими значениями
@@ -85,8 +88,17 @@ class HelpRenderer:
             max_bet=f"{bjc.max_bet} {p.pluralize(bjc.max_bet)}",
             bj_min=bjc.min_bet,
             bj_max=bjc.max_bet,
+            bj_max_games=bjc.max_games_per_window,
+            bj_window=bjc.window_hours,
             mute_min=mc.min_minutes,
             mute_max=mc.max_minutes,
+            slots_min=sc.min_bet,
+            slots_max=sc.max_bet,
+            slots_cooldown=sc.cooldown_minutes,
+            dice_min=dc.min_bet,
+            dice_max=dc.max_bet,
+            renew_cost=f"{rc.cost} {p.pluralize(rc.cost)}",
+            renew_limit=rc.daily_limit,
         )
 
         def _fmt(tmpl: str) -> str:

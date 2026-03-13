@@ -19,7 +19,7 @@ from bot.application.score_service import ScoreService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
 
 router = Router(name="commands")
 
@@ -206,34 +206,25 @@ async def cb_history(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    async def safe_answer() -> None:
-        try:
-            await callback.answer()
-        except Exception:
-            pass
-
     if callback.data == "hist:noop":
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     parts = callback.data.split(":")
     if len(parts) != 4:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     _, chat_id_str, uid_str, page_str = parts
     try:
         chat_id, uid, page = int(chat_id_str), int(uid_str), int(page_str)
     except ValueError:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     if callback.from_user.id != uid:
-        try:
-            await callback.answer("Это не твоя история.", show_alert=True)
-        except Exception:
-            pass
+        await safe_callback_answer(callback, "Это не твоя история.", show_alert=True)
         return
     pages = _history_pages.get((chat_id, uid))
     if not pages or page < 0 or page >= len(pages):
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     text = formatter.history(pages[page], config.history.retention_days)
     kb = _history_kb(page, len(pages), chat_id, uid)
@@ -243,7 +234,7 @@ async def cb_history(
         )
     except Exception:
         pass
-    await safe_answer()
+    await safe_callback_answer(callback)
 
 
 @router.message(Command("limits"))
@@ -383,37 +374,28 @@ async def cb_uhistory(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    async def safe_answer() -> None:
-        try:
-            await callback.answer()
-        except Exception:
-            pass
-
     if callback.data == "uhist:noop":
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     parts = callback.data.split(":")
     if len(parts) != 5:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     _, chat_id_str, uid_str, target_id_str, page_str = parts
     try:
         chat_id, uid, target_id, page = int(chat_id_str), int(uid_str), int(target_id_str), int(page_str)
     except ValueError:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     if callback.from_user.id != uid:
-        try:
-            await callback.answer("Это не твой запрос.", show_alert=True)
-        except Exception:
-            pass
+        await safe_callback_answer(callback, "Это не твой запрос.", show_alert=True)
         return
 
     pages = _uhistory_pages.get((chat_id, uid, target_id))
     if not pages or page < 0 or page >= len(pages):
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     target = await user_repo.get_by_id(target_id)
@@ -438,4 +420,4 @@ async def cb_uhistory(
         )
     except Exception:
         pass
-    await safe_answer()
+    await safe_callback_answer(callback)
