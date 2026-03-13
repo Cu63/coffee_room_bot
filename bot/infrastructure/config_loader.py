@@ -101,7 +101,7 @@ class DiceConfig(_BaseConfig):
     min_bet: int = 1
     max_bet: int = 1000
     min_wait_seconds: int = 10
-    max_wait_seconds: int = 3600  # 1 час
+    max_wait_seconds: int = 900   # 15 минут
 
 
 class SystemConfig(_BaseConfig):

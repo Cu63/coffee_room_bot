@@ -122,8 +122,8 @@ async def cmd_dice(
         ends_at=ends_at,
     )
 
-    if result.already_active:
-        await message.answer("❌ В этом чате уже идёт игра в кости. Дождитесь её завершения.")
+    if result.user_already_in_game:
+        await message.answer("❌ Ты уже участвуешь в активной игре в этом чате. Дождись её завершения.")
         return
 
     if result.not_enough or result.game is None:
@@ -159,7 +159,6 @@ async def cb_dice_join(
     service: FromDishka[DiceService],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
-    config: FromDishka[AppConfig],
 ) -> None:
     game_id = int(cb.data.split(":")[2])
     user_id = cb.from_user.id
@@ -183,14 +182,15 @@ async def cb_dice_join(
         await cb.answer("Ты уже участвуешь в этой игре.", show_alert=False)
         return
 
+    if join_result.already_in_other_game:
+        await cb.answer("Ты уже участвуешь в другой активной игре в этом чате.", show_alert=True)
+        return
+
     if join_result.not_enough:
-        # Получаем ставку из активной игры
-        pending = await service.get_pending_in_chat(cb.message.chat.id)
-        bet = pending.bet if pending else config.dice.min_bet
-        sw = pluralizer.pluralize(bet)
+        sw = pluralizer.pluralize(join_result.bet)
         score_word_many = pluralizer.pluralize(0)
         await cb.answer(
-            f"Недостаточно {score_word_many}. Нужно: {bet} {sw}, "
+            f"Недостаточно {score_word_many}. Нужно: {join_result.bet} {sw}, "
             f"у вас: {join_result.balance} {pluralizer.pluralize(join_result.balance)}.",
             show_alert=True,
         )

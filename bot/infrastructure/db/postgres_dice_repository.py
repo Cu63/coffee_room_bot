@@ -93,6 +93,19 @@ class PostgresDiceRepository(IDiceRepository):
         )
         return row["cnt"] if row else 0
 
+    async def is_user_in_active_game(self, chat_id: int, user_id: int) -> bool:
+        row = await self._conn.fetchrow(
+            """
+            SELECT 1 FROM dice_participants dp
+            JOIN dice_games dg ON dp.game_id = dg.id
+            WHERE dg.chat_id = $1 AND dp.user_id = $2 AND dg.status = 'pending'
+            LIMIT 1
+            """,
+            chat_id,
+            user_id,
+        )
+        return row is not None
+
     @staticmethod
     def _row_to_game(row: asyncpg.Record) -> DiceGame:
         return DiceGame(
