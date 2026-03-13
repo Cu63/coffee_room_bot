@@ -78,3 +78,6 @@ protect_extended: "🛡 Защита продлена до {until}. Списан
 slots_cooldown: "⏳ Следующий спин доступен через {minutes} мин."
 mute_daily_limit: "🚫 Сегодня уже выдано {count} из {limit} мутов. Лимит исчерпан."
 mute_target_cooldown: "⏳ Ты недавно уже мутил {target}. Подожди {hours} ч."
+renew_not_enough: "Недостаточно баллов. Нужно: {cost} {score_word}, у вас: {balance} {score_word_balance}."
+renew_daily_limit: "🚫 Сегодня уже использовал /renew {count} из {limit} раз. Лимит исчерпан."
+renew_success: "🔄 Лимиты игр сброшены за {cost} {score_word}. Баланс: {balance} {score_word_balance}.\n<i>Слоты и блекджек снова доступны.</i>"

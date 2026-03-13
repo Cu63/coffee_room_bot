@@ -149,6 +149,11 @@ class LlmConfig(_BaseConfig):
     )
 
 
+class RenewConfig(_BaseConfig):
+    cost: int = 100           # стоимость одного обновления лимитов
+    daily_limit: int = 2      # сколько раз в сутки можно использовать /renew
+
+
 class AppConfig(_BaseConfig):
     score: ScoreConfig = ScoreConfig()
     reactions: dict[str, int] = {}
@@ -164,6 +169,7 @@ class AppConfig(_BaseConfig):
     dice: DiceConfig = DiceConfig()
     llm: LlmConfig = LlmConfig()
     system: SystemConfig = SystemConfig()
+    renew: RenewConfig = RenewConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

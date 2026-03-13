@@ -24,6 +24,7 @@ from bot.presentation.handlers.protect import router as protect_router
 from bot.presentation.handlers.reactions import router as reactions_router
 from bot.presentation.handlers.slots import router as slots_router
 from bot.presentation.handlers.tag import router as tag_router
+from bot.presentation.handlers.renew import router as renew_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
@@ -144,6 +145,7 @@ async def main() -> None:
     dp.include_router(mute_router)
     dp.include_router(tag_router)
     dp.include_router(transfer_router)
+    dp.include_router(renew_router)
     dp.include_router(protect_router)
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)
