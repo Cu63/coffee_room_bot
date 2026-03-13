@@ -13,7 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.handlers.help_renderer import HelpRenderer
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="help")
@@ -30,7 +30,8 @@ async def cmd_help(
     if message.from_user is None:
         return
     uid = message.from_user.id
-    await message.reply(
+    await reply_and_delete(
+        message,
         renderer.main_text(config.score.icon),
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,

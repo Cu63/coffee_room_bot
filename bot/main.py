@@ -25,6 +25,7 @@ from bot.presentation.handlers.reactions import router as reactions_router
 from bot.presentation.handlers.slots import router as slots_router
 from bot.presentation.handlers.tag import router as tag_router
 from bot.presentation.handlers.transfer import router as transfer_router
+from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 
@@ -131,6 +132,7 @@ async def main() -> None:
     dp.message.outer_middleware(ChatContextMiddleware())
     dp.message_reaction.outer_middleware(ChatContextMiddleware())
     dp.callback_query.outer_middleware(ChatContextMiddleware())
+    dp.message.middleware(AutoDeleteCommandMiddleware())
 
     dp.include_router(commands_router)
     dp.include_router(blackjack_router)

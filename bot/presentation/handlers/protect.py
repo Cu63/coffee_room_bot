@@ -21,7 +21,7 @@ from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="protect")
@@ -46,7 +46,7 @@ async def cmd_protect(
     hours = mute_cfg.protection_duration_hours
     score = await score_service.get_score(user_id, chat_id)
     if score.value < cost:
-        await message.reply(
+        await reply_and_delete(message,
             formatter._t["protect_not_enough"].format(
                 cost=cost,
                 score_word=p.pluralize(cost),
@@ -66,7 +66,7 @@ async def cmd_protect(
             ]
         ]
     )
-    await message.reply(
+    await reply_and_delete(message,
         formatter._t["protect_confirm"].format(
             hours=hours,
             cost=cost,
@@ -176,8 +176,8 @@ async def cmd_unprotect(
 
     existing = await protection_repo.get(user_id, chat_id)
     if existing is None:
-        await message.reply("У тебя нет активной защиты.")
+        await reply_and_delete(message,"У тебя нет активной защиты.")
         return
 
     await protection_repo.delete(user_id, chat_id)
-    await message.reply("🔓 Защита снята.")
+    await reply_and_delete(message,"🔓 Защита снята.")

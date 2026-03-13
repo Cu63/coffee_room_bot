@@ -15,7 +15,7 @@ from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.presentation.handlers._admin_utils import _resolve_user_and_number
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="transfer")
@@ -37,23 +37,23 @@ async def cmd_transfer(
     chat_id = message.chat.id
     parsed = await _resolve_user_and_number(command.args, user_repo)
     if parsed is None:
-        await message.reply(formatter._t["transfer_usage"])
+        await reply_and_delete(message,formatter._t["transfer_usage"])
         return
     target, amount = parsed
     if amount <= 0:
-        await message.reply(formatter._t["transfer_invalid_amount"])
+        await reply_and_delete(message,formatter._t["transfer_invalid_amount"])
         return
     if target is None:
-        await message.reply(formatter._t["error_user_not_found"])
+        await reply_and_delete(message,formatter._t["error_user_not_found"])
         return
     if target.id == message.from_user.id:
-        await message.reply(formatter._t["transfer_self"])
+        await reply_and_delete(message,formatter._t["transfer_self"])
         return
     result = await score_service.transfer_score(
         sender_id=message.from_user.id, receiver_id=target.id, chat_id=chat_id, amount=amount
     )
     if not result.success:
-        await message.reply(
+        await reply_and_delete(message,
             formatter._t["transfer_not_enough"].format(
                 amount=amount,
                 score_word=p.pluralize(amount),
@@ -64,7 +64,7 @@ async def cmd_transfer(
         return
     sender_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     receiver_link = user_link(target.username, target.full_name, target.id)
-    await message.reply(
+    await reply_and_delete(message,
         formatter._t["transfer_success"].format(
             sender=sender_link,
             receiver=receiver_link,

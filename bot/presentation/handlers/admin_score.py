@@ -20,7 +20,7 @@ from bot.presentation.handlers._admin_utils import (
     _resolve_user_and_number,
     _resolve_username,
 )
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin_score")
@@ -39,17 +39,17 @@ async def cmd_reset(
     if message.from_user is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await message.reply(formatter._t["admin_not_allowed"])
+        await reply_and_delete(message,formatter._t["admin_not_allowed"])
         return
     if not command.args:
-        await message.reply(formatter._t["admin_usage_reset"])
+        await reply_and_delete(message,formatter._t["admin_usage_reset"])
         return
     target = await _resolve_username(command.args, user_repo)
     if target is None:
-        await message.reply(formatter._t["error_user_not_found"])
+        await reply_and_delete(message,formatter._t["error_user_not_found"])
         return
     new_value = await score_service.set_score(target.id, message.chat.id, 0, admin_id=message.from_user.id)
-    await message.reply(
+    await reply_and_delete(message,
         _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
@@ -67,18 +67,18 @@ async def cmd_set(
     if message.from_user is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await message.reply(formatter._t["admin_not_allowed"])
+        await reply_and_delete(message,formatter._t["admin_not_allowed"])
         return
     parsed = await _resolve_user_and_number(command.args, user_repo)
     if parsed is None or parsed[0] is None:
-        await message.reply(formatter._t["admin_usage_set"])
+        await reply_and_delete(message,formatter._t["admin_usage_set"])
         return
     target, amount = parsed
     if target is None:
-        await message.reply(formatter._t["error_user_not_found"])
+        await reply_and_delete(message,formatter._t["error_user_not_found"])
         return
     new_value = await score_service.set_score(target.id, message.chat.id, amount, admin_id=message.from_user.id)
-    await message.reply(
+    await reply_and_delete(message,
         _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
@@ -96,21 +96,21 @@ async def cmd_add(
     if message.from_user is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await message.reply(formatter._t["admin_not_allowed"])
+        await reply_and_delete(message,formatter._t["admin_not_allowed"])
         return
     parsed = await _resolve_user_and_number(command.args, user_repo)
     if parsed is None:
-        await message.reply(formatter._t["admin_usage_add"])
+        await reply_and_delete(message,formatter._t["admin_usage_add"])
         return
     target, amount = parsed
     if target is None:
-        await message.reply(formatter._t["error_user_not_found"])
+        await reply_and_delete(message,formatter._t["error_user_not_found"])
         return
     if amount <= 0:
-        await message.reply(formatter._t["admin_negative_amount"])
+        await reply_and_delete(message,formatter._t["admin_negative_amount"])
         return
     new_value = await score_service.add_score(target.id, message.chat.id, amount, admin_id=message.from_user.id)
-    await message.reply(
+    await reply_and_delete(message,
         _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
@@ -128,20 +128,20 @@ async def cmd_sub(
     if message.from_user is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await message.reply(formatter._t["admin_not_allowed"])
+        await reply_and_delete(message,formatter._t["admin_not_allowed"])
         return
     parsed = await _resolve_user_and_number(command.args, user_repo)
     if parsed is None:
-        await message.reply(formatter._t["admin_usage_sub"])
+        await reply_and_delete(message,formatter._t["admin_usage_sub"])
         return
     target, amount = parsed
     if target is None:
-        await message.reply(formatter._t["error_user_not_found"])
+        await reply_and_delete(message,formatter._t["error_user_not_found"])
         return
     if amount <= 0:
-        await message.reply(formatter._t["admin_negative_amount"])
+        await reply_and_delete(message,formatter._t["admin_negative_amount"])
         return
     new_value = await score_service.add_score(target.id, message.chat.id, -amount, admin_id=message.from_user.id)
-    await message.reply(
+    await reply_and_delete(message,
         _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )

@@ -19,7 +19,7 @@ from bot.application.score_service import ScoreService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
 
 router = Router(name="commands")
 
@@ -55,7 +55,7 @@ async def cmd_score(
     if command.args:
         target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
         if target_user is None:
-            await message.reply(formatter._t["error_user_not_found"])
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
             return
         display_name = user_link(target_user.username, target_user.full_name, target_user.id)
     else:
@@ -64,7 +64,7 @@ async def cmd_score(
         display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     user_id = target_user.id if target_user else message.from_user.id  # type: ignore[union-attr]
     score = await score_service.get_score(user_id, chat_id)
-    await message.reply(
+    await reply_and_delete(message,
         formatter.score_info(display_name, score.value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
@@ -106,9 +106,9 @@ async def cmd_top(
         for rank, name, value in rows:
             lines.append(f"{rank}. {name} — {value} {p.pluralize(value)}")
         text = "\n".join(lines) if rows else "🔻 <b>Антирейтинг</b>\n<i>Нет данных</i>"
-        await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
     else:
-        await message.reply(formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(message, formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("stats"))
@@ -131,7 +131,7 @@ async def cmd_stats(
     elif command.args:
         target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
         if target_user is None:
-            await message.reply(formatter._t.get("error_user_not_found", "Пользователь не найден."))
+            await reply_and_delete(message, formatter._t.get("error_user_not_found", "Пользователь не найден."))
             return
 
     if target_user is not None:
@@ -160,7 +160,7 @@ async def cmd_stats(
         f"  🎟 Розыгрыши: {stats.wins_giveaway}\n"
         f"  <i>Итого: {total_games}</i>"
     )
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("history"))
@@ -196,7 +196,7 @@ async def cmd_history(
     _history_pages[(chat_id, uid)] = pages
     text = formatter.history(pages[0], config.history.retention_days)
     kb = _history_kb(0, len(pages), chat_id, uid)
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("hist:"))
@@ -283,7 +283,7 @@ async def cmd_limits(
         f"<b>Блекджек:</b>\n"
         f"  Ставка: {bjc.min_bet}–{bjc.max_bet} {p.pluralize(bjc.max_bet)}"
     )
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 # ── Кэш для пагинации истории пользователя ───────────────────────
@@ -328,7 +328,7 @@ async def cmd_uhistory(
         target = await user_repo.get_by_username(username)
 
     if target is None:
-        await message.reply(
+        await reply_and_delete(message,
             "Использование: <code>/uhistory @username</code> или реплай на сообщение.",
             parse_mode=ParseMode.HTML,
         )
@@ -338,7 +338,7 @@ async def cmd_uhistory(
     target_link = user_link(target.username, target.full_name, target.id)
 
     if not events:
-        await message.reply(
+        await reply_and_delete(message,
             f"Нет событий для {target_link} за последние {config.history.retention_days} дн.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -372,7 +372,7 @@ async def cmd_uhistory(
     text = f"{title}\n<blockquote expandable>{body}</blockquote>"
 
     kb = _uhistory_kb(0, len(pages), chat_id, uid, target.id)
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("uhist:"))
