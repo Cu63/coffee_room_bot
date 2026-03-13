@@ -175,6 +175,32 @@ class RedisStore:
         key = f"{self._MUTE_TARGET}{actor_id}:{target_id}:{chat_id}"
         await self._r.set(key, "1", ex=hours * 3600)
 
+    # ── /renew: сброс игровых лимитов ────────────────────────────
+
+    _RENEW_DAILY = "renew:daily:"  # renew:daily:{user_id}:{chat_id}
+
+    async def renew_daily_count(self, user_id: int, chat_id: int) -> int:
+        """Сколько раз сегодня пользователь уже использовал /renew."""
+        key = f"{self._RENEW_DAILY}{user_id}:{chat_id}"
+        raw = await self._r.get(key)
+        return int(raw or 0)
+
+    async def renew_daily_increment(self, user_id: int, chat_id: int) -> None:
+        """Записать использование /renew. TTL — 24 часа."""
+        key = f"{self._RENEW_DAILY}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 86400)
+        await pipe.execute()
+
+    async def renew_game_limits(self, user_id: int, chat_id: int) -> None:
+        """Сбросить все игровые лимиты пользователя (слоты и блекджек)."""
+        await self._r.delete(
+            f"{_SLOTS_LAST}{user_id}:{chat_id}",
+            f"{_SLOTS_DAILY}{user_id}:{chat_id}",
+            f"{_BJ_HISTORY}{user_id}:{chat_id}",
+        )
+
     # ── Slots: прогрессивный джекпот ─────────────────────────────
 
     async def jackpot_add(self, chat_id: int, amount: int) -> None:

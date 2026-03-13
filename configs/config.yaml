@@ -87,5 +87,6 @@ system:
   auto_delete_seconds: 120        # через сколько секунд удалять служебные сообщения
   history_page_size: 30           # строк на страницу в /history
 
-# Лимиты блекджека
-# (max_bet и min_bet уже есть в blackjack, добавляем rate limiting)
+renew:
+  cost: 100           # стоимость одного /renew
+  daily_limit: 2      # сколько раз в сутки можно использовать /renew
