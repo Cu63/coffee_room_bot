@@ -160,14 +160,13 @@ async def cmd_blackjack(
     user_id = message.from_user.id
     chat_id = message.chat.id
 
-    if await store.bj_exists(user_id, chat_id):
-        await reply_and_delete(message, "У тебя уже есть активная игра. Доиграй текущую!")
-        return
-
-    # Fixed window: лимит сбрасывается целиком через window_hours после первой игры
+    # Одним pipeline: проверяем активную игру + лимит окна
     bjc = config.blackjack
     window_seconds = bjc.window_hours * 3600
-    wait = await store.bj_window_check(user_id, chat_id, bjc.max_games_per_window)
+    has_active, wait = await store.bj_check_start(user_id, chat_id, bjc.max_games_per_window)
+    if has_active:
+        await reply_and_delete(message, "У тебя уже есть активная игра. Доиграй текущую!")
+        return
     if wait is not None:
         total = int(wait)
         mins, secs = divmod(total, 60)
@@ -228,8 +227,8 @@ async def cmd_blackjack(
         schedule_delete(bot, message, reply, delay=30)
         return
 
-    # Сохраняем в Redis и показываем стол с кнопками
-    await store.bj_set(user_id, chat_id, rnd)
+    # Отправляем стол и сохраняем в Redis с message_id и таймаутом
+    timeout = bjc.game_timeout_seconds
     text = f"🃏 <b>Блекджек</b> — ставка {bet} {formatter._p.pluralize(bet)}\n\n" + _render_table(rnd)
     game_msg = await message.reply(
         text,
@@ -237,7 +236,8 @@ async def cmd_blackjack(
         reply_markup=_bj_kb(user_id),
         link_preview_options=NO_PREVIEW,
     )
-    # Удаляем только команду; game_msg удалится по завершении игры (cb_hit / cb_stand)
+    await store.bj_set(user_id, chat_id, rnd, message_id=game_msg.message_id, timeout_seconds=timeout)
+    # Удаляем только команду; game_msg удалится по завершении игры (cb_hit / cb_stand / таймаут)
     schedule_delete(bot, message, delay=30)
 
 
@@ -270,22 +270,9 @@ async def cb_hit(
     rnd.hit()
 
     if rnd.finished:
-        delta = rnd.payout_delta()
-        if delta != 0:
-            await score_service.add_score(
-                user_id,
-                chat_id,
-                delta,
-                admin_id=user_id,
-            )
-        if rnd.result in _WIN_RESULTS:
-            await stats_repo.add_win(user_id, chat_id, "blackjack")
-        await store.bj_delete(user_id, chat_id)
-        text = _render_table(
-            rnd,
-            reveal=True,
-            result_line=_result_line(rnd, formatter._p),
-        )
+        # Сначала отвечаем и обновляем UI — до записи в БД
+        text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
+        await callback.answer()
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
@@ -293,11 +280,22 @@ async def cb_hit(
             link_preview_options=NO_PREVIEW,
         )
         schedule_delete(bot, callback.message, delay=30)
-        await callback.answer()
+        # Потом записываем результат в БД
+        delta = rnd.payout_delta()
+        if delta != 0:
+            await score_service.add_score(user_id, chat_id, delta, admin_id=user_id)
+        if rnd.result in _WIN_RESULTS:
+            await stats_repo.add_win(user_id, chat_id, "blackjack")
+        await store.bj_delete(user_id, chat_id)
         return
 
-    # Продолжаем — сохраняем обновлённое состояние
-    await store.bj_set(user_id, chat_id, rnd)
+    # Продолжаем — отвечаем и сохраняем состояние (обновляем таймер)
+    await callback.answer()
+    await store.bj_set(
+        user_id, chat_id, rnd,
+        message_id=callback.message.message_id,
+        timeout_seconds=60,
+    )
     text = f"🃏 <b>Блекджек</b> — ставка {rnd.bet} {formatter._p.pluralize(rnd.bet)}\n\n" + _render_table(rnd)
     await callback.message.edit_text(
         text,
@@ -305,7 +303,6 @@ async def cb_hit(
         reply_markup=_bj_kb(user_id),
         link_preview_options=NO_PREVIEW,
     )
-    await callback.answer()
 
 
 # ── Callback: Stand ──────────────────────────────────────────────
@@ -336,23 +333,9 @@ async def cb_stand(
 
     rnd.stand()
 
-    delta = rnd.payout_delta()
-    if delta != 0:
-        await score_service.add_score(
-            user_id,
-            chat_id,
-            delta,
-            admin_id=user_id,
-        )
-    if rnd.result in _WIN_RESULTS:
-        await stats_repo.add_win(user_id, chat_id, "blackjack")
-    await store.bj_delete(user_id, chat_id)
-
-    text = _render_table(
-        rnd,
-        reveal=True,
-        result_line=_result_line(rnd, formatter._p),
-    )
+    # Сначала отвечаем и обновляем UI — до записи в БД
+    text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
+    await callback.answer()
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
@@ -360,4 +343,10 @@ async def cb_stand(
         link_preview_options=NO_PREVIEW,
     )
     schedule_delete(bot, callback.message, delay=30)
-    await callback.answer()
+    # Потом записываем результат в БД
+    delta = rnd.payout_delta()
+    if delta != 0:
+        await score_service.add_score(user_id, chat_id, delta, admin_id=user_id)
+    if rnd.result in _WIN_RESULTS:
+        await stats_repo.add_win(user_id, chat_id, "blackjack")
+    await store.bj_delete(user_id, chat_id)

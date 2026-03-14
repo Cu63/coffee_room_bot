@@ -95,6 +95,7 @@ class BlackjackConfig(_BaseConfig):
     max_bet: int = 50
     max_games_per_window: int = 5
     window_hours: int = 1
+    game_timeout_seconds: int = 60  # через сколько секунд незавершённая игра закрывается с возвратом ставки
 
 
 class DiceConfig(_BaseConfig):

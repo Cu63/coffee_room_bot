@@ -94,9 +94,10 @@ async def cmd_top(
     else:
         scores = await leaderboard_service.get_top(message.chat.id, limit)
 
+    users = await user_repo.get_by_ids([s.user_id for s in scores])
     rows: list[tuple[int, str, int]] = []
     for rank, score in enumerate(scores, start=1):
-        user = await user_repo.get_by_id(score.user_id)
+        user = users.get(score.user_id)
         name = user_link(user.username, user.full_name, user.id) if user else str(score.user_id)
         rows.append((rank, name, score.value))
 
@@ -178,10 +179,12 @@ async def cmd_history(
     chat_id = message.chat.id
     uid = message.from_user.id
     events = await history_service.get_history(chat_id)
+    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
+    users = await user_repo.get_by_ids(all_ids)
     event_dicts: list[dict] = []
     for e in events:
-        actor = await user_repo.get_by_id(e.actor_id)
-        target = await user_repo.get_by_id(e.target_id)
+        actor = users.get(e.actor_id)
+        target = users.get(e.target_id)
         event_dicts.append(
             {
                 "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
@@ -336,10 +339,12 @@ async def cmd_uhistory(
         )
         return
 
+    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
+    users = await user_repo.get_by_ids(all_ids)
     event_dicts: list[dict] = []
     for e in events:
-        actor = await user_repo.get_by_id(e.actor_id)
-        tgt = await user_repo.get_by_id(e.target_id)
+        actor = users.get(e.actor_id)
+        tgt = users.get(e.target_id)
         event_dicts.append(
             {
                 "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import time
 
 from aiogram import Bot, Router
 from aiogram.enums import ParseMode
@@ -116,7 +117,6 @@ async def cmd_slots(
         can_play = await store.slots_cooldown_check(user_id, chat_id, cooldown_seconds)
         if not can_play:
             # Вычисляем, сколько минут осталось
-            import time
             key_raw = await store._r.get(f"slots:last:{user_id}:{chat_id}")
             if key_raw is not None:
                 elapsed = time.time() - float(key_raw)
@@ -139,7 +139,7 @@ async def cmd_slots(
         await store.slots_cooldown_set(user_id, chat_id, cooldown_seconds)
 
     # Списываем ставку
-    await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
+    balance = await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
     # Запускаем анимацию — значение приходит сразу в ответе
     dice_msg = await message.answer_dice(emoji="🎰")
@@ -152,13 +152,12 @@ async def cmd_slots(
     payout = int(bet * multiplier)
 
     if payout > 0:
-        await score_service.add_score(user_id, chat_id, payout, admin_id=user_id)
+        balance = await score_service.add_score(user_id, chat_id, payout, admin_id=user_id)
 
     if outcome in ("jackpot", "win"):
         await stats_repo.add_win(user_id, chat_id, "slots")
 
-    new_balance = await score_service.get_score(user_id, chat_id)
-    bal_str = f"{new_balance.value} {p.pluralize(new_balance.value)}"
+    bal_str = f"{balance} {p.pluralize(balance)}"
 
     if outcome == "jackpot":
         win_net = payout - bet

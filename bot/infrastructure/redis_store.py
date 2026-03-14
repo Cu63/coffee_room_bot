@@ -20,7 +20,12 @@ _SLOTS_LAST = "slots:last:"  # slots:last:{user_id}:{chat_id}
 _JACKPOT = "slots:jackpot:"  # slots:jackpot:{chat_id}
 
 
-def _serialize_round(rnd: BlackjackRound) -> str:
+def _serialize_round(
+    rnd: BlackjackRound,
+    *,
+    message_id: int = 0,
+    expires_at: float = 0.0,
+) -> str:
     """Сериализация BlackjackRound в JSON."""
     data = {
         "player_id": rnd.player_id,
@@ -31,6 +36,8 @@ def _serialize_round(rnd: BlackjackRound) -> str:
         "dealer_hand": [{"rank": c.rank, "suit": c.suit} for c in rnd.dealer_hand],
         "finished": rnd.finished,
         "result": rnd.result.value if rnd.result else None,
+        "message_id": message_id,
+        "expires_at": expires_at,
     }
     return json.dumps(data, ensure_ascii=False)
 
@@ -66,13 +73,49 @@ class RedisStore:
             return None
         return _deserialize_round(raw)
 
-    async def bj_set(self, user_id: int, chat_id: int, rnd: BlackjackRound) -> None:
+    async def bj_set(
+        self,
+        user_id: int,
+        chat_id: int,
+        rnd: BlackjackRound,
+        *,
+        message_id: int = 0,
+        timeout_seconds: int = 60,
+    ) -> None:
         key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        await self._r.set(key, _serialize_round(rnd), ex=3600)  # TTL 1 час
+        expires_at = time.time() + timeout_seconds
+        raw = _serialize_round(rnd, message_id=message_id, expires_at=expires_at)
+        await self._r.set(key, raw, ex=timeout_seconds + 30)  # +30с буфер для cleanup
+
+    async def bj_set_message_id(self, user_id: int, chat_id: int, message_id: int) -> None:
+        """Обновить message_id игрового сообщения (вызывать после отправки)."""
+        key = f"{_BJ_GAME}{user_id}:{chat_id}"
+        raw = await self._r.get(key)
+        if raw is None:
+            return
+        data = json.loads(raw)
+        data["message_id"] = message_id
+        ttl = await self._r.ttl(key)
+        await self._r.set(key, json.dumps(data), ex=max(ttl, 10))
 
     async def bj_delete(self, user_id: int, chat_id: int) -> None:
         key = f"{_BJ_GAME}{user_id}:{chat_id}"
         await self._r.delete(key)
+
+    async def bj_pop_expired(self) -> list[dict]:
+        """Найти и атомарно удалить все истёкшие игры. Возвращает их данные."""
+        now = time.time()
+        expired: list[dict] = []
+        async for key in self._r.scan_iter(f"{_BJ_GAME}*"):
+            raw = await self._r.get(key)
+            if raw is None:
+                continue
+            data = json.loads(raw)
+            if data.get("expires_at", 0.0) <= now:
+                # DEL возвращает кол-во удалённых ключей; 0 = уже удалён другим процессом
+                if await self._r.delete(key):
+                    expired.append(data)
+        return expired
 
     async def bj_exists(self, user_id: int, chat_id: int) -> bool:
         key = f"{_BJ_GAME}{user_id}:{chat_id}"
@@ -80,19 +123,29 @@ class RedisStore:
 
     # ── Blackjack: лимит игр (fixed window) ─────────────────────
 
-    async def bj_window_check(
+    async def bj_check_start(
         self,
         user_id: int,
         chat_id: int,
         max_games: int,
-    ) -> float | None:
-        """Проверить лимит. None — можно играть, иначе — секунд до сброса окна."""
-        key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
-        raw = await self._r.get(key)
-        if raw is None or int(raw) < max_games:
-            return None
-        ttl = await self._r.ttl(key)
-        return max(ttl, 0)
+    ) -> tuple[bool, float | None]:
+        """Одним pipeline проверить активную игру и лимит окна.
+
+        Returns:
+            (has_active_game, wait_seconds)
+            wait_seconds = None если можно играть, иначе секунд до сброса окна.
+        """
+        game_key = f"{_BJ_GAME}{user_id}:{chat_id}"
+        hist_key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.exists(game_key)
+        pipe.get(hist_key)
+        pipe.ttl(hist_key)
+        game_exists, count_raw, ttl = await pipe.execute()
+        has_active = bool(game_exists)
+        if count_raw is None or int(count_raw) < max_games:
+            return has_active, None
+        return has_active, max(int(ttl), 0)
 
     async def bj_window_record(self, user_id: int, chat_id: int, window_seconds: int) -> None:
         """Записать игру. TTL устанавливается только при первой игре в окне."""

@@ -37,6 +37,19 @@ class PostgresUserRepository(IUserRepository):
         )
         return self._to_entity(row)
 
+    async def get_by_ids(self, user_ids: list[int]) -> dict[int, User]:
+        """Загрузить несколько пользователей одним запросом ANY($1)."""
+        if not user_ids:
+            return {}
+        rows = await self._conn.fetch(
+            "SELECT id, username, full_name FROM users WHERE id = ANY($1)",
+            user_ids,
+        )
+        return {
+            row["id"]: User(id=row["id"], username=row["username"], full_name=row["full_name"])
+            for row in rows
+        }
+
     @staticmethod
     def _to_entity(row: asyncpg.Record | None) -> User | None:
         if row is None:

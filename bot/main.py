@@ -104,6 +104,38 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
             logger.exception("Mute roulette loop failed")
 
 
+async def bj_cleanup_loop(container, bot: Bot) -> None:
+    """Фоновая задача: возврат ставки по истёкшим играм блекджека."""
+    from bot.application.score_service import ScoreService
+    from bot.infrastructure.redis_store import RedisStore
+
+    while True:
+        await asyncio.sleep(15)
+        try:
+            async with container() as scope:
+                store = await scope.get(RedisStore)
+                score_service = await scope.get(ScoreService)
+                for data in await store.bj_pop_expired():
+                    user_id = data["player_id"]
+                    chat_id = data["chat_id"]
+                    bet = data["bet"]
+                    message_id = data.get("message_id", 0)
+                    logger.info("BJ timeout: returning %d to user %d in chat %d", bet, user_id, chat_id)
+                    await score_service.add_score(user_id, chat_id, bet, admin_id=user_id)
+                    if message_id:
+                        try:
+                            await bot.edit_message_text(
+                                "⏰ Время вышло! Ставка возвращена.",
+                                chat_id=chat_id,
+                                message_id=message_id,
+                                reply_markup=None,
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            logger.exception("BJ cleanup loop failed")
+
+
 async def main() -> None:
     settings = Settings()
     config = load_config()
@@ -161,6 +193,7 @@ async def main() -> None:
     giveaway_task = asyncio.create_task(giveaway_loop(bot, container))
     dice_task = asyncio.create_task(dice_loop(bot, container))
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
+    bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
 
     logger.info("Bot starting…")
     try:
@@ -174,6 +207,7 @@ async def main() -> None:
         giveaway_task.cancel()
         dice_task.cancel()
         mute_roulette_task.cancel()
+        bj_cleanup_task.cancel()
         if tg_log_handler:
             tg_log_handler.stop()
         await container.close()
