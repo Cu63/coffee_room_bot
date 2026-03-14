@@ -164,19 +164,14 @@ async def cmd_blackjack(
         await reply_and_delete(message, "У тебя уже есть активная игра. Доиграй текущую!")
         return
 
-    # Sliding window
+    # Fixed window: лимит сбрасывается целиком через window_hours после первой игры
     bjc = config.blackjack
     window_seconds = bjc.window_hours * 3600
-    wait = await store.bj_history_check(
-        user_id,
-        chat_id,
-        bjc.max_games_per_window,
-        window_seconds,
-    )
+    wait = await store.bj_window_check(user_id, chat_id, bjc.max_games_per_window)
     if wait is not None:
         total = int(wait)
         mins, secs = divmod(total, 60)
-        await reply_and_delete(message, f"⏳ Лимит: {bjc.max_games_per_window} игр в час. Следующая игра через {mins}м {secs}с.")
+        await reply_and_delete(message, f"⏳ Лимит: {bjc.max_games_per_window} игр в {bjc.window_hours} ч. Лимит сбросится через {mins}м {secs}с.")
         return
 
     # Парсим ставку
@@ -207,8 +202,8 @@ async def cmd_blackjack(
         await reply_and_delete(message, f"Недостаточно баллов. У тебя: {score.value} {formatter._p.pluralize(score.value)}.")
         return
 
-    # Записываем игру в sliding window и создаём раунд
-    await store.bj_history_record(user_id, chat_id, window_seconds)
+    # Записываем игру в окно и создаём раунд
+    await store.bj_window_record(user_id, chat_id, window_seconds)
     rnd = BlackjackRound(player_id=user_id, chat_id=chat_id, bet=bet)
     rnd.deal()
 

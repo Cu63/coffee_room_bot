@@ -78,41 +78,28 @@ class RedisStore:
         key = f"{_BJ_GAME}{user_id}:{chat_id}"
         return bool(await self._r.exists(key))
 
-    # ── Blackjack: история игр (sliding window) ─────────────────
+    # ── Blackjack: лимит игр (fixed window) ─────────────────────
 
-    async def bj_history_check(
+    async def bj_window_check(
         self,
         user_id: int,
         chat_id: int,
         max_games: int,
-        window_seconds: int,
     ) -> float | None:
-        """Проверить лимит. Возвращает None если можно играть, иначе секунды ожидания."""
+        """Проверить лимит. None — можно играть, иначе — секунд до сброса окна."""
         key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
-        now = time.time()
-        cutoff = now - window_seconds
-
-        # Удаляем устаревшие записи
-        await self._r.zremrangebyscore(key, 0, cutoff)
-
-        count = await self._r.zcard(key)
-        if count < max_games:
+        raw = await self._r.get(key)
+        if raw is None or int(raw) < max_games:
             return None
+        ttl = await self._r.ttl(key)
+        return max(ttl, 0)
 
-        # Время до освобождения слота
-        oldest = await self._r.zrange(key, 0, 0, withscores=True)
-        if oldest:
-            _, ts = oldest[0]
-            wait = window_seconds - (now - ts)
-            return max(wait, 0)
-        return None
-
-    async def bj_history_record(self, user_id: int, chat_id: int, window_seconds: int) -> None:
-        """Записать игру в историю."""
+    async def bj_window_record(self, user_id: int, chat_id: int, window_seconds: int) -> None:
+        """Записать игру. TTL устанавливается только при первой игре в окне."""
         key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
-        now = time.time()
-        await self._r.zadd(key, {str(now): now})
-        await self._r.expire(key, window_seconds + 60)
+        count = await self._r.incr(key)
+        if count == 1:
+            await self._r.expire(key, window_seconds)
 
     # ── Slots: дневной лимит ─────────────────────────────────────
 
