@@ -79,7 +79,7 @@ llm:
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем
-  positive_only: false # только 👍❤️🔥 итд, без 💩👎
+  positive_only: true
 # Системные интервалы и параметры
 system:
   cleanup_interval_hours: 6       # как часто удалять устаревшие события
