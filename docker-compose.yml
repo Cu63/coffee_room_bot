@@ -67,6 +67,25 @@ services:
     volumes:
       - ./configs:/app/configs:ro,z
 
+  db-backup:
+      image: prodrigestivill/postgres-backup-local
+      restart: unless-stopped
+      depends_on:
+        db:
+          condition: service_healthy
+      environment:
+        POSTGRES_HOST: db
+        POSTGRES_DB: scorebot
+        POSTGRES_USER: scorebot
+        POSTGRES_PASSWORD: scorebot
+        SCHEDULE: "@hourly"          # cron или @hourly/@daily/@weekly
+        BACKUP_KEEP_DAYS: 7
+        BACKUP_KEEP_WEEKS: 4
+        BACKUP_KEEP_MONTHS: 6
+        HEALTHCHECK_PORT: 8080
+      volumes:
+        - /var/backups/scorebot:/backups
+
 volumes:
   pgdata:
   redisdata:
