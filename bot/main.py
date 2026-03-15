@@ -2,7 +2,9 @@ import asyncio
 import logging
 import os
 
+from aiohttp import ClientTimeout
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from dishka import make_async_container
 from dishka.integrations.aiogram import setup_dishka
 
@@ -28,6 +30,7 @@ from bot.presentation.handlers.renew import router as renew_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
+from bot.presentation.middlewares.retry_network import RetryNetworkMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation.utils import delete_loop
 
@@ -148,7 +151,9 @@ async def main() -> None:
 
     container = make_async_container(AppProvider(), RequestProvider())
 
-    bot = Bot(token=settings.bot_token)
+    # Короткий таймаут: не ждём 60 с на SSL handshake, падаем быстро и идём дальше
+    session = AiohttpSession(timeout=ClientTimeout(total=15, connect=8))
+    bot = Bot(token=settings.bot_token, session=session)
 
     # Мониторинг: отправка логов в Telegram-чат
     tg_log_handler = None
@@ -163,6 +168,12 @@ async def main() -> None:
         logger.info("Telegram log handler enabled (chat_id=%d, level=%s)", settings.log_chat_id, settings.log_level)
 
     dp = Dispatcher()
+
+    # Первым в цепочке — перехватываем сетевые ошибки до любой бизнес-логики
+    retry_mw = RetryNetworkMiddleware()
+    dp.message.outer_middleware(retry_mw)
+    dp.callback_query.outer_middleware(retry_mw)
+    dp.message_reaction.outer_middleware(retry_mw)
 
     dp.message.outer_middleware(ChatContextMiddleware())
     dp.message_reaction.outer_middleware(ChatContextMiddleware())
