@@ -84,7 +84,7 @@ services:
         BACKUP_KEEP_MONTHS: 6
         HEALTHCHECK_PORT: 8080
       volumes:
-        - ./backups:/backups
+        - /var/backups/scorebot:/backups
 
 volumes:
   pgdata:
