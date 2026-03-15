@@ -12,6 +12,7 @@ from bot.infrastructure.config_loader import Settings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
 from bot.infrastructure.dice_loop import dice_loop
 from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
+from bot.infrastructure.logger import setup_logger
 from bot.presentation.handlers._admin_utils import _unmute_user
 from bot.presentation.handlers.admin_score import router as admin_score_router
 from bot.presentation.handlers.admin_user import router as admin_user_router
@@ -37,10 +38,9 @@ from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation import utils as presentation_utils
 from bot.presentation.utils import delete_loop
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-7s  %(name)s  %(message)s",
-)
+# Логгер инициализируется после load_config() в main() — здесь только получаем инстанс.
+# setup_logger() вызывается первым делом в main() и настраивает root logger,
+# поэтому все последующие вызовы getLogger(__name__) в любом модуле будут через structlog.
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +93,6 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
                 store = await scope.get(RedisStore)
                 mute_service = await scope.get(MuteService)
                 now = _time.time()
-                # Обрабатываем ключи inline — без аккумуляции в список
                 async for key in store._r.scan_iter("mutegiveaway:*"):
                     raw = await store._r.get(key)
                     if raw is None:
@@ -149,21 +148,21 @@ async def bj_cleanup_loop(container, bot: Bot) -> None:
 
 
 async def main() -> None:
-    settings = Settings()
     config = load_config()
 
-    # ── Redis ────────────────────────────────────────────────────
-    # Отдельное соединение для очереди удалений (вне DI-контейнера),
-    # чтобы delete_loop мог работать независимо от dishka-скопов.
-    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    # ── Логирование ──────────────────────────────────────────────
+    # Инициализируем structlog до любых других действий,
+    # чтобы все последующие logger.info/error шли через него.
+    setup_logger(config.logging)
 
-    # Передаём redis в presentation.utils — schedule_delete/schedule_delete_id
-    # будут записывать в общий Redis sorted set, доступный всем инстансам.
+    settings = Settings()
+
+    # ── Redis ────────────────────────────────────────────────────
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     presentation_utils.init_redis(redis)
 
     container = make_async_container(AppProvider(), RequestProvider())
 
-    # TELEGRAM_PROXY — опциональный SOCKS5/HTTP прокси для обхода блокировок.
     proxy = os.getenv("TELEGRAM_PROXY") or None
     if proxy:
         logger.info("Using Telegram proxy: %s", proxy)
@@ -171,7 +170,6 @@ async def main() -> None:
     session = AiohttpSession(timeout=15, proxy=proxy)
     bot = Bot(token=settings.bot_token, session=session)
 
-    # Кешируем информацию о боте один раз при старте.
     bot_me = await bot.get_me()
     logger.info("Bot identity cached: @%s (id=%d)", bot_me.username, bot_me.id)
 
@@ -189,7 +187,6 @@ async def main() -> None:
 
     dp = Dispatcher()
 
-    # Первым в цепочке — перехватываем сетевые ошибки до любой бизнес-логики
     retry_mw = RetryNetworkMiddleware()
     dp.message.outer_middleware(retry_mw)
     dp.callback_query.outer_middleware(retry_mw)
@@ -216,17 +213,9 @@ async def main() -> None:
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
     dp.include_router(bug_router)
-    logger.info(
-        "Commands: /add, /sub, /set, /reset, /op, /deop, /mute,"
-        " /amute, /selfmute, /unmute, /tag, /transfer,"
-        " /protect, /save, /restore, /help, /limits, /bug,"
-        " /giveaway_period, /giveaway_period_stop"
-    )
 
     setup_dishka(container, dp)
-    # Передаём кешированный bot_me — middleware не будет вызывать get_me() при каждом авто-реакте
     dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))
-    # Owner-mute: удаляет сообщения участников под soft-mute (регистрируем после dishka)
     dp.message.outer_middleware(OwnerMuteDeleteMiddleware())
 
     sys_cfg = config.system

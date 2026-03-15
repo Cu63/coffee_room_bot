@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
@@ -36,8 +37,8 @@ class ScoreConfig(_BaseConfig):
 
 
 class LimitsConfig(_BaseConfig):
-    daily_negative_given: int = 10       # глобальный лимит отрицательных реакций в сутки
-    daily_positive_per_target: int = 20  # лимит положительных реакций одному получателю в сутки
+    daily_negative_given: int = 10
+    daily_positive_per_target: int = 20
     daily_score_received: int = 50
     max_message_age_hours: int = 36
 
@@ -45,7 +46,7 @@ class LimitsConfig(_BaseConfig):
 class SlotsConfig(_BaseConfig):
     min_bet: int = 1
     max_bet: int = 25
-    cooldown_minutes: int = 60  # кулдаун между спинами одного пользователя
+    cooldown_minutes: int = 60
 
 
 class HistoryConfig(_BaseConfig):
@@ -74,8 +75,8 @@ class MuteConfig(_BaseConfig):
     cost_per_minute: int = 3
     min_minutes: int = 1
     max_minutes: int = 15
-    daily_limit: int = 3             # сколько мутов в сутки может выдать один пользователь
-    target_cooldown_hours: int = 2   # кулдаун между мутами одного и того же человека
+    daily_limit: int = 3
+    target_cooldown_hours: int = 2
     selfmute_min_minutes: int = 1
     selfmute_max_minutes: int = 1440
     protection_cost: int = 200
@@ -95,14 +96,14 @@ class BlackjackConfig(_BaseConfig):
     max_bet: int = 50
     max_games_per_window: int = 5
     window_hours: int = 1
-    game_timeout_seconds: int = 60  # через сколько секунд незавершённая игра закрывается с возвратом ставки
+    game_timeout_seconds: int = 60
 
 
 class DiceConfig(_BaseConfig):
     min_bet: int = 1
     max_bet: int = 1000
     min_wait_seconds: int = 10
-    max_wait_seconds: int = 900   # 15 минут
+    max_wait_seconds: int = 900
 
 
 class SystemConfig(_BaseConfig):
@@ -151,13 +152,30 @@ class LlmConfig(_BaseConfig):
 
 
 class RenewConfig(_BaseConfig):
-    cost: int = 100           # стоимость одного обновления лимитов
-    daily_limit: int = 2      # сколько раз в сутки можно использовать /renew
+    cost: int = 100
+    daily_limit: int = 2
 
 
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
-    recipients: list[int] = []  # Telegram user_id получателей (должны начать чат с ботом)
+    recipients: list[int] = []
+
+
+class LoggingConfig(_BaseConfig):
+    """Настройки логирования через structlog."""
+    level: int = logging.INFO
+    human_readable_logs: bool = False  # True = цветной консольный вывод (dev), False = JSON (prod)
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def parse_level(cls, v) -> int:
+        """Принимает строку ('INFO', 'DEBUG') или число."""
+        if isinstance(v, str):
+            numeric = getattr(logging, v.upper(), None)
+            if numeric is None:
+                raise ValueError(f"Неизвестный уровень логирования: {v!r}")
+            return numeric
+        return v
 
 
 class AppConfig(_BaseConfig):
@@ -177,6 +195,7 @@ class AppConfig(_BaseConfig):
     system: SystemConfig = SystemConfig()
     renew: RenewConfig = RenewConfig()
     bug: BugConfig = BugConfig()
+    logging: LoggingConfig = LoggingConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

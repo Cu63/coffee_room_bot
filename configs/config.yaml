@@ -98,3 +98,8 @@ renew:
 bug:
   recipients:
     - 758647978   # замените на реальные Telegram user_id
+
+
+logging:
+  level: "INFO"
+  human_readable_logs: false
