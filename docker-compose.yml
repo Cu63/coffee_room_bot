@@ -15,6 +15,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        tag: "{{.Name}}"
 
   redis:
     image: redis:7-alpine
@@ -27,6 +31,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        tag: "{{.Name}}"
 
   flyway:
     image: flyway/flyway:11
@@ -40,6 +48,10 @@ services:
       FLYWAY_URL: jdbc:postgresql://db:5432/scorebot
       FLYWAY_USER: scorebot
       FLYWAY_PASSWORD: scorebot
+    logging:
+      driver: json-file
+      options:
+        tag: "{{.Name}}"
 
   openserp:
     image: karust/openserp
@@ -47,6 +59,10 @@ services:
     command: serve -a 0.0.0.0 -p 7000
     ports:
       - "127.0.0.1:7000:7000"
+    logging:
+      driver: json-file
+      options:
+        tag: "{{.Name}}"
 
   bot:
     build: .
@@ -66,7 +82,54 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./configs:/app/configs:ro,z
+    logging:
+      driver: json-file
+      options:
+        tag: "{{.Name}}"
+
+  # ── Observability ─────────────────────────────────────────────────────────
+
+  loki:
+    image: grafana/loki:3.4
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./loki-config.yml:/etc/loki/config.yml:ro,z
+      - lokidata:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 -O- http://localhost:3100/ready | grep -q ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  promtail:
+    image: grafana/promtail:3.4
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro,z
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # needs access to Docker socket — runs as root
+    user: root
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro,z
+      - grafanadata:/var/lib/grafana
 
 volumes:
   pgdata:
   redisdata:
+  lokidata:
+  grafanadata:
