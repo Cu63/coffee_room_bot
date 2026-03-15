@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,18 @@ async def safe_callback_answer(
 
 
 async def reply_and_delete(message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any) -> Message:
-    """Отправляет reply и планирует его удаление через delay секунд."""
-    reply = await message.reply(*args, **kwargs)
+    """Отправляет reply и планирует его удаление через delay секунд.
+
+    Если оригинальное сообщение уже удалено (бот не успел ответить),
+    падает в answer() без reply_to_message_id.
+    """
+    try:
+        reply = await message.reply(*args, **kwargs)
+    except TelegramBadRequest as e:
+        if "message to be replied not found" in str(e):
+            reply = await message.answer(*args, **kwargs)
+        else:
+            raise
     if message.bot:
         schedule_delete(message.bot, reply, delay=delay)
     return reply
