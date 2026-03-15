@@ -6,8 +6,17 @@ import logging
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.exceptions import TelegramNetworkError
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.types import TelegramObject
+
+# Ошибки callback-запросов, которые не нужно логировать — это норма
+_IGNORED_BAD_REQUEST = (
+    "query is too old",
+    "message to be replied not found",
+    "message can't be deleted",
+    "message to delete not found",
+    "message is not modified",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +42,12 @@ class RetryNetworkMiddleware(BaseMiddleware):
         for attempt in range(_MAX_ATTEMPTS):
             try:
                 return await handler(event, data)
+            except TelegramBadRequest as e:
+                # Ожидаемые ошибки — тихо игнорируем без retry
+                if any(msg in str(e) for msg in _IGNORED_BAD_REQUEST):
+                    logger.debug("Ignored TelegramBadRequest: %s", e)
+                    return None
+                raise
             except TelegramNetworkError as e:
                 last_exc = e
                 if attempt < _MAX_ATTEMPTS - 1:
