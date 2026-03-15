@@ -150,10 +150,22 @@ async def main() -> None:
 
     container = make_async_container(AppProvider(), RequestProvider())
 
+    # TELEGRAM_PROXY — опциональный SOCKS5/HTTP прокси для обхода блокировок.
+    # Примеры: socks5://user:pass@1.2.3.4:1080  или  http://1.2.3.4:3128
+    # Если переменная не задана — работаем без прокси (прямое подключение).
+    proxy = os.getenv("TELEGRAM_PROXY") or None
+    if proxy:
+        logger.info("Using Telegram proxy: %s", proxy)
+
     # Короткий таймаут: не ждём 60 с на SSL handshake, падаем быстро и идём дальше
     # AiohttpSession принимает timeout как int (секунды), не ClientTimeout
-    session = AiohttpSession(timeout=15)
+    session = AiohttpSession(timeout=15, proxy=proxy)
     bot = Bot(token=settings.bot_token, session=session)
+
+    # Кешируем информацию о боте один раз при старте.
+    # TrackMessageMiddleware использует это вместо bot.get_me() на каждый авто-реакт.
+    bot_me = await bot.get_me()
+    logger.info("Bot identity cached: @%s (id=%d)", bot_me.username, bot_me.id)
 
     # Мониторинг: отправка логов в Telegram-чат
     tg_log_handler = None
@@ -202,7 +214,8 @@ async def main() -> None:
     )
 
     setup_dishka(container, dp)
-    dp.message.outer_middleware(TrackMessageMiddleware())
+    # Передаём кешированный bot_me — middleware не будет вызывать get_me() при каждом авто-реакте
+    dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))
 
     sys_cfg = config.system
     cleanup_task = asyncio.create_task(cleanup_loop(container, sys_cfg.cleanup_interval_hours))

@@ -26,7 +26,14 @@ class TrackMessageMiddleware(BaseMiddleware):
 
     Работает как outer-middleware на Message — вызывается ДО хэндлеров,
     поэтому и команды, и обычные сообщения трекаются.
+
+    bot_me передаётся при инициализации из main() — один раз при старте,
+    чтобы не делать лишний запрос к Telegram API на каждый авто-реакт.
     """
+
+    def __init__(self, bot_me) -> None:
+        super().__init__()
+        self._bot_me = bot_me
 
     async def __call__(
         self,
@@ -69,7 +76,7 @@ class TrackMessageMiddleware(BaseMiddleware):
         if message.bot is None or message.from_user is None:
             return
         # Не реагируем на сообщения самого бота
-        if message.from_user.id == message.bot.id:
+        if message.from_user.id == self._bot_me.id:
             return
         # Бросаем кубик
         if random.random() >= cfg.probability:
@@ -96,18 +103,18 @@ class TrackMessageMiddleware(BaseMiddleware):
         # Сначала upsert бота в users (иначе FK на score_events упадёт),
         # затем применяем реакцию без лимитов (бот не ограничен).
         user_repo = await container.get(IUserRepository)
-        bot_info = await message.bot.get_me()
+        # Используем кешированный bot_me вместо bot.get_me() (экономим один запрос к API)
         await user_repo.upsert(
             User(
-                id=message.bot.id,
-                username=bot_info.username,
-                full_name=bot_info.full_name,
+                id=self._bot_me.id,
+                username=self._bot_me.username,
+                full_name=self._bot_me.full_name,
             )
         )
 
         score_service = await container.get(ScoreService)
         result = await score_service.apply_reaction_no_limits(
-            actor_id=message.bot.id,
+            actor_id=self._bot_me.id,
             chat_id=message.chat.id,
             message_id=message.message_id,
             emoji=emoji,
