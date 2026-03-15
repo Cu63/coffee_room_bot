@@ -26,7 +26,7 @@ from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
 
 _WIN_RESULTS = {GameResult.PLAYER_WIN, GameResult.DEALER_BUST, GameResult.PLAYER_BLACKJACK}
 
@@ -257,14 +257,14 @@ async def cb_hit(
     user_id = callback.from_user.id
     owner_id = int(callback.data.split(":")[1])
     if user_id != owner_id:
-        await callback.answer("Это не твоя игра!", show_alert=True)
+        await safe_callback_answer(callback, "Это не твоя игра!", show_alert=True)
         return
 
     chat_id = callback.message.chat.id
 
     rnd = await store.bj_get(user_id, chat_id)
     if rnd is None:
-        await callback.answer("Нет активной игры.", show_alert=True)
+        await safe_callback_answer(callback, "Нет активной игры.", show_alert=True)
         return
 
     rnd.hit()
@@ -272,7 +272,7 @@ async def cb_hit(
     if rnd.finished:
         # Сначала отвечаем и обновляем UI — до записи в БД
         text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
-        await callback.answer()
+        await safe_callback_answer(callback)
         await callback.message.edit_text(
             text,
             parse_mode=ParseMode.HTML,
@@ -290,7 +290,7 @@ async def cb_hit(
         return
 
     # Продолжаем — отвечаем и сохраняем состояние (обновляем таймер)
-    await callback.answer()
+    await safe_callback_answer(callback)
     await store.bj_set(
         user_id, chat_id, rnd,
         message_id=callback.message.message_id,
@@ -321,21 +321,21 @@ async def cb_stand(
     user_id = callback.from_user.id
     owner_id = int(callback.data.split(":")[1])
     if user_id != owner_id:
-        await callback.answer("Это не твоя игра!", show_alert=True)
+        await safe_callback_answer(callback, "Это не твоя игра!", show_alert=True)
         return
 
     chat_id = callback.message.chat.id
 
     rnd = await store.bj_get(user_id, chat_id)
     if rnd is None:
-        await callback.answer("Нет активной игры.", show_alert=True)
+        await safe_callback_answer(callback, "Нет активной игры.", show_alert=True)
         return
 
     rnd.stand()
 
     # Сначала отвечаем и обновляем UI — до записи в БД
     text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
-    await callback.answer()
+    await safe_callback_answer(callback)
     await callback.message.edit_text(
         text,
         parse_mode=ParseMode.HTML,
