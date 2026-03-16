@@ -156,6 +156,15 @@ class RenewConfig(_BaseConfig):
     daily_limit: int = 2
 
 
+class WordgameConfig(_BaseConfig):
+    min_bet: int = 1
+    max_bet: int = 1000
+    min_duration_seconds: int = 180    # 3 минуты
+    max_duration_seconds: int = 3600   # 1 час
+    attempt_cost: int = 1              # баллов за неудачную попытку
+    min_word_length: int = 2
+    max_word_length: int = 32
+
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
     recipients: list[int] = []
@@ -194,6 +203,7 @@ class AppConfig(_BaseConfig):
     llm: LlmConfig = LlmConfig()
     system: SystemConfig = SystemConfig()
     renew: RenewConfig = RenewConfig()
+    wordgame: WordgameConfig = WordgameConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
 

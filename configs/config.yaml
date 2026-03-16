@@ -49,7 +49,7 @@ tag:
   cost_member: 100              # сменить тег обычному участнику
   cost_admin: 200               # сменить тег админу/модератору
   cost_owner: 500               # сменить тег создателю чата
-  max_length: 32                # максимальная длина тега
+  max_length: 16                # максимальная длина тега
 
 blackjack:
   min_bet: 1
@@ -99,6 +99,15 @@ bug:
   recipients:
     - 758647978   # замените на реальные Telegram user_id
     - 450588708
+
+wordgame:
+  min_bet: 1
+  max_bet: 100
+  min_duration_seconds: 180   # 3 минуты минимум
+  max_duration_seconds: 3600  # 1 час максимум
+  attempt_cost: 1             # баллов за неудачную попытку
+  min_word_length: 2
+  max_word_length: 10
 
 logging:
   level: "INFO"

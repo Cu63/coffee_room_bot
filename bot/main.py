@@ -12,6 +12,7 @@ from bot.infrastructure.config_loader import Settings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
 from bot.infrastructure.dice_loop import dice_loop
 from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
+from bot.infrastructure.wordgame_loop import wordgame_loop
 from bot.infrastructure.logger import setup_logger
 from bot.presentation.handlers._admin_utils import _unmute_user
 from bot.presentation.handlers.admin_score import router as admin_score_router
@@ -29,6 +30,7 @@ from bot.presentation.handlers.reactions import router as reactions_router
 from bot.presentation.handlers.slots import router as slots_router
 from bot.presentation.handlers.tag import router as tag_router
 from bot.presentation.handlers.renew import router as renew_router
+from bot.presentation.handlers.wordgame import router as wordgame_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
@@ -208,6 +210,7 @@ async def main() -> None:
     dp.include_router(tag_router)
     dp.include_router(transfer_router)
     dp.include_router(renew_router)
+    dp.include_router(wordgame_router)
     dp.include_router(protect_router)
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)
@@ -226,6 +229,7 @@ async def main() -> None:
     dice_task = asyncio.create_task(dice_loop(bot, container))
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
     bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
+    wordgame_task = asyncio.create_task(wordgame_loop(bot, container))
     delete_task = asyncio.create_task(delete_loop(bot, redis))
 
     logger.info("Bot starting…")
@@ -242,6 +246,7 @@ async def main() -> None:
         dice_task.cancel()
         mute_roulette_task.cancel()
         bj_cleanup_task.cancel()
+        wordgame_task.cancel()
         delete_task.cancel()
         if tg_log_handler:
             tg_log_handler.stop()

@@ -9,10 +9,13 @@ from aiogram.types import Chat, TelegramObject
 class ChatContextMiddleware(BaseMiddleware):
     """Прокидывает chat_id во все хэндлеры.
 
-    Также отсекает события из личных чатов — бот работает только в группах/супергруппах.
+    Для групп/супергрупп — устанавливает chat_id и пропускает дальше.
+    Для личных чатов — пропускает без chat_id (нужно для приёма слова в Угадайке).
+    Остальные типы чатов (channels и т.д.) — отсекает.
     """
 
-    ALLOWED_CHAT_TYPES = {"group", "supergroup"}
+    GROUP_CHAT_TYPES = {"group", "supergroup"}
+    ALLOWED_CHAT_TYPES = {"group", "supergroup", "private"}
 
     async def __call__(
         self,
@@ -28,5 +31,7 @@ class ChatContextMiddleware(BaseMiddleware):
         if chat.type not in self.ALLOWED_CHAT_TYPES:
             return None
 
-        data["chat_id"] = chat.id
+        if chat.type in self.GROUP_CHAT_TYPES:
+            data["chat_id"] = chat.id
+
         return await handler(event, data)
