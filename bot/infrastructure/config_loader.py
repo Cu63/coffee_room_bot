@@ -171,6 +171,15 @@ class LoggingConfig:
     level: str = "INFO"
     human_readable_logs: bool = False  # True = цветной консольный вывод (dev), False = JSON (prod)
 
+@dataclass(slots=True, kw_only=True)
+class WordgameConfig:
+    min_bet: int = 0
+    max_bet: int = 1000
+    min_duration_seconds: int = 180    # 3 минуты
+    max_duration_seconds: int = 3600   # 1 час
+    attempt_cost: int = 1              # баллов за неудачную попытку
+    min_word_length: int = 2
+    max_word_length: int = 32
 
 @dataclass(slots=True, kw_only=True)
 class AppConfig:
@@ -191,6 +200,7 @@ class AppConfig:
     renew: RenewConfig
     bug: BugConfig
     logging: LoggingConfig
+    wordgame: WordgameConfig
 
 
 T = TypeVar("T")
