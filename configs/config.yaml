@@ -107,7 +107,7 @@ wordgame:
   max_duration_seconds: 3600  # 1 час максимум
   attempt_cost: 1             # баллов за неудачную попытку
   min_word_length: 3
-  max_word_length: 8
+  max_word_length: 16
 
 logging:
   level: "INFO"

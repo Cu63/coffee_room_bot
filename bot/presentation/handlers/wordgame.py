@@ -322,6 +322,8 @@ async def msg_private_word(
                 parse_mode=ParseMode.HTML,
                 reply_markup=None,
             )
+            await bot.pin_chat_message(chat_id=chat_id,
+                                       message_id = lobby_msg_id)
         except TelegramBadRequest:
             pass
 
