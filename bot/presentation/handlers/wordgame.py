@@ -169,8 +169,6 @@ async def cmd_wordgame(
         )
         return
 
-    await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
-
     await user_repo.upsert(User(
         id=user_id,
         username=message.from_user.username,
@@ -205,6 +203,9 @@ async def cmd_wordgame(
         dm_sent = True
     except TelegramBadRequest:
         pass
+
+    if dm_sent:
+        await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
     lobby_text = (
         f"🔤 <b>Угадайка!</b>\n\n"
