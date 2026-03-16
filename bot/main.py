@@ -18,7 +18,6 @@ from bot.presentation.handlers._admin_utils import _unmute_user
 from bot.presentation.handlers.admin_score import router as admin_score_router
 from bot.presentation.handlers.admin_user import router as admin_user_router
 from bot.presentation.handlers.blackjack import router as blackjack_router
-from bot.presentation.handlers.bug import router as bug_router
 from bot.presentation.handlers.tracker import router as tracker_router
 from bot.presentation.handlers.commands import router as commands_router
 from bot.presentation.handlers.dice import router as dice_router
@@ -216,7 +215,6 @@ async def main() -> None:
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
-    dp.include_router(bug_router)
     dp.include_router(tracker_router)
 
     setup_dishka(container, dp)
