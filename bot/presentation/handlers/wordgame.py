@@ -455,18 +455,23 @@ async def msg_reply_guess(
         await store.wg_game_save_raw(game.game_id, _game_to_raw(game))
 
         cost = wg.attempt_cost
-        cost_deducted = False
-        if cost > 0:
-            bal = await score_service.get_score(user_id, chat_id)
-            if bal.value >= cost:
-                await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
-                cost_deducted = True
-
         hint_parts = [
             f"❌ {user_mention}: «{guess}» — не то "
             f"({matched_count}/{len(game.word)} на месте)"
         ]
-        if cost_deducted:
+
+        if cost > 0:
+            bal = await score_service.get_score(user_id, chat_id)
+            if bal.value < cost:
+                # Баллов не хватает — блокируем попытку
+                err = await message.answer(
+                    f"🚫 {user_mention}: недостаточно баллов для попытки "
+                    f"(нужно {cost}, у тебя {bal.value}).",
+                    parse_mode=ParseMode.HTML,
+                )
+                schedule_delete(bot, err, delay=10)
+                return
+            await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
             hint_parts.append(f"<i>−{cost} балл за попытку</i>")
 
         hint = await message.answer("\n".join(hint_parts), parse_mode=ParseMode.HTML)
