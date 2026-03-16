@@ -75,3 +75,19 @@ class PostgresScoreRepository(IScoreRepository):
             limit,
         )
         return [Score(user_id=r["user_id"], chat_id=r["chat_id"], value=r["value"]) for r in rows]
+
+    async def get_rank(self, user_id: int, chat_id: int) -> int | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT rank FROM (
+                SELECT user_id,
+                       RANK() OVER (ORDER BY value DESC) AS rank
+                FROM scores
+                WHERE chat_id = $1 AND value != 0
+            ) ranked
+            WHERE user_id = $2
+            """,
+            chat_id,
+            user_id,
+        )
+        return int(row["rank"]) if row else None

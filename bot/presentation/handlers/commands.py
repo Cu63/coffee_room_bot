@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
@@ -13,7 +15,10 @@ from cachetools import TTLCache
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.history_service import HistoryService
+from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
+from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.score_service import ScoreService
 from bot.domain.tz import to_msk
@@ -118,17 +123,20 @@ async def cmd_stats(
     message: Message,
     command: CommandObject,
     score_service: FromDishka[ScoreService],
+    score_repo: FromDishka[IScoreRepository],
+    stats_repo: FromDishka[IUserStatsRepository],
+    limits_repo: FromDishka[IDailyLimitsRepository],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
 ) -> None:
-    """Статистика по реакциям и победам в играх."""
+    """Подробная статистика пользователя: счёт, лимиты, реакции, игры."""
     chat_id = message.chat.id
 
-    # Определяем пользователя: реплай, @username или сам
+    # Определяем цель: реплай → @username → сам
     target_user = None
     if message.reply_to_message and message.reply_to_message.from_user:
-        ru = message.reply_to_message.from_user
-        target_user = await user_repo.get_by_id(ru.id)
+        target_user = await user_repo.get_by_id(message.reply_to_message.from_user.id)
     elif command.args:
         target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
         if target_user is None:
@@ -144,24 +152,76 @@ async def cmd_stats(
         user_id = message.from_user.id
         display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
 
-    stats = await score_service.get_stats(user_id, chat_id)
+    # Параллельно тянем все данные
+    today = datetime.date.today()
+    score_obj = await score_service.get_score(user_id, chat_id)
+    rank = await score_repo.get_rank(user_id, chat_id)
+    stats = await stats_repo.get(user_id, chat_id)
+    daily = await limits_repo.get(user_id, chat_id, today)
+
     p = formatter._p
+    lc = config.limits
+    icon = config.score.icon
 
-    total_games = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway
+    # ── Счёт + место ────────────────────────────────────────────
+    score_val = score_obj.value
+    rank_str = f"  · #{rank} в чате" if rank else ""
+    score_line = f"{icon} <b>{score_val} {p.pluralize(score_val)}</b>{rank_str}"
 
-    text = (
-        f"📊 <b>Статистика</b> {display_name}\n\n"
-        f"<b>Реакции:</b>\n"
+    # ── Лимиты сегодня ──────────────────────────────────────────
+    neg_used = daily.reactions_given
+    neg_left = max(0, lc.daily_negative_given - neg_used)
+    recv_used = daily.score_received
+    recv_left = max(0, lc.daily_score_received - recv_used)
+
+    limits_block = (
+        f"<b>Сегодня:</b>\n"
+        f"  ➖ Негативных реакций: {neg_used} / {lc.daily_negative_given}"
+        f"  <i>(осталось {neg_left})</i>\n"
+        f"  📥 Получено баллов: {recv_used} / {lc.daily_score_received}"
+        f"  <i>(осталось {recv_left})</i>"
+    )
+
+    # ── Реакции за всё время ─────────────────────────────────────
+    netto = stats.score_given - stats.score_taken
+    netto_sign = "+" if netto >= 0 else ""
+    reactions_block = (
+        f"<b>Реакции (всё время):</b>\n"
         f"  🎁 Подарено: {stats.score_given} {p.pluralize(stats.score_given)}\n"
-        f"  💀 Отнято: {stats.score_taken} {p.pluralize(stats.score_taken)}\n\n"
+        f"  💀 Отнято: {stats.score_taken} {p.pluralize(stats.score_taken)}\n"
+        f"  ∑ Нетто: {netto_sign}{netto} {p.pluralize(abs(netto))}"
+    )
+
+    # ── Игры ────────────────────────────────────────────────────
+    total_wins = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway
+    games_block = (
         f"<b>Победы в играх:</b>\n"
         f"  🃏 Блекджек: {stats.wins_blackjack}\n"
         f"  🎰 Слоты: {stats.wins_slots}\n"
         f"  🎲 Кубики: {stats.wins_dice}\n"
         f"  🎟 Розыгрыши: {stats.wins_giveaway}\n"
-        f"  <i>Итого: {total_games}</i>"
+        f"  <i>Итого: {total_wins} {_wins_plural(total_wins)}</i>"
+    )
+
+    text = (
+        f"📊 <b>Статистика</b> {display_name}\n\n"
+        f"{score_line}\n\n"
+        f"{limits_block}\n\n"
+        f"{reactions_block}\n\n"
+        f"{games_block}"
     )
     await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+
+
+def _wins_plural(n: int) -> str:
+    if 11 <= n % 100 <= 19:
+        return "побед"
+    r = n % 10
+    if r == 1:
+        return "победа"
+    if 2 <= r <= 4:
+        return "победы"
+    return "побед"
 
 
 @router.message(Command("history"))
