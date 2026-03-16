@@ -400,6 +400,8 @@ async def msg_reply_guess(
         schedule_delete(bot, err, message, delay=30)
         return
 
+    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
+
     # Проверка баллов — только если ставка игры > 0 (иначе все попытки бесплатные)
     cost = wg.attempt_cost
     if game.bet > 0 and cost > 0:
@@ -421,8 +423,6 @@ async def msg_reply_guess(
     game.revealed = new_revealed
 
     schedule_delete(bot, message, delay=30)
-
-    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
 
     if is_correct:
         # ── ПОБЕДА ──────────────────────────────────────────────────────
