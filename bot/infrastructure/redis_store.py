@@ -22,6 +22,12 @@ _OWNER_MUTE = "owner_mute:"  # owner_mute:{chat_id}:{user_id}
 _GIVEAWAY_PERIOD = "giveaway_period:"  # giveaway_period:{chat_id}:{gp_id}
 _BURST_WINDOW = "burst:win:"  # burst:win:{user_id}:{chat_id} (sorted set)
 _BURST_COOLDOWN = "burst:cd:"  # burst:cd:{user_id}:{chat_id}
+_SPARK_ACTIVE = "spark:act:"  # spark:act:{chat_id} (set of user_ids)
+_SPARK_RESP = "spark:resp:"   # spark:resp:{user_id}:{chat_id} (set of responder_ids)
+_SPARK_COOLDOWN = "spark:cd:" # spark:cd:{user_id}:{chat_id}
+_CHAIN_COUNT = "chain:cnt:"   # chain:cnt:{chat_id}:{min_id}:{max_id}
+_CHAIN_LAST = "chain:last:"   # chain:last:{chat_id}:{min_id}:{max_id}
+_CHAIN_COOLDOWN = "chain:cd:" # chain:cd:{chat_id}:{min_id}:{max_id}
 
 
 def _serialize_round(
@@ -298,6 +304,88 @@ class RedisStore:
         pipe = self._r.pipeline()
         pipe.set(cd_key, "1", ex=cooldown_seconds)
         pipe.delete(win_key)
+        await pipe.execute()
+
+    # ── Spark: разжигатель дискуссии ─────────────────────────────
+
+    async def spark_cooldown_active(self, user_id: int, chat_id: int) -> bool:
+        key = f"{_SPARK_COOLDOWN}{user_id}:{chat_id}"
+        return bool(await self._r.exists(key))
+
+    async def spark_activate(self, user_id: int, chat_id: int, window_seconds: int) -> None:
+        """Зарегистрировать пользователя как потенциального зачинщика."""
+        active_key = f"{_SPARK_ACTIVE}{chat_id}"
+        resp_key = f"{_SPARK_RESP}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.sadd(active_key, str(user_id))
+        pipe.expire(active_key, window_seconds + 60)
+        pipe.delete(resp_key)  # сбросить старых респондентов
+        pipe.expire(resp_key, window_seconds)
+        await pipe.execute()
+
+    async def spark_get_active(self, chat_id: int) -> set[int]:
+        """Все активные зачинщики в чате."""
+        key = f"{_SPARK_ACTIVE}{chat_id}"
+        members = await self._r.smembers(key)
+        return {int(m) for m in members}
+
+    async def spark_add_responder(self, anchor_id: int, responder_id: int, chat_id: int) -> int:
+        """Добавить респондента к зачинщику. Возвращает кол-во уникальных респондентов."""
+        key = f"{_SPARK_RESP}{anchor_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.sadd(key, str(responder_id))
+        pipe.scard(key)
+        results = await pipe.execute()
+        return results[1]
+
+    async def spark_award_cleanup(self, user_id: int, chat_id: int, cooldown_seconds: int) -> None:
+        """Начислить награду: поставить кулдаун, убрать из активных, удалить респондентов."""
+        cd_key = f"{_SPARK_COOLDOWN}{user_id}:{chat_id}"
+        active_key = f"{_SPARK_ACTIVE}{chat_id}"
+        resp_key = f"{_SPARK_RESP}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.set(cd_key, "1", ex=cooldown_seconds)
+        pipe.srem(active_key, str(user_id))
+        pipe.delete(resp_key)
+        await pipe.execute()
+
+    # ── Reply chain: цепочка реплаев ──────────────────────────────
+
+    def _chain_pair(self, chat_id: int, user_a: int, user_b: int) -> str:
+        lo, hi = min(user_a, user_b), max(user_a, user_b)
+        return f"{chat_id}:{lo}:{hi}"
+
+    async def chain_cooldown_active(self, chat_id: int, user_a: int, user_b: int) -> bool:
+        pair = self._chain_pair(chat_id, user_a, user_b)
+        return bool(await self._r.exists(f"{_CHAIN_COOLDOWN}{pair}"))
+
+    async def chain_add_reply(
+        self, chat_id: int, replier_id: int, author_id: int, window_seconds: int,
+    ) -> int | None:
+        """Добавить реплай в цепочку. Возвращает счётчик или None если не чередуется."""
+        pair = self._chain_pair(chat_id, replier_id, author_id)
+        last_key = f"{_CHAIN_LAST}{pair}"
+        cnt_key = f"{_CHAIN_COUNT}{pair}"
+
+        last = await self._r.get(last_key)
+        if last is not None and int(last) == replier_id:
+            return None  # тот же человек подряд — не считаем
+
+        pipe = self._r.pipeline()
+        pipe.set(last_key, str(replier_id), ex=window_seconds)
+        pipe.incr(cnt_key)
+        pipe.expire(cnt_key, window_seconds)
+        results = await pipe.execute()
+        return results[1]  # новое значение счётчика
+
+    async def chain_award_cleanup(
+        self, chat_id: int, user_a: int, user_b: int, cooldown_seconds: int,
+    ) -> None:
+        """Поставить кулдаун на пару и сбросить цепочку."""
+        pair = self._chain_pair(chat_id, user_a, user_b)
+        pipe = self._r.pipeline()
+        pipe.set(f"{_CHAIN_COOLDOWN}{pair}", "1", ex=cooldown_seconds)
+        pipe.delete(f"{_CHAIN_COUNT}{pair}", f"{_CHAIN_LAST}{pair}")
         await pipe.execute()
 
     # ── Мут-гивэвей ──────────────────────────────────────────────

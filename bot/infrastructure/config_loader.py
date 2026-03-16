@@ -135,6 +135,22 @@ class BurstConfig(_BaseConfig):
     cooldown_hours: int = 4
 
 
+class SparkConfig(_BaseConfig):
+    enabled: bool = False
+    unique_responders: int = 4
+    window_minutes: int = 10
+    reward: int = 10
+    cooldown_hours: int = 6
+
+
+class ReplyChainConfig(_BaseConfig):
+    enabled: bool = False
+    replies_required: int = 6
+    window_minutes: int = 15
+    reward: int = 8
+    cooldown_hours: int = 4
+
+
 class SystemConfig(_BaseConfig):
     """Системные интервалы и технические параметры."""
 
@@ -231,6 +247,8 @@ class AppConfig(_BaseConfig):
     dice: DiceConfig = DiceConfig()
     llm: LlmConfig = LlmConfig()
     burst: BurstConfig = BurstConfig()
+    spark: SparkConfig = SparkConfig()
+    reply_chain: ReplyChainConfig = ReplyChainConfig()
     system: SystemConfig = SystemConfig()
     renew: RenewConfig = RenewConfig()
     wordgame: WordgameConfig = WordgameConfig()

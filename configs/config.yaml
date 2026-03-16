@@ -85,6 +85,20 @@ burst:
   reward: 15                    # награда в кирчиках
   cooldown_hours: 4             # кулдаун после срабатывания
 
+spark:
+  enabled: true
+  unique_responders: 4          # сколько разных людей должны написать после сообщения
+  window_minutes: 10            # за какой период
+  reward: 10                    # награда автору-зачинщику
+  cooldown_hours: 6             # кулдаун
+
+reply_chain:
+  enabled: true
+  replies_required: 6           # сколько чередующихся реплаев нужно (A→B→A→B→...)
+  window_minutes: 15            # за какой период
+  reward: 8                     # награда каждому из двоих
+  cooldown_hours: 4             # кулдаун на пару
+
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем

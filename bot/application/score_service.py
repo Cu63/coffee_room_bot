@@ -30,6 +30,8 @@ SPECIAL_EMOJI = {
     "transfer": "💸",
     "protect": "🛡",
     "burst": "💬",
+    "spark": "🔥",
+    "chain": "🔗",
 }
 
 
@@ -355,6 +357,22 @@ class ScoreService:
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
             user_id, user_id, chat_id, reward, SPECIAL_EMOJI["burst"],
+        )
+        return new_value
+
+    async def award_spark(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за разжигание дискуссии."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["spark"],
+        )
+        return new_value
+
+    async def award_chain(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за цепочку реплаев."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["chain"],
         )
         return new_value
 
