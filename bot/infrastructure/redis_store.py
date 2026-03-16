@@ -561,3 +561,16 @@ class RedisStore:
             else:
                 await self._r.srem(f"{self._WG_CHAT}{chat_id}", gid)
         return active
+
+    async def wg_game_by_message_id(self, chat_id: int, message_id: int) -> dict | None:
+        """Найти активную игру в чате по message_id игрового сообщения."""
+        members = await self._r.smembers(f"{self._WG_CHAT}{chat_id}")
+        for gid in members:
+            raw = await self._r.get(f"{self._WG_GAME}{gid}")
+            if raw is None:
+                await self._r.srem(f"{self._WG_CHAT}{chat_id}", gid)
+                continue
+            data = json.loads(raw)
+            if data.get("message_id") == message_id:
+                return data
+        return None

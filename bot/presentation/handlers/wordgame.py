@@ -1,10 +1,10 @@
 """Обработчики игры «Угадайка».
 
 Флоу:
-1. /wordgame <ставка> <время>  — в группе: создаёт игру, бот пишет создателю в ЛС
-2. /start (в ЛС, без аргументов) — бот предлагает написать слово, если есть pending
+1. /wordgame <ставка> <время>  — в группе: создаёт игру, пишет создателю в ЛС
+2. /start в ЛС — предлагает ввести слово если есть pending
 3. Текст в ЛС — создатель отправляет загаданное слово
-4. /guess <слово> — в группе: попытка угадать, бот редактирует игровое сообщение
+4. Reply на игровое сообщение бота — попытка угадать слово
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from datetime import datetime
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
@@ -29,7 +29,6 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.wordgame_entities import (
     WordGame,
     compare,
-    format_masked,
     is_valid_word,
     merge_revealed,
     normalize_word,
@@ -37,7 +36,7 @@ from bot.domain.wordgame_entities import (
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete, schedule_delete_id
+from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 router = Router(name="wordgame")
@@ -54,7 +53,6 @@ def _parse_duration_seconds(token: str) -> int | None:
 
 
 def _open_dm_kb(bot_username: str) -> InlineKeyboardMarkup:
-    """Кнопка «Написать слово в ЛС» — просто открывает бота без payload."""
     return InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(
@@ -66,7 +64,6 @@ def _open_dm_kb(bot_username: str) -> InlineKeyboardMarkup:
 
 
 def _game_text(game: WordGame, pluralizer: ScorePluralizer) -> str:
-    """Текст игрового сообщения с текущей маской слова."""
     ends_dt = datetime.fromtimestamp(game.ends_at, tz=TZ_MSK)
     ends_str = ends_dt.strftime("%H:%M")
     bet_str = pluralizer.pluralize(game.bet)
@@ -75,7 +72,7 @@ def _game_text(game: WordGame, pluralizer: ScorePluralizer) -> str:
         f"Слово из <b>{len(game.word)}</b> букв: {game.masked}\n"
         f"Открыто: <b>{game.revealed_count}/{len(game.word)}</b>\n\n"
         f"💰 Ставка: <b>{game.bet} {bet_str}</b>  ⏰ До: <b>{ends_str}</b>\n\n"
-        f"<i>/guess &lt;слово&gt; — попробовать угадать</i>"
+        f"<i>Ответь на это сообщение словом, чтобы угадать</i>"
     )
 
 
@@ -142,9 +139,7 @@ async def cmd_wordgame(
         return
     bet = int(args[0])
     if not (wg.min_bet <= bet <= wg.max_bet):
-        await reply_and_delete(
-            message, f"❌ Ставка: от {wg.min_bet} до {wg.max_bet}."
-        )
+        await reply_and_delete(message, f"❌ Ставка: от {wg.min_bet} до {wg.max_bet}.")
         return
 
     duration_secs = _parse_duration_seconds(args[1])
@@ -174,7 +169,6 @@ async def cmd_wordgame(
         )
         return
 
-    # Списываем ставку сразу — призовой фонд
     await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
     await user_repo.upsert(User(
@@ -190,7 +184,6 @@ async def cmd_wordgame(
         bet=bet,
         duration_seconds=duration_secs,
     )
-    # Запоминаем что ждём слово от создателя
     await store.wg_awaiting_set(user_id, game_id)
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
@@ -200,21 +193,19 @@ async def cmd_wordgame(
         else f"{duration_secs // 3600} ч"
     )
 
-    # Пробуем сразу написать создателю в ЛС
     dm_sent = False
     try:
         await bot.send_message(
             user_id,
-            f"✏️ Ты создал Угадайку в чате!\n"
+            f"✏️ Ты создал Угадайку!\n"
             f"Ставка: <b>{bet} {bet_str}</b>  |  Время: <b>{dur_str}</b>\n\n"
             f"Отправь мне загадываемое слово:",
             parse_mode=ParseMode.HTML,
         )
         dm_sent = True
     except TelegramBadRequest:
-        pass  # пользователь не начинал диалог с ботом
+        pass
 
-    # Публикуем лобби-сообщение в группе
     lobby_text = (
         f"🔤 <b>Угадайка!</b>\n\n"
         f"{user_mention} загадывает слово…\n"
@@ -228,7 +219,7 @@ async def cmd_wordgame(
     schedule_delete(bot, message, delay=5)
 
 
-# ── /start в ЛС — проверяем pending игру ────────────────────────────────────
+# ── /start в ЛС ─────────────────────────────────────────────────────────────
 
 @router.message(Command("start"), F.chat.type == "private")
 @inject
@@ -240,7 +231,7 @@ async def cmd_start_private(
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
         await message.answer(
-            "Привет! Чтобы начать игру, используй команду /wordgame в групповом чате."
+            "Привет! Чтобы начать игру, используй /wordgame в групповом чате."
         )
         return
 
@@ -295,8 +286,7 @@ async def msg_private_word(
     if pending is None:
         await store.wg_awaiting_delete(user_id)
         await message.answer(
-            "❌ Игра устарела (прошло больше 10 мин).\n"
-            "Начни новую командой /wordgame в группе."
+            "❌ Игра устарела. Начни новую командой /wordgame в группе."
         )
         return
 
@@ -322,7 +312,6 @@ async def msg_private_word(
     await store.wg_game_create(game)
     await store.wg_chat_add(chat_id, game_id)
 
-    # Редактируем лобби-сообщение — показываем маску
     if lobby_msg_id:
         try:
             await bot.edit_message_text(
@@ -342,12 +331,18 @@ async def msg_private_word(
     )
 
 
-# ── /guess <слово> ───────────────────────────────────────────────────────────
+# ── Reply на игровое сообщение бота = попытка угадать ───────────────────────
 
-@router.message(Command("guess"))
+@router.message(
+    F.reply_to_message.as_("replied"),
+    F.reply_to_message.from_user.is_bot.is_(True),
+    F.text,
+    ~F.text.startswith("/"),
+)
 @inject
-async def cmd_guess(
+async def msg_reply_guess(
     message: Message,
+    replied: Message,
     bot: Bot,
     store: FromDishka[RedisStore],
     score_service: FromDishka[ScoreService],
@@ -355,18 +350,41 @@ async def cmd_guess(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
-    args = (message.text or "").split()[1:]
-    if not args:
-        await reply_and_delete(
-            message,
-            "Использование: <code>/guess &lt;слово&gt;</code>",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
     user_id = message.from_user.id
     chat_id = message.chat.id
-    guess = normalize_word(args[0])
+
+    # Ищем игру по message_id сообщения, на которое ответили
+    raw = await store.wg_game_by_message_id(chat_id, replied.message_id)
+    if raw is None:
+        # Это не игровое сообщение — игнорируем
+        return
+
+    game = _raw_to_game(raw)
+    if game.finished or game.is_expired:
+        return
+
+    if game.creator_id == user_id:
+        err = await message.reply("❌ Нельзя угадывать свою игру!")
+        schedule_delete(bot, err, message, delay=5)
+        return
+
+    guess = normalize_word(message.text or "")
+    wg = config.wordgame
+
+    if not is_valid_word(guess, wg.min_word_length, wg.max_word_length):
+        err = await message.reply(
+            f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}."
+        )
+        schedule_delete(bot, err, message, delay=8)
+        return
+
+    if len(guess) != len(game.word):
+        err = await message.reply(
+            f"❌ Слово должно быть из <b>{len(game.word)}</b> букв, а не {len(guess)}.",
+            parse_mode=ParseMode.HTML,
+        )
+        schedule_delete(bot, err, message, delay=8)
+        return
 
     await user_repo.upsert(User(
         id=user_id,
@@ -374,135 +392,82 @@ async def cmd_guess(
         full_name=message.from_user.full_name,
     ))
 
-    game_ids = await store.wg_chat_games(chat_id)
-    if not game_ids:
-        await reply_and_delete(message, "🤷 Нет активных игр в этом чате.")
+    if game.already_tried(user_id, guess):
+        err = await message.reply(
+            f"🔄 «<b>{guess}</b>» ты уже пробовал. Другое слово!",
+            parse_mode=ParseMode.HTML,
+        )
+        schedule_delete(bot, err, message, delay=8)
         return
 
-    wg = config.wordgame
+    matches = compare(game.word, guess)
+    new_revealed = merge_revealed(game.revealed, matches)
+    is_correct = all(matches)
+    matched_count = sum(matches)
+
+    game.guesses.append({"user_id": user_id, "word": guess})
+    game.revealed = new_revealed
+
+    schedule_delete(bot, message, delay=3)
+
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
-    tried_any = False
 
-    for game_id in list(game_ids):
-        raw = await store.wg_game_get(game_id)
-        if raw is None:
-            await store.wg_chat_remove(chat_id, game_id)
-            continue
+    if is_correct:
+        # ── ПОБЕДА ──────────────────────────────────────────────────────
+        game.finished = True
+        game.winner_id = user_id
+        await store.wg_game_finish(game.game_id)
+        await store.wg_chat_remove(chat_id, game.game_id)
 
-        game = _raw_to_game(raw)
-        if game.finished or game.is_expired:
-            continue
-        if game.creator_id == user_id:
-            continue  # нельзя угадывать свою игру
-        if len(guess) != len(game.word):
-            continue
+        await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
 
-        tried_any = True
-
-        # Повтор попытки
-        if game.already_tried(user_id, guess):
-            err = await message.reply(
-                f"🔄 «<b>{guess}</b>» ты уже пробовал. Другое слово!",
-                parse_mode=ParseMode.HTML,
-            )
-            schedule_delete(bot, err, message, delay=10)
-            return
-
-        matches = compare(game.word, guess)
-        new_revealed = merge_revealed(game.revealed, matches)
-        is_correct = all(matches)
-        matched_count = sum(matches)
-
-        game.guesses.append({"user_id": user_id, "word": guess})
-        game.revealed = new_revealed
-
-        # Удаляем команду сразу
-        schedule_delete(bot, message, delay=3)
-
-        if is_correct:
-            # ── ПОБЕДА ──────────────────────────────────────────────
-            game.finished = True
-            game.winner_id = user_id
-            await store.wg_game_finish(game_id)
-            await store.wg_chat_remove(chat_id, game_id)
-
-            await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
-
-            bet_str = pluralizer.pluralize(game.bet)
-            win_text = (
-                f"🎉 <b>Угадайка завершена!</b>\n\n"
-                f"Слово: <b>{game.word}</b>\n"
-                f"Угадал(а): {user_mention}\n"
-                f"Приз: <b>+{game.bet} {bet_str}</b> 🏆"
-            )
-
-            # Редактируем игровое сообщение
-            if game.message_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=game.message_id,
-                        text=win_text,
-                        parse_mode=ParseMode.HTML,
-                    )
-                    schedule_delete_id(bot, chat_id, game.message_id, delay=30)
-                except TelegramBadRequest:
-                    result_msg = await bot.send_message(
-                        chat_id, win_text, parse_mode=ParseMode.HTML
-                    )
-                    schedule_delete(bot, result_msg, delay=30)
-            else:
-                result_msg = await bot.send_message(
-                    chat_id, win_text, parse_mode=ParseMode.HTML
-                )
-                schedule_delete(bot, result_msg, delay=30)
-
-        else:
-            # ── НЕВЕРНО ──────────────────────────────────────────────
-            # Редактируем игровое сообщение — открываем угаданные буквы
-            if game.message_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=game.message_id,
-                        text=_game_text(game, pluralizer),
-                        parse_mode=ParseMode.HTML,
-                    )
-                except TelegramBadRequest:
-                    pass
-
-            # Сохраняем обновлённое состояние
-            await store.wg_game_save_raw(game_id, _game_to_raw(game))
-
-            # Краткий ответ с результатом попытки
-            cost = wg.attempt_cost
-            cost_deducted = False
-            if cost > 0:
-                bal = await score_service.get_score(user_id, chat_id)
-                if bal.value >= cost:
-                    await score_service.add_score(
-                        user_id, chat_id, -cost, admin_id=user_id
-                    )
-                    cost_deducted = True
-
-            hint_lines = [
-                f"❌ {user_mention}: «{guess}» — не то "
-                f"({matched_count}/{len(game.word)} на месте)"
-            ]
-            if cost_deducted:
-                hint_lines.append(f"<i>−{cost} балл за попытку</i>")
-
-            hint = await message.answer(
-                "\n".join(hint_lines),
-                parse_mode=ParseMode.HTML,
-            )
-            schedule_delete(bot, hint, delay=15)
-
-        return  # обработали одну игру, выходим
-
-    if not tried_any:
-        await reply_and_delete(
-            message,
-            "🤷 Нет подходящих игр: длина слова не совпадает, "
-            "либо ты создатель всех активных игр.",
+        bet_str = pluralizer.pluralize(game.bet)
+        win_text = (
+            f"🎉 <b>Угадайка завершена!</b>\n\n"
+            f"Слово: <b>{game.word}</b>\n"
+            f"Угадал(а): {user_mention}\n"
+            f"Приз: <b>+{game.bet} {bet_str}</b> 🏆"
         )
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game.message_id,
+                text=win_text,
+                parse_mode=ParseMode.HTML,
+            )
+            schedule_delete_id(bot, chat_id, game.message_id, delay=30)
+        except TelegramBadRequest:
+            result_msg = await bot.send_message(chat_id, win_text, parse_mode=ParseMode.HTML)
+            schedule_delete(bot, result_msg, delay=30)
+
+    else:
+        # ── НЕВЕРНО — редактируем игровое сообщение с новой маской ──────
+        try:
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=game.message_id,
+                text=_game_text(game, pluralizer),
+                parse_mode=ParseMode.HTML,
+            )
+        except TelegramBadRequest:
+            pass
+
+        await store.wg_game_save_raw(game.game_id, _game_to_raw(game))
+
+        cost = wg.attempt_cost
+        cost_deducted = False
+        if cost > 0:
+            bal = await score_service.get_score(user_id, chat_id)
+            if bal.value >= cost:
+                await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
+                cost_deducted = True
+
+        hint_parts = [
+            f"❌ {user_mention}: «{guess}» — не то "
+            f"({matched_count}/{len(game.word)} на месте)"
+        ]
+        if cost_deducted:
+            hint_parts.append(f"<i>−{cost} балл за попытку</i>")
+
+        hint = await message.answer("\n".join(hint_parts), parse_mode=ParseMode.HTML)
+        schedule_delete(bot, hint, delay=15)
