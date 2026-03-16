@@ -439,7 +439,8 @@ async def msg_reply_guess(
             f"🎉 <b>Угадайка завершена!</b>\n\n"
             f"Слово: <b>{game.word}</b>\n"
             f"Угадал(а): {user_mention}\n"
-            f"Приз: <b>+{game.bet} {bet_str}</b> 🏆"
+            f"Приз: <b>+{game.bet} {bet_str}</b> 🏆\n"
+            f"Количество попыток: <b>{len(game.guesses)}</b>"
         )
         try:
             await bot.edit_message_text(
