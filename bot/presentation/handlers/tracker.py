@@ -404,7 +404,7 @@ async def _handle_changelog_message(message: Message, store: RedisStore, is_edit
     )
 
 
-@router.message(F.chat.type == "supergroup", F.message_thread_id.is_(True), ~F.text.startswith("/"))
+@router.message(F.chat.type == "supergroup", F.message_thread_id.is_not(None), ~F.text.startswith("/"))
 @inject
 async def on_changelog_message(
     message: Message,
@@ -413,7 +413,7 @@ async def on_changelog_message(
     await _handle_changelog_message(message, store, is_edit=False)
 
 
-@router.edited_message(F.chat.type == "supergroup", F.message_thread_id.is_(True))
+@router.edited_message(F.chat.type == "supergroup", F.message_thread_id.is_not(None))
 @inject
 async def on_changelog_edited(
     message: Message,
