@@ -12,7 +12,7 @@ from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.llm_service import LlmResult, LlmService, RateLimitExceeded
-from bot.infrastructure.config_loader import AppConfig, Settings
+from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.infrastructure.message_formatter import MessageFormatter
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ async def cmd_llm(
     command: CommandObject,
     llm_service: FromDishka[LlmService],
     formatter: FromDishka[MessageFormatter],
-    settings: FromDishka[Settings],
+    settings: FromDishka[BotSettings],
     config: FromDishka[AppConfig],
 ) -> None:
     """Прямой вопрос к LLM."""
@@ -148,7 +148,7 @@ async def cmd_search(
     command: CommandObject,
     llm_service: FromDishka[LlmService],
     formatter: FromDishka[MessageFormatter],
-    settings: FromDishka[Settings],
+    settings: FromDishka[BotSettings],
     config: FromDishka[AppConfig],
 ) -> None:
     """Поиск в интернете + ответ LLM по результатам."""
@@ -188,7 +188,7 @@ async def cmd_search_debug(
     command: CommandObject,
     llm_service: FromDishka[LlmService],
     formatter: FromDishka[MessageFormatter],
-    settings: FromDishka[Settings],
+    settings: FromDishka[BotSettings],
     config: FromDishka[AppConfig],
 ) -> None:
     """Поиск с debug-трейсом — отправляет файл с полной цепочкой."""

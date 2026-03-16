@@ -8,7 +8,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from dishka import make_async_container
 from dishka.integrations.aiogram import setup_dishka
 
-from bot.infrastructure.config_loader import Settings, load_config
+from bot.infrastructure.config_loader import BotSettings, load_config
 from bot.infrastructure.di import AppProvider, RequestProvider
 from bot.infrastructure.dice_loop import dice_loop
 from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
@@ -157,7 +157,7 @@ async def main() -> None:
     # чтобы все последующие logger.info/error шли через него.
     setup_logger(config.logging)
 
-    settings = Settings()
+    settings = BotSettings()
 
     # ── Redis ────────────────────────────────────────────────────
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)

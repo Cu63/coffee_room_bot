@@ -17,6 +17,8 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     "aiohttp-socks>=0.11.0",
     "structlog>=25.5.0",
+    "dynaconf>=3.2.12",
+    "adaptix>=3.0.0b11",
 ]
 
 [dependency-groups]

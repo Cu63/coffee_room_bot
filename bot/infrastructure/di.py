@@ -29,7 +29,7 @@ from bot.application.score_service import ScoreService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.infrastructure.aitunnel_client import AiTunnelClient
-from bot.infrastructure.config_loader import AppConfig, Settings, load_config, load_help_config, load_messages
+from bot.infrastructure.config_loader import AppConfig, BotSettings, DatabaseConfig, load_config, load_help_config, load_messages
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
 from bot.infrastructure.db.postgres_dice_repository import PostgresDiceRepository
@@ -56,8 +56,12 @@ class AppProvider(Provider):
     scope = Scope.APP
 
     @provide
-    def get_settings(self) -> Settings:
-        return Settings()
+    def get_bot_settings(self) -> BotSettings:
+        return BotSettings()
+
+    @provide
+    def get_db_config(self) -> DatabaseConfig:
+        return DatabaseConfig()
 
     @provide
     def get_config(self) -> AppConfig:
@@ -86,14 +90,14 @@ class AppProvider(Provider):
         return HelpRenderer(load_help_config())
 
     @provide
-    async def get_pool(self, settings: Settings) -> AsyncIterable[asyncpg.Pool]:
-        dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+    async def get_pool(self, db: DatabaseConfig) -> AsyncIterable[asyncpg.Pool]:
+        dsn = db.dsn.replace("postgresql+asyncpg://", "postgresql://")
         pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         yield pool
         await pool.close()
 
     @provide
-    async def get_redis(self, settings: Settings) -> AsyncIterable[aioredis.Redis]:
+    async def get_redis(self, settings: BotSettings) -> AsyncIterable[aioredis.Redis]:
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
         yield r
         await r.aclose()
@@ -234,7 +238,7 @@ class RequestProvider(Provider):
         return GiveawayService(repo, score_repo, stats_repo)
 
     @provide
-    def get_aitunnel_client(self, settings: Settings, config: AppConfig) -> AiTunnelClient:
+    def get_aitunnel_client(self, settings: BotSettings, config: AppConfig) -> AiTunnelClient:
         return AiTunnelClient(
             api_key=settings.aitunnel_api_key,
             base_url=config.llm.base_url,
@@ -248,7 +252,7 @@ class RequestProvider(Provider):
         llm_repo: ILlmRepository,
         client: AiTunnelClient,
         config: AppConfig,
-        settings: Settings,
+        settings: BotSettings,
     ) -> LlmService:
         return LlmService(
             client=client,
