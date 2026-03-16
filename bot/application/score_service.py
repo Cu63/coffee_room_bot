@@ -29,6 +29,7 @@ SPECIAL_EMOJI = {
     "tag": "🏷",
     "transfer": "💸",
     "protect": "🛡",
+    "burst": "💬",
 }
 
 
@@ -348,6 +349,14 @@ class ScoreService:
             sender_balance=sender_new,
             receiver_balance=receiver_new,
         )
+
+    async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за burst-активность. Возвращает новый баланс."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["burst"],
+        )
+        return new_value
 
     async def _save_special_event(
         self,

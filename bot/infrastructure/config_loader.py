@@ -126,6 +126,15 @@ class DiceConfig(_BaseConfig):
     max_wait_seconds: int = 900
 
 
+class BurstConfig(_BaseConfig):
+    enabled: bool = False
+    messages_required: int = 8
+    window_minutes: int = 20
+    min_length: int = 15
+    reward: int = 15
+    cooldown_hours: int = 4
+
+
 class SystemConfig(_BaseConfig):
     """Системные интервалы и технические параметры."""
 
@@ -221,6 +230,7 @@ class AppConfig(_BaseConfig):
     slots: SlotsConfig = SlotsConfig()
     dice: DiceConfig = DiceConfig()
     llm: LlmConfig = LlmConfig()
+    burst: BurstConfig = BurstConfig()
     system: SystemConfig = SystemConfig()
     renew: RenewConfig = RenewConfig()
     wordgame: WordgameConfig = WordgameConfig()

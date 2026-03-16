@@ -16,6 +16,7 @@ from bot.domain.entities import User
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.redis_store import RedisStore
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class TrackMessageMiddleware(BaseMiddleware):
             )
 
             await self._maybe_react(event, container)
+            await self._maybe_burst(event, container)
 
         return await handler(event, data)
 
@@ -125,3 +127,48 @@ class TrackMessageMiddleware(BaseMiddleware):
             message.message_id,
             result.applied,
         )
+
+    async def _maybe_burst(self, message: Message, container: AsyncContainer) -> None:
+        config = await container.get(AppConfig)
+        cfg = config.burst
+
+        if not cfg.enabled:
+            return
+        if message.from_user is None:
+            return
+        # Боты не участвуют
+        if message.from_user.is_bot:
+            return
+        # Команды не засчитываются
+        if message.text and message.text.startswith("/"):
+            return
+        # Форварды не засчитываются
+        if message.forward_origin is not None:
+            return
+
+        # Текст сообщения (text или caption)
+        text = message.text or message.caption or ""
+        if len(text) < cfg.min_length:
+            return
+
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+
+        store = await container.get(RedisStore)
+
+        # Кулдаун активен — пропускаем
+        if await store.burst_cooldown_active(user_id, chat_id):
+            return
+
+        window_seconds = cfg.window_minutes * 60
+        count = await store.burst_add_message(user_id, chat_id, window_seconds)
+
+        if count >= cfg.messages_required:
+            score_service = await container.get(ScoreService)
+            cooldown_seconds = cfg.cooldown_hours * 3600
+            await store.burst_set_cooldown(user_id, chat_id, cooldown_seconds)
+            new_value = await score_service.award_burst(user_id, chat_id, cfg.reward)
+            logger.debug(
+                "burst: user %d in chat %d awarded %d, new score %d",
+                user_id, chat_id, cfg.reward, new_value,
+            )

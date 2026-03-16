@@ -20,6 +20,8 @@ _SLOTS_LAST = "slots:last:"  # slots:last:{user_id}:{chat_id}
 _JACKPOT = "slots:jackpot:"  # slots:jackpot:{chat_id}
 _OWNER_MUTE = "owner_mute:"  # owner_mute:{chat_id}:{user_id}
 _GIVEAWAY_PERIOD = "giveaway_period:"  # giveaway_period:{chat_id}:{gp_id}
+_BURST_WINDOW = "burst:win:"  # burst:win:{user_id}:{chat_id} (sorted set)
+_BURST_COOLDOWN = "burst:cd:"  # burst:cd:{user_id}:{chat_id}
 
 
 def _serialize_round(
@@ -262,6 +264,41 @@ class RedisStore:
         key = f"{_JACKPOT}{chat_id}"
         raw = await self._r.get(key)
         return int(raw or 0)
+
+    # ── Burst: скользящее окно сообщений + кулдаун ─────────────
+
+    async def burst_cooldown_active(self, user_id: int, chat_id: int) -> bool:
+        """True если кулдаун активен (награда недавно выдана)."""
+        key = f"{_BURST_COOLDOWN}{user_id}:{chat_id}"
+        return bool(await self._r.exists(key))
+
+    async def burst_add_message(
+        self,
+        user_id: int,
+        chat_id: int,
+        window_seconds: int,
+    ) -> int:
+        """Добавить timestamp в скользящее окно. Возвращает кол-во сообщений в окне."""
+        key = f"{_BURST_WINDOW}{user_id}:{chat_id}"
+        now = time.time()
+        cutoff = now - window_seconds
+
+        pipe = self._r.pipeline()
+        pipe.zremrangebyscore(key, 0, cutoff)
+        pipe.zadd(key, {str(now): now})
+        pipe.zcard(key)
+        pipe.expire(key, window_seconds + 60)
+        results = await pipe.execute()
+        return results[2]  # zcard result
+
+    async def burst_set_cooldown(self, user_id: int, chat_id: int, cooldown_seconds: int) -> None:
+        """Поставить кулдаун и очистить окно."""
+        cd_key = f"{_BURST_COOLDOWN}{user_id}:{chat_id}"
+        win_key = f"{_BURST_WINDOW}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.set(cd_key, "1", ex=cooldown_seconds)
+        pipe.delete(win_key)
+        await pipe.execute()
 
     # ── Мут-гивэвей ──────────────────────────────────────────────
     # Ключ: mutegiveaway:{chat_id}:{roulette_id}
