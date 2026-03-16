@@ -101,13 +101,13 @@ bug:
     - 450588708
 
 wordgame:
-  min_bet: 1
-  max_bet: 100
+  min_bet: 0
+  max_bet: 200
   min_duration_seconds: 180   # 3 минуты минимум
   max_duration_seconds: 3600  # 1 час максимум
   attempt_cost: 1             # баллов за неудачную попытку
-  min_word_length: 2
-  max_word_length: 10
+  min_word_length: 3
+  max_word_length: 8
 
 logging:
   level: "INFO"

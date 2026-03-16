@@ -157,7 +157,7 @@ class RenewConfig(_BaseConfig):
 
 
 class WordgameConfig(_BaseConfig):
-    min_bet: int = 1
+    min_bet: int = 0
     max_bet: int = 1000
     min_duration_seconds: int = 180    # 3 минуты
     max_duration_seconds: int = 3600   # 1 час

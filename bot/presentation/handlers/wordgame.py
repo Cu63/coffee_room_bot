@@ -365,7 +365,7 @@ async def msg_reply_guess(
 
     if game.creator_id == user_id:
         err = await message.reply("❌ Нельзя угадывать свою игру!")
-        schedule_delete(bot, err, message, delay=5)
+        schedule_delete(bot, err, message, delay=30)
         return
 
     guess = normalize_word(message.text or "")
@@ -375,7 +375,7 @@ async def msg_reply_guess(
         err = await message.reply(
             f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}."
         )
-        schedule_delete(bot, err, message, delay=8)
+        schedule_delete(bot, err, message, delay=30)
         return
 
     if len(guess) != len(game.word):
@@ -383,7 +383,7 @@ async def msg_reply_guess(
             f"❌ Слово должно быть из <b>{len(game.word)}</b> букв, а не {len(guess)}.",
             parse_mode=ParseMode.HTML,
         )
-        schedule_delete(bot, err, message, delay=8)
+        schedule_delete(bot, err, message, delay=30)
         return
 
     await user_repo.upsert(User(
@@ -397,8 +397,20 @@ async def msg_reply_guess(
             f"🔄 «<b>{guess}</b>» ты уже пробовал. Другое слово!",
             parse_mode=ParseMode.HTML,
         )
-        schedule_delete(bot, err, message, delay=8)
+        schedule_delete(bot, err, message, delay=30)
         return
+
+    # Проверка баллов — только если ставка игры > 0 (иначе все попытки бесплатные)
+    cost = wg.attempt_cost
+    if game.bet > 0 and cost > 0:
+        bal = await score_service.get_score(user_id, chat_id)
+        if bal.value <= 0:
+            err = await message.answer(
+                f"🚫 {user_mention}: у тебя {bal.value} баллов — угадывать нельзя.",
+                parse_mode=ParseMode.HTML,
+            )
+            schedule_delete(bot, err, message, delay=30)
+            return
 
     matches = compare(game.word, guess)
     new_revealed = merge_revealed(game.revealed, matches)
@@ -408,7 +420,7 @@ async def msg_reply_guess(
     game.guesses.append({"user_id": user_id, "word": guess})
     game.revealed = new_revealed
 
-    schedule_delete(bot, message, delay=3)
+    schedule_delete(bot, message, delay=30)
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
 
@@ -454,23 +466,12 @@ async def msg_reply_guess(
 
         await store.wg_game_save_raw(game.game_id, _game_to_raw(game))
 
-        cost = wg.attempt_cost
         hint_parts = [
             f"❌ {user_mention}: «{guess}» — не то "
             f"({matched_count}/{len(game.word)} на месте)"
         ]
 
-        if cost > 0:
-            bal = await score_service.get_score(user_id, chat_id)
-            if bal.value < cost:
-                # Баллов не хватает — блокируем попытку
-                err = await message.answer(
-                    f"🚫 {user_mention}: недостаточно баллов для попытки "
-                    f"(нужно {cost}, у тебя {bal.value}).",
-                    parse_mode=ParseMode.HTML,
-                )
-                schedule_delete(bot, err, delay=10)
-                return
+        if game.bet > 0 and cost > 0:
             await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
             hint_parts.append(f"<i>−{cost} балл за попытку</i>")
 
