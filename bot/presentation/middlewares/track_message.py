@@ -66,6 +66,8 @@ class TrackMessageMiddleware(BaseMiddleware):
 
             await self._maybe_react(event, container)
             await self._maybe_burst(event, container)
+            await self._maybe_spark(event, container)
+            await self._maybe_reply_chain(event, container)
 
         return await handler(event, data)
 
@@ -172,3 +174,88 @@ class TrackMessageMiddleware(BaseMiddleware):
                 "burst: user %d in chat %d awarded %d, new score %d",
                 user_id, chat_id, cfg.reward, new_value,
             )
+
+    async def _maybe_spark(self, message: Message, container: AsyncContainer) -> None:
+        """Conversation spark: бонус зачинщику, если N уникальных людей написали после него."""
+        config = await container.get(AppConfig)
+        cfg = config.spark
+
+        if not cfg.enabled:
+            return
+        if message.from_user is None or message.from_user.is_bot:
+            return
+        if message.text and message.text.startswith("/"):
+            return
+        if message.forward_origin is not None:
+            return
+
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        store = await container.get(RedisStore)
+        window_seconds = cfg.window_minutes * 60
+
+        # Если у пользователя нет кулдауна — зарегистрировать как потенциального зачинщика
+        if not await store.spark_cooldown_active(user_id, chat_id):
+            active = await store.spark_get_active(chat_id)
+            if user_id not in active:
+                await store.spark_activate(user_id, chat_id, window_seconds)
+
+        # Добавить текущего пользователя как респондента ко всем другим зачинщикам
+        active = await store.spark_get_active(chat_id)
+        score_service = await container.get(ScoreService)
+        cooldown_seconds = cfg.cooldown_hours * 3600
+
+        for anchor_id in active:
+            if anchor_id == user_id:
+                continue
+            count = await store.spark_add_responder(anchor_id, user_id, chat_id)
+            if count >= cfg.unique_responders:
+                await store.spark_award_cleanup(anchor_id, chat_id, cooldown_seconds)
+                new_value = await score_service.award_spark(anchor_id, chat_id, cfg.reward)
+                logger.debug(
+                    "spark: user %d in chat %d awarded %d, new score %d",
+                    anchor_id, chat_id, cfg.reward, new_value,
+                )
+
+    async def _maybe_reply_chain(self, message: Message, container: AsyncContainer) -> None:
+        """Reply chain: бонус обоим за чередующийся диалог через реплаи."""
+        config = await container.get(AppConfig)
+        cfg = config.reply_chain
+
+        if not cfg.enabled:
+            return
+        if message.from_user is None or message.from_user.is_bot:
+            return
+        if message.reply_to_message is None:
+            return
+        if message.reply_to_message.from_user is None:
+            return
+
+        replier_id = message.from_user.id
+        author_id = message.reply_to_message.from_user.id
+
+        # Не считаем реплаи самому себе и ботам
+        if replier_id == author_id:
+            return
+        if message.reply_to_message.from_user.is_bot:
+            return
+
+        chat_id = message.chat.id
+        store = await container.get(RedisStore)
+
+        if await store.chain_cooldown_active(chat_id, replier_id, author_id):
+            return
+
+        window_seconds = cfg.window_minutes * 60
+        count = await store.chain_add_reply(chat_id, replier_id, author_id, window_seconds)
+
+        if count is not None and count >= cfg.replies_required:
+            score_service = await container.get(ScoreService)
+            cooldown_seconds = cfg.cooldown_hours * 3600
+            await store.chain_award_cleanup(chat_id, replier_id, author_id, cooldown_seconds)
+            for uid in (replier_id, author_id):
+                new_value = await score_service.award_chain(uid, chat_id, cfg.reward)
+                logger.debug(
+                    "chain: user %d in chat %d awarded %d, new score %d",
+                    uid, chat_id, cfg.reward, new_value,
+                )
