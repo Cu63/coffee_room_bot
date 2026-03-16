@@ -19,6 +19,7 @@ from bot.presentation.handlers.admin_score import router as admin_score_router
 from bot.presentation.handlers.admin_user import router as admin_user_router
 from bot.presentation.handlers.blackjack import router as blackjack_router
 from bot.presentation.handlers.bug import router as bug_router
+from bot.presentation.handlers.tracker import router as tracker_router
 from bot.presentation.handlers.commands import router as commands_router
 from bot.presentation.handlers.dice import router as dice_router
 from bot.presentation.handlers.giveaway import router as giveaway_router
@@ -216,10 +217,33 @@ async def main() -> None:
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
     dp.include_router(bug_router)
+    dp.include_router(tracker_router)
 
     setup_dishka(container, dp)
     dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))
     dp.message.outer_middleware(OwnerMuteDeleteMiddleware())
+
+    # ── Стартап-лог ченджлога ────────────────────────────────────
+    try:
+        all_logs = await redis.changelog_scan_all() if hasattr(redis, "changelog_scan_all") else []
+    except Exception:
+        all_logs = []
+    # redis здесь — aioredis.Redis, changelog методы на RedisStore
+    # создаём временный store только для лога
+    from bot.infrastructure.redis_store import RedisStore as _RS
+    _tmp_store = _RS(redis)
+    try:
+        all_logs = await _tmp_store.changelog_scan_all()
+        for tracker_chat_id, entries in all_logs:
+            latest = entries[0]
+            title = latest.get("text", "").split("\n", 1)[0]
+            date = latest.get("date", "?")
+            logger.info(
+                "changelog [tracker %d]: %d записей. Последнее: \"%s\" (%s)",
+                tracker_chat_id, len(entries), title, date,
+            )
+    except Exception:
+        logger.warning("changelog: не удалось прочитать при старте")
 
     sys_cfg = config.system
     cleanup_task = asyncio.create_task(cleanup_loop(container, sys_cfg.cleanup_interval_hours))

@@ -574,3 +574,79 @@ class RedisStore:
             if data.get("message_id") == message_id:
                 return data
         return None
+    # ── Трекер: привязка чатов ────────────────────────────────────
+    # tracker:source:{source_chat_id}        → str(tracker_chat_id)
+    # tracker:topic:{tracker_chat_id}:{type} → str(thread_id)
+    # tracker:counter                        → глобальный счётчик репортов
+
+    async def tracker_set_source(self, source_chat_id: int, tracker_chat_id: int) -> None:
+        """Привязать основной чат к трекер-чату."""
+        await self._r.set(f"tracker:source:{source_chat_id}", str(tracker_chat_id))
+
+    async def tracker_get_tracker_id(self, source_chat_id: int) -> int | None:
+        """Получить tracker_chat_id для source_chat_id. None если не привязан."""
+        raw = await self._r.get(f"tracker:source:{source_chat_id}")
+        return int(raw) if raw else None
+
+    async def tracker_set_topic(self, tracker_chat_id: int, topic_type: str, thread_id: int) -> None:
+        """Назначить топик для типа обращения (bug/feature/report/changelog)."""
+        await self._r.set(f"tracker:topic:{tracker_chat_id}:{topic_type}", str(thread_id))
+
+    async def tracker_get_topic(self, tracker_chat_id: int, topic_type: str) -> int | None:
+        """Получить thread_id топика по типу. None если не назначен."""
+        raw = await self._r.get(f"tracker:topic:{tracker_chat_id}:{topic_type}")
+        return int(raw) if raw else None
+
+    async def tracker_next_id(self) -> int:
+        """Атомарно выдать следующий глобальный номер репорта."""
+        return int(await self._r.incr("tracker:counter"))
+
+    # ── Changelog ─────────────────────────────────────────────────
+    # changelog:{tracker_chat_id} → JSON-список, последние 20 записей
+    # Каждая запись: {message_id, text, date}
+    # Порядок: новые впереди.
+
+    _CHANGELOG_MAX = 20
+
+    async def changelog_add(self, tracker_chat_id: int, message_id: int, text: str, date: str) -> None:
+        """Добавить/обновить запись ченджлога. Если message_id уже есть — обновить."""
+        key = f"changelog:{tracker_chat_id}"
+        raw = await self._r.get(key)
+        entries: list[dict] = json.loads(raw) if raw else []
+
+        # Убрать старую запись с тем же message_id (при редактировании)
+        entries = [e for e in entries if e["message_id"] != message_id]
+
+        # Добавить новую запись в начало
+        entries.insert(0, {"message_id": message_id, "text": text, "date": date})
+
+        # Ограничить размер
+        entries = entries[: self._CHANGELOG_MAX]
+        await self._r.set(key, json.dumps(entries, ensure_ascii=False))
+
+    async def changelog_remove(self, tracker_chat_id: int, message_id: int) -> None:
+        """Удалить запись ченджлога по message_id."""
+        key = f"changelog:{tracker_chat_id}"
+        raw = await self._r.get(key)
+        if raw is None:
+            return
+        entries = [e for e in json.loads(raw) if e["message_id"] != message_id]
+        await self._r.set(key, json.dumps(entries, ensure_ascii=False))
+
+    async def changelog_get_all(self, tracker_chat_id: int) -> list[dict]:
+        """Все записи ченджлога (новые впереди)."""
+        raw = await self._r.get(f"changelog:{tracker_chat_id}")
+        return json.loads(raw) if raw else []
+
+    async def changelog_scan_all(self) -> list[tuple[int, list[dict]]]:
+        """Все ченджлоги по всем трекер-чатам. Используется для лога при старте."""
+        result: list[tuple[int, list[dict]]] = []
+        async for key in self._r.scan_iter("changelog:*"):
+            raw = await self._r.get(key)
+            if not raw:
+                continue
+            tracker_chat_id = int(key.split(":", 1)[1])
+            entries = json.loads(raw)
+            if entries:
+                result.append((tracker_chat_id, entries))
+        return result
