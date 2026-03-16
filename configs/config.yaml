@@ -77,6 +77,14 @@ llm:
   search_max_results: 7         # сколько результатов поиска парсить
 
 
+burst:
+  enabled: true
+  messages_required: 8          # сколько сообщений нужно
+  window_minutes: 20            # за какой период (скользящее окно)
+  min_length: 15                # минимальная длина сообщения (символов)
+  reward: 15                    # награда в кирчиках
+  cooldown_hours: 4             # кулдаун после срабатывания
+
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем
