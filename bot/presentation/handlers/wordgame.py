@@ -639,7 +639,8 @@ async def msg_reply_guess(
         ]
 
         if game.bet > 0 and cost > 0:
-            await score_service.add_score(game.creator_id, chat_id, cost, admin_id=user_id)            
+            if not game.is_random:
+                await score_service.add_score(game.creator_id, chat_id, cost, admin_id=user_id)
             await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
             hint_parts.append(f"<i>−{cost} балл за попытку</i>")
 
