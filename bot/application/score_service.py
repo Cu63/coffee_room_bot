@@ -246,6 +246,11 @@ class ScoreService:
             return Score(user_id=user_id, chat_id=chat_id, value=0)
         return score
 
+    async def get_bot_balance(self, bot_id: int, chat_id: int) -> int:
+        """Получить текущий баланс бота в данном чате."""
+        score = await self._score_repo.get(bot_id, chat_id)
+        return score.value if score else 0
+
     async def set_score(
         self,
         user_id: int,

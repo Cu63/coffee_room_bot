@@ -18,6 +18,7 @@ _BJ_HISTORY = "bj:hist:"  # bj:hist:{user_id}:{chat_id}  (sorted set)
 _SLOTS_DAILY = "slots:daily:"  # slots:daily:{user_id}:{chat_id}
 _SLOTS_LAST = "slots:last:"  # slots:last:{user_id}:{chat_id}
 _JACKPOT = "slots:jackpot:"  # slots:jackpot:{chat_id}
+_SLOTS_ALL_DAILY = "slots:all:"   # slots:all:{user_id}:{chat_id}  (1 раз в сутки)
 _OWNER_MUTE = "owner_mute:"  # owner_mute:{chat_id}:{user_id}
 _GIVEAWAY_PERIOD = "giveaway_period:"  # giveaway_period:{chat_id}:{gp_id}
 _BURST_WINDOW = "burst:win:"  # burst:win:{user_id}:{chat_id} (sorted set)
@@ -196,6 +197,18 @@ class RedisStore:
         key = f"{_SLOTS_LAST}{user_id}:{chat_id}"
         await self._r.set(key, str(time.time()), ex=cooldown_seconds + 10)
 
+    # ── Slots: all-ставка (1 раз в сутки) ───────────────────────
+
+    async def slots_all_used_today(self, user_id: int, chat_id: int) -> bool:
+        """True если all-ставка уже использована сегодня."""
+        key = f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}"
+        return bool(await self._r.exists(key))
+
+    async def slots_all_mark_used(self, user_id: int, chat_id: int) -> None:
+        """Отметить использование all-ставки. TTL 24 часа."""
+        key = f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}"
+        await self._r.set(key, "1", ex=86400)
+
     # ── Mute: дневной лимит и кулдаун ───────────────────────────────
 
     _MUTE_DAILY = "mute:daily:"   # mute:daily:{actor_id}:{chat_id}
@@ -248,6 +261,7 @@ class RedisStore:
         await self._r.delete(
             f"{_SLOTS_LAST}{user_id}:{chat_id}",
             f"{_SLOTS_DAILY}{user_id}:{chat_id}",
+            f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}",
             f"{_BJ_HISTORY}{user_id}:{chat_id}",
         )
 

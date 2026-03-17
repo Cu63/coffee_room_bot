@@ -100,7 +100,7 @@ class DiceService:
     async def count_participants(self, game_id: int) -> int:
         return await self._dice_repo.count_participants(game_id)
 
-    async def finish(self, game_id: int, dice_results: dict[int, int]) -> FinishResult | None:
+    async def finish(self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None) -> FinishResult | None:
         """Завершает игру с уже известными значениями костей. Распределяет призы."""
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:
@@ -130,9 +130,12 @@ class DiceService:
 
         for winner_id in winners:
             await self._score_repo.add_delta(winner_id, game.chat_id, prize_per_winner)
-        # Остаток (при нечётном делении) — первому победителю
+        # Остаток (при нечётном делении) — боту, если bot_id передан; иначе первому победителю
         if remainder > 0:
-            await self._score_repo.add_delta(winners[0], game.chat_id, remainder)
+            if bot_id is not None:
+                await self._score_repo.add_delta(bot_id, game.chat_id, remainder)
+            else:
+                await self._score_repo.add_delta(winners[0], game.chat_id, remainder)
 
         # Победа засчитывается только в многопользовательской игре
         if len(participants) > 1:

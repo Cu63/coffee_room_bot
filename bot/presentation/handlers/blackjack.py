@@ -35,6 +35,42 @@ logger = logging.getLogger(__name__)
 router = Router(name="blackjack")
 
 
+# ── Хелпер: применить результат раунда с учётом баланса бота ────
+
+async def _apply_bj_delta(
+    score_service: ScoreService,
+    bot: Bot,
+    user_id: int,
+    chat_id: int,
+    delta: int,
+) -> int:
+    """Применить delta с учётом баланса бота.
+
+    delta > 0 — игрок выигрывает: бот платит, ограниченно своим балансом.
+    delta < 0 — игрок проигрывает: бот получает abs(delta).
+    delta == 0 — ничья, ничего не делаем.
+
+    Возвращает фактически применённый delta (может быть меньше при нехватке у бота).
+    """
+    if delta == 0:
+        return 0
+
+    bot_id = bot.id
+
+    if delta > 0:
+        bot_balance = await score_service.get_bot_balance(bot_id, chat_id)
+        actual = min(delta, max(bot_balance, 0))
+        if actual > 0:
+            await score_service.add_score(user_id, chat_id, actual, admin_id=user_id)
+            await score_service.add_score(bot_id, chat_id, -actual, admin_id=bot_id)
+        return actual
+    else:
+        # Проигрыш: списываем у игрока, начисляем боту
+        await score_service.add_score(user_id, chat_id, delta, admin_id=user_id)
+        await score_service.add_score(bot_id, chat_id, -delta, admin_id=bot_id)
+        return delta
+
+
 # ── Inline-клавиатура ────────────────────────────────────────────
 
 
@@ -86,14 +122,20 @@ _RESULT_TEXT = {
 }
 
 
-def _result_line(rnd: BlackjackRound, pluralizer) -> str:
-    delta = rnd.payout_delta()
+def _result_line(rnd: BlackjackRound, pluralizer, actual_delta: int | None = None) -> str:
+    original_delta = rnd.payout_delta()
+    # Если actual_delta не передан, используем оригинальный
+    display_delta = actual_delta if actual_delta is not None else original_delta
     tpl = _RESULT_TEXT[rnd.result.value]
-    return tpl.format(
-        win=abs(delta),
-        loss=abs(delta),
-        sw=pluralizer.pluralize(abs(delta)) if delta != 0 else "",
+    line = tpl.format(
+        win=abs(display_delta),
+        loss=abs(original_delta),
+        sw=pluralizer.pluralize(abs(display_delta)) if display_delta != 0 else "",
     )
+    # Предупреждение если выигрыш срезан из-за баланса бота
+    if actual_delta is not None and original_delta > 0 and actual_delta < original_delta:
+        line += f"\n⚠️ У бота не хватало баллов. Мог выиграть <b>{original_delta}</b>."
+    return line
 
 
 # ── /help_bj ─────────────────────────────────────────────────────
@@ -209,19 +251,13 @@ async def cmd_blackjack(
     if rnd.finished:
         # Натуральный блекджек — сразу результат
         delta = rnd.payout_delta()
-        if delta != 0:
-            await score_service.add_score(
-                user_id,
-                chat_id,
-                delta,
-                admin_id=user_id,
-            )
+        actual_delta = await _apply_bj_delta(score_service, bot, user_id, chat_id, delta)
         if rnd.result in _WIN_RESULTS:
             await stats_repo.add_win(user_id, chat_id, "blackjack")
         text = _render_table(
             rnd,
             reveal=True,
-            result_line=_result_line(rnd, formatter._p),
+            result_line=_result_line(rnd, formatter._p, actual_delta),
         )
         reply = await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         schedule_delete(bot, message, reply, delay=30)
@@ -271,7 +307,9 @@ async def cb_hit(
 
     if rnd.finished:
         # Сначала отвечаем и обновляем UI — до записи в БД
-        text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
+        delta = rnd.payout_delta()
+        actual_delta = await _apply_bj_delta(score_service, callback.message.bot, user_id, chat_id, delta)
+        text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p, actual_delta))
         await safe_callback_answer(callback)
         await callback.message.edit_text(
             text,
@@ -280,10 +318,6 @@ async def cb_hit(
             link_preview_options=NO_PREVIEW,
         )
         schedule_delete(bot, callback.message, delay=30)
-        # Потом записываем результат в БД
-        delta = rnd.payout_delta()
-        if delta != 0:
-            await score_service.add_score(user_id, chat_id, delta, admin_id=user_id)
         if rnd.result in _WIN_RESULTS:
             await stats_repo.add_win(user_id, chat_id, "blackjack")
         await store.bj_delete(user_id, chat_id)
@@ -334,7 +368,9 @@ async def cb_stand(
     rnd.stand()
 
     # Сначала отвечаем и обновляем UI — до записи в БД
-    text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p))
+    delta = rnd.payout_delta()
+    actual_delta = await _apply_bj_delta(score_service, callback.message.bot, user_id, chat_id, delta)
+    text = _render_table(rnd, reveal=True, result_line=_result_line(rnd, formatter._p, actual_delta))
     await safe_callback_answer(callback)
     await callback.message.edit_text(
         text,
@@ -343,10 +379,6 @@ async def cb_stand(
         link_preview_options=NO_PREVIEW,
     )
     schedule_delete(bot, callback.message, delay=30)
-    # Потом записываем результат в БД
-    delta = rnd.payout_delta()
-    if delta != 0:
-        await score_service.add_score(user_id, chat_id, delta, admin_id=user_id)
     if rnd.result in _WIN_RESULTS:
         await stats_repo.add_win(user_id, chat_id, "blackjack")
     await store.bj_delete(user_id, chat_id)

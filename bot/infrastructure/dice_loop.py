@@ -74,7 +74,7 @@ async def _resolve_game(bot: Bot, game, container) -> None:
     async with container() as scope:
         service = await scope.get(DiceService)
         pluralizer: ScorePluralizer = await scope.get(ScorePluralizer)
-        result = await service.finish(game.id, dice_results)
+        result = await service.finish(game.id, dice_results, bot_id=bot.id)
 
     if result is None:
         logger.warning("Game %d already finished when trying to resolve", game.id)
