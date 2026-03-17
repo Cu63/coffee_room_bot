@@ -58,14 +58,19 @@ async def cmd_save(
             link_preview_options=NO_PREVIEW,
         )
         return
-    if not isinstance(member, ChatMemberAdministrator):
+    if not isinstance(member, (ChatMemberAdministrator, ChatMemberOwner)):
         await reply_and_delete(message,
             formatter._t["save_not_admin"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
-    perms = _extract_admin_permissions(member)
+    if isinstance(member, ChatMemberOwner):
+        perms = {field: True for field in _ADMIN_PERM_FIELDS}
+        if member.custom_title:
+            perms["custom_title"] = member.custom_title
+    else:
+        perms = _extract_admin_permissions(member)
     existing = await saved_perms_repo.get(target.id, message.chat.id)
     await saved_perms_repo.save(target.id, message.chat.id, perms)
     key = "save_overwritten" if existing else "save_success"
