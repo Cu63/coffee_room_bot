@@ -37,6 +37,7 @@ from bot.domain.wordgame_entities import (
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers.anon import NoAnonState
 from bot.infrastructure.word_loader import pick_random_word
 from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
@@ -391,12 +392,6 @@ async def cmd_start_private(
     store: FromDishka[RedisStore],
 ) -> None:
     user_id = message.from_user.id
-
-    # Если пользователь сейчас пишет анонимное сообщение — не мешаем
-    anon_state = await store.anon_get_state(user_id)
-    if anon_state is not None:
-        return
-
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
         await message.answer(
@@ -423,7 +418,7 @@ async def cmd_start_private(
 
 # ── Приём слова в ЛС ─────────────────────────────────────────────────────────
 
-@router.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
+@router.message(F.chat.type == "private", F.text, ~F.text.startswith("/"), NoAnonState())
 @inject
 async def msg_private_word(
     message: Message,

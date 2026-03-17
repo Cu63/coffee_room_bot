@@ -15,16 +15,39 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
-from aiogram.filters import Command
+from aiogram.filters import BaseFilter, Command
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
+from dishka import AsyncContainer
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.infrastructure.redis_store import RedisStore
+
+
+class HasAnonState(BaseFilter):
+    """True когда у пользователя есть активное anon-состояние в Redis."""
+
+    async def __call__(self, message: Message, dishka_container: AsyncContainer) -> bool:
+        if message.from_user is None:
+            return False
+        store: RedisStore = await dishka_container.get(RedisStore)
+        state = await store.anon_get_state(message.from_user.id)
+        return state is not None
+
+
+class NoAnonState(BaseFilter):
+    """True когда у пользователя НЕТ активного anon-состояния — пропускает wordgame."""
+
+    async def __call__(self, message: Message, dishka_container: AsyncContainer) -> bool:
+        if message.from_user is None:
+            return True
+        store: RedisStore = await dishka_container.get(RedisStore)
+        state = await store.anon_get_state(message.from_user.id)
+        return state is None
 
 logger = logging.getLogger(__name__)
 router = Router(name="anon")
@@ -181,7 +204,7 @@ async def cmd_cancel(
 # ── Приём текста и отправка ──────────────────────────────────────────────────
 
 
-@router.message(F.chat.type == "private", F.text, ~F.text.startswith("/"))
+@router.message(F.chat.type == "private", F.text, ~F.text.startswith("/"), HasAnonState())
 @inject
 async def on_private_text(
     message: Message,
