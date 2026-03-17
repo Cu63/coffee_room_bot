@@ -300,15 +300,6 @@ async def cmd_random_wordgame(
     user_id = message.from_user.id
     chat_id = message.chat.id
 
-    if bet > 0:
-        score = await score_service.get_score(user_id, chat_id)
-        if score.value < bet:
-            await reply_and_delete(
-                message,
-                f"❌ Недостаточно баллов. У тебя {score.value}, нужно {bet}.",
-            )
-            return
-
     # Лимит на создание игр — отдельный от /word
     window_secs = rwg.game_window_hours * 3600
     created = await store.wg_rate_check_rword(user_id, rwg.max_games_per_window, window_secs)
@@ -330,7 +321,7 @@ async def cmd_random_wordgame(
 
     # Ставка списывается сразу — создатель сам задаёт её «в банк»
     if bet > 0:
-        await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
+        await score_service.add_score(bot.id, chat_id, -bet, admin_id=user_id)
 
     await store.wg_rate_record_rword(user_id, window_secs)
 
