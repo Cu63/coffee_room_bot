@@ -513,29 +513,47 @@ async def cmd_aunmute(
 @inject
 async def cmd_unmute(
     message: Message,
+    command: CommandObject,
     score_service: FromDishka[ScoreService],
     mute_service: FromDishka[MuteService],
+    user_repo: FromDishka[IUserRepository],
     store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """Платное снятие мута с самого себя за кирчики."""
+    """Платное снятие мута с другого пользователя за кирчики."""
     if message.from_user is None or message.bot is None:
         return
-    user_id = message.from_user.id
+
+    # Резолвим цель: @username или reply
+    target = await _resolve_username(command.args, user_repo)
+    if target is None:
+        reply = message.reply_to_message
+        if reply is not None and reply.from_user is not None:
+            from bot.domain.entities import User as DomainUser
+
+            tg = reply.from_user
+            target = DomainUser(id=tg.id, username=tg.username, full_name=tg.full_name or str(tg.id))
+        else:
+            await reply_and_delete(message, formatter._t["unmute_usage"])
+            return
+
+    actor_id = message.from_user.id
+    target_id = target.id
     chat_id = message.chat.id
     mute_cfg = config.mute
     p = formatter._p
-    display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
+    target_display = user_link(target.username, target.full_name, target_id)
+    actor_display = user_link(message.from_user.username, message.from_user.full_name or "", actor_id)
 
-    # Проверяем owner-mute (Redis soft-mute)
-    is_owner_muted = await store.owner_mute_active(chat_id, user_id)
-    entry = await mute_service._repo.get(user_id, chat_id)
+    # Проверяем, замутён ли target
+    is_owner_muted = await store.owner_mute_active(chat_id, target_id)
+    entry = await mute_service._repo.get(target_id, chat_id)
 
     if not is_owner_muted and entry is None:
         await reply_and_delete(
             message,
-            formatter._t["unmute_not_muted"].format(user=display),
+            formatter._t["unmute_not_muted"].format(user=target_display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
@@ -544,19 +562,19 @@ async def cmd_unmute(
     # Вычисляем оставшееся время и стоимость
     now = datetime.now(TZ_MSK)
     if is_owner_muted:
-        # Для owner-mute получаем until_ts из Redis
-        raw_ts = await store.owner_mute_get_ts(chat_id, user_id)
+        raw_ts = await store.owner_mute_get_ts(chat_id, target_id)
         remaining_minutes = max((raw_ts - now.timestamp()) / 60, 1) if raw_ts else 1
     else:
         remaining_minutes = max((entry.until_at - now).total_seconds() / 60, 1)
 
     cost = max(1, math.ceil(remaining_minutes * mute_cfg.cost_per_minute * mute_cfg.unmute_multiplier))
 
-    score = await score_service.get_score(user_id, chat_id)
+    score = await score_service.get_score(actor_id, chat_id)
     if score.value < cost:
         await reply_and_delete(
             message,
             formatter._t["unmute_not_enough"].format(
+                target=target_display,
                 cost=cost,
                 score_word=p.pluralize(cost),
                 balance=score.value,
@@ -564,23 +582,25 @@ async def cmd_unmute(
                 minutes=math.ceil(remaining_minutes),
             ),
             parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
         )
         return
 
     # Снимаем мут
     if is_owner_muted:
-        await store.owner_mute_delete(chat_id, user_id)
+        await store.owner_mute_delete(chat_id, target_id)
     if entry is not None:
         await _unmute_user(message.bot, mute_service, entry)
 
-    # Списываем баллы
-    await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
+    # Списываем баллы с актора
+    await score_service.add_score(actor_id, chat_id, -cost, admin_id=actor_id)
     new_balance = score.value - cost
 
     await reply_and_delete(
         message,
         formatter._t["unmute_paid_success"].format(
-            user=display,
+            actor=actor_display,
+            target=target_display,
             cost=cost,
             score_word=p.pluralize(cost),
             balance=new_balance,
