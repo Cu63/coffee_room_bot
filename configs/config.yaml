@@ -43,6 +43,7 @@ mute:
   selfmute_max_minutes: 1440        # 24 часа
   protection_cost: 200              # баллов за одно использование /protect
   protection_duration_hours: 24     # сколько часов даёт /protect
+  unmute_multiplier: 1.5            # множитель стоимости /unmute (оставшиеся мин × cost_per_minute × множитель)
 
 tag:
   cost_self: 50                 # сменить тег себе

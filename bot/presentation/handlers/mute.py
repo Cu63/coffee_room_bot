@@ -1,8 +1,9 @@
-"""Обработчики команд мута: /mute, /amute, /selfmute, /unmute."""
+"""Обработчики команд мута: /mute, /amute, /selfmute, /unmute, /aunmute."""
 
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta
 
 from aiogram import Router
@@ -448,9 +449,9 @@ async def cmd_selfmute(
     )
 
 
-@router.message(Command("unmute"))
+@router.message(Command("aunmute"))
 @inject
-async def cmd_unmute(
+async def cmd_aunmute(
     message: Message,
     command: CommandObject,
     mute_service: FromDishka[MuteService],
@@ -459,6 +460,7 @@ async def cmd_unmute(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
+    """Админская команда: бесплатное снятие мута."""
     if message.from_user is None or message.bot is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
@@ -473,7 +475,7 @@ async def cmd_unmute(
             tg = reply.from_user
             target = DomainUser(id=tg.id, username=tg.username, full_name=tg.full_name or str(tg.id))
         else:
-            await reply_and_delete(message, formatter._t["unmute_usage"])
+            await reply_and_delete(message, formatter._t["aunmute_usage"])
             return
     display = user_link(target.username, target.full_name, target.id)
     chat_id = message.chat.id
@@ -502,6 +504,89 @@ async def cmd_unmute(
     await reply_and_delete(
         message,
         formatter._t["unmute_success"].format(user=display),
+        parse_mode=ParseMode.HTML,
+        link_preview_options=NO_PREVIEW,
+    )
+
+
+@router.message(Command("unmute"))
+@inject
+async def cmd_unmute(
+    message: Message,
+    score_service: FromDishka[ScoreService],
+    mute_service: FromDishka[MuteService],
+    store: FromDishka[RedisStore],
+    formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
+) -> None:
+    """Платное снятие мута с самого себя за кирчики."""
+    if message.from_user is None or message.bot is None:
+        return
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    mute_cfg = config.mute
+    p = formatter._p
+    display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
+
+    # Проверяем owner-mute (Redis soft-mute)
+    is_owner_muted = await store.owner_mute_active(chat_id, user_id)
+    entry = await mute_service._repo.get(user_id, chat_id)
+
+    if not is_owner_muted and entry is None:
+        await reply_and_delete(
+            message,
+            formatter._t["unmute_not_muted"].format(user=display),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+        )
+        return
+
+    # Вычисляем оставшееся время и стоимость
+    now = datetime.now(TZ_MSK)
+    if is_owner_muted:
+        # Для owner-mute получаем until_ts из Redis
+        raw_ts = await store.owner_mute_get_ts(chat_id, user_id)
+        remaining_minutes = max((raw_ts - now.timestamp()) / 60, 1) if raw_ts else 1
+    else:
+        remaining_minutes = max((entry.until_at - now).total_seconds() / 60, 1)
+
+    cost = max(1, math.ceil(remaining_minutes * mute_cfg.cost_per_minute * mute_cfg.unmute_multiplier))
+
+    score = await score_service.get_score(user_id, chat_id)
+    if score.value < cost:
+        await reply_and_delete(
+            message,
+            formatter._t["unmute_not_enough"].format(
+                cost=cost,
+                score_word=p.pluralize(cost),
+                balance=score.value,
+                score_word_balance=p.pluralize(score.value),
+                minutes=math.ceil(remaining_minutes),
+            ),
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    # Снимаем мут
+    if is_owner_muted:
+        await store.owner_mute_delete(chat_id, user_id)
+    if entry is not None:
+        await _unmute_user(message.bot, mute_service, entry)
+
+    # Списываем баллы
+    await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
+    new_balance = score.value - cost
+
+    await reply_and_delete(
+        message,
+        formatter._t["unmute_paid_success"].format(
+            user=display,
+            cost=cost,
+            score_word=p.pluralize(cost),
+            balance=new_balance,
+            score_word_balance=p.pluralize(new_balance),
+            minutes=math.ceil(remaining_minutes),
+        ),
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
     )

@@ -101,6 +101,7 @@ class MuteConfig(_BaseConfig):
     selfmute_max_minutes: int = 1440
     protection_cost: int = 200
     protection_duration_hours: int = 24
+    unmute_multiplier: float = 1.5
 
 
 class TagConfig(_BaseConfig):
