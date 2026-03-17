@@ -391,6 +391,12 @@ async def cmd_start_private(
     store: FromDishka[RedisStore],
 ) -> None:
     user_id = message.from_user.id
+
+    # Если пользователь сейчас пишет анонимное сообщение — не мешаем
+    anon_state = await store.anon_get_state(user_id)
+    if anon_state is not None:
+        return
+
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
         await message.answer(
