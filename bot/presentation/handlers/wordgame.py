@@ -1,7 +1,7 @@
 """Обработчики игры «Угадайка».
 
 Флоу:
-1. /wordgame <ставка> <время>  — в группе: создаёт игру, пишет создателю в ЛС
+1. /word <ставка> <время>  — в группе: создаёт игру, пишет создателю в ЛС
 2. /start в ЛС — предлагает ввести слово если есть pending
 3. Текст в ЛС — создатель отправляет загаданное слово
 4. Reply на игровое сообщение бота — попытка угадать слово
@@ -108,9 +108,9 @@ def _game_to_raw(game: WordGame) -> dict:
     }
 
 
-# ── /wordgame <ставка> <время> ───────────────────────────────────────────────
+# ── /word <ставка> <время> ───────────────────────────────────────────────
 
-@router.message(Command("wordgame"))
+@router.message(Command("word"))
 @inject
 async def cmd_wordgame(
     message: Message,
@@ -127,9 +127,9 @@ async def cmd_wordgame(
     if len(args) < 2:
         await reply_and_delete(
             message,
-            f"Использование: <code>/wordgame &lt;ставка&gt; &lt;время&gt;</code>\n"
+            f"Использование: <code>/word &lt;ставка&gt; &lt;время&gt;</code>\n"
             f"Ставка: {wg.min_bet}–{wg.max_bet}  |  Время: от 3m до 1h\n\n"
-            f"Пример: <code>/wordgame 50 10m</code>",
+            f"Пример: <code>/word 50 10m</code>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -169,6 +169,15 @@ async def cmd_wordgame(
         )
         return
 
+    window_secs = wg.game_window_hours * 3600
+    created = await store.wg_rate_check(user_id, wg.max_games_per_window, window_secs)
+    if created >= wg.max_games_per_window:
+        await reply_and_delete(
+            message,
+            f"❌ Лимит: {wg.max_games_per_window} игры за {wg.game_window_hours} ч. Попробуй позже.",
+        )
+        return
+
     await user_repo.upsert(User(
         id=user_id,
         username=message.from_user.username,
@@ -183,6 +192,7 @@ async def cmd_wordgame(
         duration_seconds=duration_secs,
     )
     await store.wg_awaiting_set(user_id, game_id)
+    await store.wg_rate_record(user_id, window_secs)
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
     bet_str = pluralizer.pluralize(bet)
@@ -232,7 +242,7 @@ async def cmd_start_private(
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
         await message.answer(
-            "Привет! Чтобы начать игру, используй /wordgame в групповом чате."
+            "Привет! Чтобы начать игру, используй /word в групповом чате."
         )
         return
 
@@ -241,7 +251,7 @@ async def cmd_start_private(
         await store.wg_awaiting_delete(user_id)
         await message.answer(
             "❌ Игра устарела (прошло больше 10 мин).\n"
-            "Начни новую командой /wordgame в группе."
+            "Начни новую командой /word в группе."
         )
         return
 
@@ -269,7 +279,7 @@ async def msg_private_word(
     if game_id is None:
         await message.answer(
             "Нет активной игры, ожидающей слово.\n"
-            "Начни командой /wordgame в групповом чате."
+            "Начни командой /word в групповом чате."
         )
         return
 
@@ -287,7 +297,7 @@ async def msg_private_word(
     if pending is None:
         await store.wg_awaiting_delete(user_id)
         await message.answer(
-            "❌ Игра устарела. Начни новую командой /wordgame в группе."
+            "❌ Игра устарела. Начни новую командой /word в группе."
         )
         return
 
