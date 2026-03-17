@@ -18,6 +18,7 @@ _BJ_HISTORY = "bj:hist:"  # bj:hist:{user_id}:{chat_id}  (sorted set)
 _SLOTS_DAILY = "slots:daily:"  # slots:daily:{user_id}:{chat_id}
 _SLOTS_LAST = "slots:last:"  # slots:last:{user_id}:{chat_id}
 _JACKPOT = "slots:jackpot:"  # slots:jackpot:{chat_id}
+_SLOTS_ALL_DAILY = "slots:all:"   # slots:all:{user_id}:{chat_id}  (1 раз в сутки)
 _OWNER_MUTE = "owner_mute:"  # owner_mute:{chat_id}:{user_id}
 _GIVEAWAY_PERIOD = "giveaway_period:"  # giveaway_period:{chat_id}:{gp_id}
 _BURST_WINDOW = "burst:win:"  # burst:win:{user_id}:{chat_id} (sorted set)
@@ -196,6 +197,18 @@ class RedisStore:
         key = f"{_SLOTS_LAST}{user_id}:{chat_id}"
         await self._r.set(key, str(time.time()), ex=cooldown_seconds + 10)
 
+    # ── Slots: all-ставка (1 раз в сутки) ───────────────────────
+
+    async def slots_all_used_today(self, user_id: int, chat_id: int) -> bool:
+        """True если all-ставка уже использована сегодня."""
+        key = f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}"
+        return bool(await self._r.exists(key))
+
+    async def slots_all_mark_used(self, user_id: int, chat_id: int) -> None:
+        """Отметить использование all-ставки. TTL 24 часа."""
+        key = f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}"
+        await self._r.set(key, "1", ex=86400)
+
     # ── Mute: дневной лимит и кулдаун ───────────────────────────────
 
     _MUTE_DAILY = "mute:daily:"   # mute:daily:{actor_id}:{chat_id}
@@ -248,6 +261,7 @@ class RedisStore:
         await self._r.delete(
             f"{_SLOTS_LAST}{user_id}:{chat_id}",
             f"{_SLOTS_DAILY}{user_id}:{chat_id}",
+            f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}",
             f"{_BJ_HISTORY}{user_id}:{chat_id}",
         )
 
@@ -655,6 +669,20 @@ class RedisStore:
         await self._r.zadd(key, {str(now): now})
         await self._r.expire(key, window_seconds)
 
+    async def wg_rate_check_rword(self, user_id: int, max_games: int, window_seconds: int) -> int:
+        """Проверить лимит /rword отдельно от /word."""
+        key = f"{self._WG_RATE}rword:{user_id}"
+        now = time.time()
+        await self._r.zremrangebyscore(key, 0, now - window_seconds)
+        return await self._r.zcard(key)
+
+    async def wg_rate_record_rword(self, user_id: int, window_seconds: int) -> None:
+        """Записать факт создания /rword игры."""
+        key = f"{self._WG_RATE}rword:{user_id}"
+        now = time.time()
+        await self._r.zadd(key, {str(now): now})
+        await self._r.expire(key, window_seconds)
+
     async def wg_game_create(self, game) -> None:
         """Сохранить новую активную игру (WordGame)."""
         key = f"{self._WG_GAME}{game.game_id}"
@@ -665,6 +693,7 @@ class RedisStore:
             "revealed": game.revealed, "guesses": game.guesses,
             "message_id": game.message_id,
             "finished": game.finished, "winner_id": game.winner_id,
+            "is_random": game.is_random,
         }
         ttl = int(game.ends_at - time.time()) + 120
         await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
@@ -721,6 +750,32 @@ class RedisStore:
                 return data
         return None
     # ── Трекер: привязка чатов ────────────────────────────────────
+    # ── Анонимные сообщения ───────────────────────────────────────
+    # anon:chats                         → hash {chat_id: title}
+    # anon:state:{user_id}               → JSON, TTL 300s
+
+    async def anon_register_chat(self, chat_id: int, title: str) -> None:
+        """Зарегистрировать чат как доступный для анонимных сообщений."""
+        await self._r.hset("anon:chats", str(chat_id), title)
+
+    async def anon_get_chats(self) -> list[tuple[int, str]]:
+        """Вернуть список (chat_id, title) всех зарегистрированных чатов."""
+        raw = await self._r.hgetall("anon:chats")
+        return [(int(k), v) for k, v in raw.items()]
+
+    async def anon_get_state(self, user_id: int) -> dict | None:
+        """Получить FSM-состояние пользователя для /anon. None если нет."""
+        raw = await self._r.get(f"anon:state:{user_id}")
+        return json.loads(raw) if raw else None
+
+    async def anon_set_state(self, user_id: int, state: dict, ttl: int = 300) -> None:
+        """Сохранить FSM-состояние пользователя для /anon."""
+        await self._r.set(f"anon:state:{user_id}", json.dumps(state, ensure_ascii=False), ex=ttl)
+
+    async def anon_clear_state(self, user_id: int) -> None:
+        """Очистить FSM-состояние пользователя для /anon."""
+        await self._r.delete(f"anon:state:{user_id}")
+
     # tracker:source:{source_chat_id}        → str(tracker_chat_id)
     # tracker:topic:{tracker_chat_id}:{type} → str(thread_id)
     # tracker:counter                        → глобальный счётчик репортов

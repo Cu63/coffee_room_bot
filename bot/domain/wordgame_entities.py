@@ -47,6 +47,7 @@ class WordGame:
     message_id: int = 0                                 # ID игрового сообщения в группе
     finished: bool = False
     winner_id: int | None = None
+    is_random: bool = False                             # True если слово загадал бот (/rword)
 
     def __post_init__(self) -> None:
         if not self.revealed:

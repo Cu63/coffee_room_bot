@@ -213,6 +213,16 @@ class WordgameConfig(_BaseConfig):
     max_games_per_window: int = 3      # макс. игр за окно
     game_window_hours: int = 4         # окно лимита в часах
 
+
+class RwordgameConfig(_BaseConfig):
+    """Настройки /rword — угадайка с рандомным словом из словаря."""
+    max_bet: int = 50                  # максимальная ставка (лимит N)
+    min_word_length: int = 4           # минимальная длина загадываемого слова
+    max_word_length: int = 9           # максимальная длина загадываемого слова
+    words_file: str = "configs/words_ru.txt"
+    max_games_per_window: int = 5      # макс. игр за окно
+    game_window_hours: int = 2         # окно лимита в часах
+
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
     recipients: list[int] = []
@@ -255,6 +265,7 @@ class AppConfig(_BaseConfig):
     system: SystemConfig = SystemConfig()
     renew: RenewConfig = RenewConfig()
     wordgame: WordgameConfig = WordgameConfig()
+    rwordgame: RwordgameConfig = RwordgameConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
 

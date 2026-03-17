@@ -134,6 +134,14 @@ wordgame:
   max_games_per_window: 3     # макс. игр за окно
   game_window_hours: 4        # окно лимита в часах
 
+rwordgame:
+  max_bet: 50                 # лимит ставки для /rword (0–N)
+  min_word_length: 4          # минимальная длина случайного слова
+  max_word_length: 9          # максимальная длина случайного слова
+  words_file: "configs/words_ru.txt"  # путь к файлу словаря
+  max_games_per_window: 10     # макс. игр за окно
+  game_window_hours: 2        # окно лимита в часах
+
 logging:
   level: "INFO"
   human_readable_logs: false

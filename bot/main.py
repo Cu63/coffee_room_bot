@@ -19,6 +19,7 @@ from bot.presentation.handlers.admin_score import router as admin_score_router
 from bot.presentation.handlers.admin_user import router as admin_user_router
 from bot.presentation.handlers.blackjack import router as blackjack_router
 from bot.presentation.handlers.tracker import router as tracker_router
+from bot.presentation.handlers.anon import router as anon_router
 from bot.presentation.handlers.commands import router as commands_router
 from bot.presentation.handlers.dice import router as dice_router
 from bot.presentation.handlers.giveaway import router as giveaway_router
@@ -216,6 +217,7 @@ async def main() -> None:
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
     dp.include_router(tracker_router)
+    dp.include_router(anon_router)
 
     setup_dishka(container, dp)
     dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))

@@ -153,7 +153,7 @@ async def cmd_op(
         return
     try:
         await message.bot.promote_chat_member(
-            chat_id=message.chat.id, user_id=target.id, can_invite_users=True
+            chat_id=message.chat.id, user_id=target.id, **MODERATOR_PERMS
         )
     except Exception:
         logger.exception("Failed to op user %d", target.id)

@@ -3,7 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# custom files
 backups/
+words*.txt
 
 # C extensions
 *.so
