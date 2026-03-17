@@ -593,6 +593,7 @@ class RedisStore:
     _WG_AWAITING = "wg:awaiting:"
     _WG_GAME     = "wg:game:"
     _WG_CHAT     = "wg:chat:"
+    _WG_RATE     = "wg:rate:"
     _WG_TTL      = 600  # 10 минут на ввод слова создателем
 
     async def wg_pending_create(
@@ -633,6 +634,20 @@ class RedisStore:
 
     async def wg_awaiting_delete(self, user_id: int) -> None:
         await self._r.delete(f"{self._WG_AWAITING}{user_id}")
+
+    async def wg_rate_check(self, user_id: int, max_games: int, window_seconds: int) -> int:
+        """Проверить сколько игр создал пользователь за окно. Не инкрементирует."""
+        key = f"{self._WG_RATE}{user_id}"
+        now = time.time()
+        await self._r.zremrangebyscore(key, 0, now - window_seconds)
+        return await self._r.zcard(key)
+
+    async def wg_rate_record(self, user_id: int, window_seconds: int) -> None:
+        """Записать факт создания игры."""
+        key = f"{self._WG_RATE}{user_id}"
+        now = time.time()
+        await self._r.zadd(key, {str(now): now})
+        await self._r.expire(key, window_seconds)
 
     async def wg_game_create(self, game) -> None:
         """Сохранить новую активную игру (WordGame)."""

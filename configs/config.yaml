@@ -130,6 +130,8 @@ wordgame:
   attempt_cost: 1             # баллов за неудачную попытку
   min_word_length: 2
   max_word_length: 16
+  max_games_per_window: 3     # макс. игр за окно
+  game_window_hours: 4        # окно лимита в часах
 
 logging:
   level: "INFO"

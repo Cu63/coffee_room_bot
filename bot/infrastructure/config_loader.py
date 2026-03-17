@@ -209,6 +209,8 @@ class WordgameConfig(_BaseConfig):
     attempt_cost: int = 1              # баллов за неудачную попытку
     min_word_length: int = 2
     max_word_length: int = 32
+    max_games_per_window: int = 3      # макс. игр за окно
+    game_window_hours: int = 4         # окно лимита в часах
 
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
