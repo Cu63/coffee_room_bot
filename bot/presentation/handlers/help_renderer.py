@@ -65,6 +65,8 @@ class HelpRenderer:
         dc = config.dice
         rc = config.renew
         lc = config.limits
+        wgc = config.wordgame
+        rwgc = config.rwordgame
 
         # Плейсхолдеры для секций с динамическими значениями
         ctx = dict(
@@ -100,6 +102,16 @@ class HelpRenderer:
             dice_max=dc.max_bet,
             renew_cost=f"{rc.cost} {p.pluralize(rc.cost)}",
             renew_limit=rc.daily_limit,
+            wg_min_bet=wgc.min_bet,
+            wg_max_bet=wgc.max_bet,
+            wg_min_dur=wgc.min_duration_seconds // 60,
+            wg_max_dur=wgc.max_duration_seconds // 60,
+            wg_max_games=wgc.max_games_per_window,
+            wg_window=wgc.game_window_hours,
+            attempt_cost=wgc.attempt_cost,
+            rwg_max_bet=rwgc.max_bet,
+            rwg_min_len=rwgc.min_word_length,
+            rwg_max_len=rwgc.max_word_length,
         )
 
         def _fmt(tmpl: str) -> str:
@@ -163,6 +175,10 @@ class HelpRenderer:
             lines += [""]
             lines += s.get("commands", [])
             return "\n".join(lines)
+
+        if section == "wordgame":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "commands":
             cmds = [_fmt(c) for c in s.get("static_commands", [])]

@@ -16,11 +16,13 @@ menu_buttons:
       label: "🏷 Тег"
   - - key: bj
       label: "🃏 Блекджек"
-    - key: commands
+    - key: wordgame
+      label: "🔤 Угадайка"
+  - - key: commands
       label: "📋 Команды"
-  - - key: admin
+    - key: admin
       label: "🛡 Для админов"
-    - key: tracker
+  - - key: tracker
       label: "📡 Трекер"
 
 # Тексты разделов. Поддерживают Telegram HTML.
@@ -99,6 +101,28 @@ sections:
       - "  /help_bj — подробные правила"
       - "  /renew — сбросить лимит за {renew_cost}"
 
+  wordgame:
+    header: "🔤 <b>Угадайка</b>"
+    rows:
+      - "Два режима игры на слова:"
+      - ""
+      - "<b>/word &lt;ставка&gt; &lt;время&gt;</b> — ты сам загадываешь слово."
+      - "  Бот напишет тебе в ЛС и попросит ввести слово."
+      - "  Ставка: {wg_min_bet}–{wg_max_bet}  |  Время: от {wg_min_dur}m до {wg_max_dur}m"
+      - ""
+      - "<b>/rword &lt;ставка&gt; &lt;время&gt;</b> — бот загадывает случайное слово."
+      - "  Ничего вводить не надо — игра стартует сразу."
+      - "  Ставка: 0–{rwg_max_bet}  |  Время: те же лимиты"
+      - "  Длина слова: {rwg_min_len}–{rwg_max_len} букв (из словаря)"
+      - ""
+      - "<b>Как угадывать:</b>"
+      - "  Ответь (reply) на игровое сообщение своим словом."
+      - "  Слово должно быть той же длины, что загаданное."
+      - "  Каждая неверная попытка стоит {attempt_cost} балл."
+      - "  Победитель забирает всю ставку."
+      - ""
+      - "  Лимит: {wg_max_games} игры за {wg_window} ч. (общий для /word и /rword)"
+
   commands:
     header: "📋 <b>Команды</b>"
     static_commands:
@@ -116,6 +140,8 @@ sections:
       - "  /bj &lt;ставка&gt; — блекджек ({bj_min}–{bj_max})"
       - "  /slots &lt;ставка&gt; — слоты ({slots_min}–{slots_max})"
       - "  /dice &lt;ставка&gt; — кубики ({dice_min}–{dice_max})"
+      - "  /word &lt;ставка&gt; &lt;время&gt; — угадайка: ты загадываешь слово"
+      - "  /rword &lt;ставка&gt; &lt;время&gt; — угадайка: бот загадывает слово (0–{rwg_max_bet})"
       - "  /renew — сбросить лимиты игр за {renew_cost}"
       - ""
       - "  /mute @user N — платный мут ({mute_min}–{mute_max} мин)"
