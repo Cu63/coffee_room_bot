@@ -750,6 +750,32 @@ class RedisStore:
                 return data
         return None
     # ── Трекер: привязка чатов ────────────────────────────────────
+    # ── Анонимные сообщения ───────────────────────────────────────
+    # anon:chats                         → hash {chat_id: title}
+    # anon:state:{user_id}               → JSON, TTL 300s
+
+    async def anon_register_chat(self, chat_id: int, title: str) -> None:
+        """Зарегистрировать чат как доступный для анонимных сообщений."""
+        await self._r.hset("anon:chats", str(chat_id), title)
+
+    async def anon_get_chats(self) -> list[tuple[int, str]]:
+        """Вернуть список (chat_id, title) всех зарегистрированных чатов."""
+        raw = await self._r.hgetall("anon:chats")
+        return [(int(k), v) for k, v in raw.items()]
+
+    async def anon_get_state(self, user_id: int) -> dict | None:
+        """Получить FSM-состояние пользователя для /anon. None если нет."""
+        raw = await self._r.get(f"anon:state:{user_id}")
+        return json.loads(raw) if raw else None
+
+    async def anon_set_state(self, user_id: int, state: dict, ttl: int = 300) -> None:
+        """Сохранить FSM-состояние пользователя для /anon."""
+        await self._r.set(f"anon:state:{user_id}", json.dumps(state, ensure_ascii=False), ex=ttl)
+
+    async def anon_clear_state(self, user_id: int) -> None:
+        """Очистить FSM-состояние пользователя для /anon."""
+        await self._r.delete(f"anon:state:{user_id}")
+
     # tracker:source:{source_chat_id}        → str(tracker_chat_id)
     # tracker:topic:{tracker_chat_id}:{type} → str(thread_id)
     # tracker:counter                        → глобальный счётчик репортов

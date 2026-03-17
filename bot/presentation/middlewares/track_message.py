@@ -69,6 +69,11 @@ class TrackMessageMiddleware(BaseMiddleware):
             await self._maybe_spark(event, container)
             await self._maybe_reply_chain(event, container)
 
+            # Авто-регистрация чата для /anon
+            if event.chat.type in ("group", "supergroup") and event.chat.title:
+                store = await container.get(RedisStore)
+                await store.anon_register_chat(event.chat.id, event.chat.title)
+
         return await handler(event, data)
 
     async def _maybe_react(self, message: Message, container: AsyncContainer) -> None:
