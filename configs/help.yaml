@@ -62,7 +62,7 @@ sections:
     protect_header: "<b>Защита от мута:</b>"
     unmute_header: "<b>Досрочное снятие мута:</b>"
     unmute_rows:
-      - "  /unmute — снять мут с себя за кирчики"
+      - "  /unmute @user — снять мут с пользователя за кирчики"
       - "  Цена: оставшиеся минуты × {cost_per_minute} × {unmute_multiplier}"
       - "  Чем меньше осталось — тем дешевле"
     protect_header: "<b>Защита от мута:</b>"
@@ -119,7 +119,7 @@ sections:
       - "  /renew — сбросить лимиты игр за {renew_cost}"
       - ""
       - "  /mute @user N — платный мут ({mute_min}–{mute_max} мин)"
-      - "  /unmute — снять мут с себя за кирчики"
+      - "  /unmute @user — снять мут за кирчики"
       - "  /selfmute N — самомут бесплатно ({selfmute_min}–{selfmute_max} мин)"
       - "  /protect — защита от /mute на {protection_hours} ч. за {protection_cost} б."
       - "  /unprotect — снять свою защиту"
