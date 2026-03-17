@@ -308,13 +308,13 @@ async def cmd_random_wordgame(
             )
             return
 
-    # Лимит на создание игр — общий с /word
-    window_secs = wg.game_window_hours * 3600
-    created = await store.wg_rate_check(user_id, wg.max_games_per_window, window_secs)
-    if created >= wg.max_games_per_window:
+    # Лимит на создание игр — отдельный от /word
+    window_secs = rwg.game_window_hours * 3600
+    created = await store.wg_rate_check_rword(user_id, rwg.max_games_per_window, window_secs)
+    if created >= rwg.max_games_per_window:
         await reply_and_delete(
             message,
-            f"❌ Лимит: {wg.max_games_per_window} игры за {wg.game_window_hours} ч. Попробуй позже.",
+            f"❌ Лимит: {rwg.max_games_per_window} игры за {rwg.game_window_hours} ч. Попробуй позже.",
         )
         return
 
@@ -331,7 +331,7 @@ async def cmd_random_wordgame(
     if bet > 0:
         await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
-    await store.wg_rate_record(user_id, window_secs)
+    await store.wg_rate_record_rword(user_id, window_secs)
 
     # Создаём объект игры с временным message_id=0, потом обновим
     game = WordGame(

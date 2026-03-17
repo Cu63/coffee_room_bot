@@ -112,6 +112,8 @@ class HelpRenderer:
             rwg_max_bet=rwgc.max_bet,
             rwg_min_len=rwgc.min_word_length,
             rwg_max_len=rwgc.max_word_length,
+            rwg_max_games=rwgc.max_games_per_window,
+            rwg_window=rwgc.game_window_hours,
         )
 
         def _fmt(tmpl: str) -> str:

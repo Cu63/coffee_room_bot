@@ -121,7 +121,8 @@ sections:
       - "  Каждая неверная попытка стоит {attempt_cost} балл."
       - "  Победитель забирает всю ставку."
       - ""
-      - "  Лимит: {wg_max_games} игры за {wg_window} ч. (общий для /word и /rword)"
+      - "  Лимит /word: {wg_max_games} игры за {wg_window} ч."
+      - "  Лимит /rword: {rwg_max_games} игры за {rwg_window} ч."
 
   commands:
     header: "📋 <b>Команды</b>"

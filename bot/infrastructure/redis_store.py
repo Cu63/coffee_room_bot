@@ -669,6 +669,20 @@ class RedisStore:
         await self._r.zadd(key, {str(now): now})
         await self._r.expire(key, window_seconds)
 
+    async def wg_rate_check_rword(self, user_id: int, max_games: int, window_seconds: int) -> int:
+        """Проверить лимит /rword отдельно от /word."""
+        key = f"{self._WG_RATE}rword:{user_id}"
+        now = time.time()
+        await self._r.zremrangebyscore(key, 0, now - window_seconds)
+        return await self._r.zcard(key)
+
+    async def wg_rate_record_rword(self, user_id: int, window_seconds: int) -> None:
+        """Записать факт создания /rword игры."""
+        key = f"{self._WG_RATE}rword:{user_id}"
+        now = time.time()
+        await self._r.zadd(key, {str(now): now})
+        await self._r.expire(key, window_seconds)
+
     async def wg_game_create(self, game) -> None:
         """Сохранить новую активную игру (WordGame)."""
         key = f"{self._WG_GAME}{game.game_id}"
