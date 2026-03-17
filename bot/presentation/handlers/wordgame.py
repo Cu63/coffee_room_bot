@@ -91,6 +91,7 @@ def _raw_to_game(raw: dict) -> WordGame:
         message_id=raw.get("message_id", 0),
         finished=raw.get("finished", False),
         winner_id=raw.get("winner_id"),
+        is_random=raw.get("is_random", False),
     )
 
 
@@ -107,6 +108,7 @@ def _game_to_raw(game: WordGame) -> dict:
         "message_id": game.message_id,
         "finished": game.finished,
         "winner_id": game.winner_id,
+        "is_random": game.is_random,
     }
 
 
@@ -339,6 +341,7 @@ async def cmd_random_wordgame(
         word=word,
         bet=bet,
         ends_at=ends_at,
+        is_random=True,
     )
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
@@ -526,7 +529,7 @@ async def msg_reply_guess(
     if game.finished or game.is_expired:
         return
 
-    if game.creator_id == user_id:
+    if game.creator_id == user_id and not game.is_random:
         err = await message.reply("❌ Нельзя угадывать свою игру!")
         schedule_delete(bot, err, message, delay=30)
         return

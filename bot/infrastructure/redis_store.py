@@ -679,6 +679,7 @@ class RedisStore:
             "revealed": game.revealed, "guesses": game.guesses,
             "message_id": game.message_id,
             "finished": game.finished, "winner_id": game.winner_id,
+            "is_random": game.is_random,
         }
         ttl = int(game.ends_at - time.time()) + 120
         await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
