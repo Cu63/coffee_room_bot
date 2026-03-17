@@ -37,12 +37,12 @@ _ADMIN_PERM_FIELDS = (
 
 # Права модератора, выдаваемые через /op
 MODERATOR_PERMS = {
-    "can_delete_messages": True,
-    "can_restrict_members": True,
+    "can_delete_messages": False,
+    "can_restrict_members": False,
     "can_invite_users": True,
-    "can_pin_messages": True,
-    "can_manage_video_chats": True,
-    "can_manage_topics": True,
+    "can_pin_messages": False,
+    "can_manage_video_chats": False,
+    "can_manage_topics": False,
 }
 
 
