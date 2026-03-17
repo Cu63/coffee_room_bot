@@ -504,6 +504,12 @@ class RedisStore:
             return False
         return float(raw) > time.time()
 
+    async def owner_mute_get_ts(self, chat_id: int, user_id: int) -> float | None:
+        """Получить unix timestamp окончания owner-мута. None если нет."""
+        key = f"{_OWNER_MUTE}{chat_id}:{user_id}"
+        raw = await self._r.get(key)
+        return float(raw) if raw else None
+
     async def owner_mute_delete(self, chat_id: int, user_id: int) -> None:
         """Снять owner-мут досрочно."""
         key = f"{_OWNER_MUTE}{chat_id}:{user_id}"

@@ -79,6 +79,7 @@ class HelpRenderer:
             selfmute_max=mc.selfmute_max_minutes,
             protection_hours=mc.protection_duration_hours,
             protection_cost=mc.protection_cost,
+            unmute_multiplier=mc.unmute_multiplier,
             cost_self=f"{tc.cost_self} {p.pluralize(tc.cost_self)}",
             cost_member=f"{tc.cost_member} {p.pluralize(tc.cost_member)}",
             cost_admin=f"{tc.cost_admin} {p.pluralize(tc.cost_admin)}",
@@ -136,6 +137,11 @@ class HelpRenderer:
                 "",
                 s["selfmute_header"],
                 _fmt(s["selfmute_row"]),
+                "",
+                s["unmute_header"],
+            ]
+            parts += [_fmt(r) for r in s.get("unmute_rows", [])]
+            parts += [
                 "",
                 s["protect_header"],
             ]
