@@ -193,13 +193,14 @@ async def cmd_stats(
     )
 
     # ── Игры ────────────────────────────────────────────────────
-    total_wins = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway
+    total_wins = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway + stats.wins_ttt
     games_block = (
         f"<b>Победы в играх:</b>\n"
         f"  🃏 Блекджек: {stats.wins_blackjack}\n"
         f"  🎰 Слоты: {stats.wins_slots}\n"
         f"  🎲 Кубики: {stats.wins_dice}\n"
         f"  🎟 Розыгрыши: {stats.wins_giveaway}\n"
+        f"  🎮 Крестики-нолики: {stats.wins_ttt}\n"
         f"  <i>Итого: {total_wins} {_wins_plural(total_wins)}</i>"
     )
 
