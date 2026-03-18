@@ -40,6 +40,9 @@ async def _resolve_game(bot: Bot, game, container) -> None:
     from bot.application.dice_service import DiceService
     from bot.domain.pluralizer import ScorePluralizer
 
+    # Убираем кнопку «Участвовать» перед бросками
+    await _remove_lobby(bot, game.chat_id, game.message_id)
+
     # Получаем список участников до броска
     async with container() as scope:
         service: DiceService = await scope.get(DiceService)
@@ -51,7 +54,6 @@ async def _resolve_game(bot: Bot, game, container) -> None:
             await service.finish(game.id, {})
         cancel_msg = await bot.send_message(game.chat_id, "🎲 Игра в кости отменена: нет участников.")
         schedule_delete(bot, cancel_msg, delay=_GAME_DELETE_DELAY)
-        await _remove_lobby(bot, game.chat_id, game.message_id)
         return
 
     # Объявляем начало бросков
@@ -70,6 +72,23 @@ async def _resolve_game(bot: Bot, game, container) -> None:
         except Exception:
             logger.warning("Failed to send dice for user %d in game %d", user_id, game.id)
 
+    # Если у кого-то не удалось бросить кость — игра забагована, рефанд всем
+    missing = [uid for uid in participants if uid not in dice_results]
+    if missing:
+        logger.warning(
+            "Dice game %d: missing results for %s — refunding all bets",
+            game.id, missing,
+        )
+        async with container() as scope:
+            service = await scope.get(DiceService)
+            await service.finish(game.id, {})  # пустой dict → рефанд всем
+        refund_msg = await bot.send_message(
+            game.chat_id,
+            "🎲 Игра в кости отменена: не все броски удалось выполнить. Ставки возвращены.",
+        )
+        schedule_delete(bot, refund_msg, delay=_GAME_DELETE_DELAY)
+        return
+
     # Завершаем игру и распределяем призы
     async with container() as scope:
         service = await scope.get(DiceService)
@@ -81,7 +100,6 @@ async def _resolve_game(bot: Bot, game, container) -> None:
         return
 
     await _post_dice_results(bot, result, pluralizer)
-    await _remove_lobby(bot, game.chat_id, game.message_id)
 
 
 async def _post_dice_results(bot: Bot, result, pluralizer) -> None:

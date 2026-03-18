@@ -226,6 +226,19 @@ class RwordgameConfig(_BaseConfig):
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
 
+class BuyopConfig(_BaseConfig):
+    """Настройки /buyop — покупка титула админа без прав."""
+    cost: int = 500
+    tag: str = ""  # пустая строка = без тега
+
+
+class IdeaConfig(_BaseConfig):
+    """Настройки /idea — голосование за идеи."""
+    cost: int = 0               # стоимость создания идеи (0 = бесплатно)
+    votes_threshold: int = 5    # сколько 👍 нужно для уведомления админов
+    vote_ttl_hours: int = 72    # сколько часов принимать голоса
+
+
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
     recipients: list[int] = []
@@ -269,6 +282,8 @@ class AppConfig(_BaseConfig):
     renew: RenewConfig = RenewConfig()
     wordgame: WordgameConfig = WordgameConfig()
     rwordgame: RwordgameConfig = RwordgameConfig()
+    buyop: BuyopConfig = BuyopConfig()
+    idea: IdeaConfig = IdeaConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
 

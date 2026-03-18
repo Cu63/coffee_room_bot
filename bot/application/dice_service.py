@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.score_repository import IScoreRepository
@@ -74,10 +74,19 @@ class DiceService:
     async def set_message_id(self, game_id: int, message_id: int) -> None:
         await self._dice_repo.update_message_id(game_id, message_id)
 
-    async def join(self, game_id: int, user_id: int) -> JoinResult:
-        """Участник присоединяется к игре. Списывает ставку."""
+    async def join(self, game_id: int, user_id: int, *, join_cutoff_seconds: int = 10) -> JoinResult:
+        """Участник присоединяется к игре. Списывает ставку.
+
+        join_cutoff_seconds — за сколько секунд до конца закрыть приём.
+        """
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:
+            return JoinResult(success=False, game_not_found=True)
+
+        # Закрыть приём за N секунд до конца — чтобы бросок не опередил присоединение
+        tz = game.ends_at.tzinfo or timezone.utc
+        now = datetime.now(tz)
+        if (game.ends_at - now).total_seconds() < join_cutoff_seconds:
             return JoinResult(success=False, game_not_found=True)
 
         participants = await self._dice_repo.get_participants(game_id)
