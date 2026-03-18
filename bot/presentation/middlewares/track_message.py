@@ -3,13 +3,16 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime
+from html import escape
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
+from aiogram.enums import ParseMode
 from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.interfaces.message_repository import IMessageRepository, MessageInfo
+from bot.application.interfaces.mute_repository import IMuteRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
@@ -17,6 +20,7 @@ from bot.domain.reaction_registry import ReactionRegistry
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.utils import schedule_delete
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                     id=event.from_user.id,
                     username=event.from_user.username,
                     full_name=event.from_user.full_name or "",
+                    is_bot=event.from_user.is_bot,
                 )
             )
 
@@ -77,6 +82,11 @@ class TrackMessageMiddleware(BaseMiddleware):
                     user_id=event.from_user.id,
                     sent_at=event.date or datetime.now(TZ_MSK),
                     text=msg_text,
+                    is_reply=(
+                        event.reply_to_message is not None
+                        and event.reply_to_message.from_user is not None
+                        and not event.reply_to_message.from_user.is_bot
+                    ),
                 )
             )
 
@@ -84,6 +94,7 @@ class TrackMessageMiddleware(BaseMiddleware):
             await self._maybe_burst(event, container)
             await self._maybe_spark(event, container)
             await self._maybe_reply_chain(event, container)
+            await self._maybe_notify_muted(event, container)
 
             # Авто-регистрация чата для /anon
             if event.chat.type in ("group", "supergroup") and event.chat.title:
@@ -134,6 +145,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                 id=self._bot_me.id,
                 username=self._bot_me.username,
                 full_name=self._bot_me.full_name,
+                is_bot=True,
             )
         )
 
@@ -280,3 +292,99 @@ class TrackMessageMiddleware(BaseMiddleware):
                     "chain: user %d in chat %d awarded %d, new score %d",
                     uid, chat_id, cfg.reward, new_value,
                 )
+
+    async def _maybe_notify_muted(self, message: Message, container: AsyncContainer) -> None:
+        """Уведомляет в чате, если ответили или тегнули пользователя, который в муте."""
+        if message.bot is None or message.from_user is None:
+            return
+        if message.chat.type not in ("group", "supergroup"):
+            return
+        # Боты не инициируют уведомления
+        if message.from_user.is_bot:
+            return
+
+        chat_id = message.chat.id
+        mute_repo = await container.get(IMuteRepository)
+
+        # Собираем уникальных кандидатов для проверки мута
+        muted_user_ids: set[int] = set()
+
+        # 1. Reply на чьё-то сообщение
+        if (
+            message.reply_to_message is not None
+            and message.reply_to_message.from_user is not None
+            and not message.reply_to_message.from_user.is_bot
+            and message.reply_to_message.from_user.id != message.from_user.id
+        ):
+            muted_user_ids.add(message.reply_to_message.from_user.id)
+
+        # 2. @mention через entities
+        entities = message.entities or message.caption_entities or []
+        user_repo = await container.get(IUserRepository)
+        for entity in entities:
+            mentioned_id: int | None = None
+
+            if entity.type == "mention":
+                # @username — вытаскиваем юзернейм из текста
+                text = message.text or message.caption or ""
+                raw = text[entity.offset : entity.offset + entity.length]
+                username = raw.lstrip("@")
+                user = await user_repo.get_by_username(username)
+                if user is not None and not user.is_bot and user.id != message.from_user.id:
+                    mentioned_id = user.id
+
+            elif entity.type == "text_mention":
+                # Пользователь без username — aiogram кладёт его в entity.user
+                if (
+                    entity.user is not None
+                    and not entity.user.is_bot
+                    and entity.user.id != message.from_user.id
+                ):
+                    mentioned_id = entity.user.id
+
+            if mentioned_id is not None:
+                muted_user_ids.add(mentioned_id)
+
+        if not muted_user_ids:
+            return
+
+        from bot.domain.tz import now_msk
+        now = now_msk()
+
+        for user_id in muted_user_ids:
+            entry = await mute_repo.get(user_id, chat_id)
+            if entry is None:
+                continue
+            # Мут мог уже истечь (loop ещё не успел снять)
+            if entry.until_at <= now:
+                continue
+
+            # Вычисляем оставшееся время
+            remaining_secs = int((entry.until_at - now).total_seconds())
+            if remaining_secs <= 0:
+                continue
+
+            minutes, secs = divmod(remaining_secs, 60)
+            if minutes > 0:
+                time_str = f"{minutes} мин." + (f" {secs} сек." if secs else "")
+            else:
+                time_str = f"{secs} сек."
+
+            # Получаем имя замученного пользователя
+            muted_user = await user_repo.get_by_id(user_id)
+            if muted_user is None:
+                continue
+
+            if muted_user.username:
+                name = f"@{escape(muted_user.username)}"
+            else:
+                name = f"<b>{escape(muted_user.full_name)}</b>"
+
+            try:
+                notice = await message.reply(
+                    f"🔇 {name} сейчас в муте — ещё {time_str}",
+                    parse_mode=ParseMode.HTML,
+                )
+                schedule_delete(message.bot, notice, delay=30)
+            except Exception as e:
+                logger.debug("notify_muted: failed to send notice: %s", e)

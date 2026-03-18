@@ -18,16 +18,18 @@ class PostgresMessageRepository(IMessageRepository):
     async def save(self, info: MessageInfo) -> None:
         await self._conn.execute(
             """
-            INSERT INTO messages (message_id, chat_id, user_id, sent_at, text)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO messages (message_id, chat_id, user_id, sent_at, text, is_reply)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (message_id, chat_id) DO UPDATE
-                SET text = COALESCE(EXCLUDED.text, messages.text)
+                SET text = COALESCE(EXCLUDED.text, messages.text),
+                    is_reply = EXCLUDED.is_reply OR messages.is_reply
             """,
             info.message_id,
             info.chat_id,
             info.user_id,
             info.sent_at,
             info.text,
+            info.is_reply,
         )
 
     async def get(self, chat_id: int, message_id: int) -> MessageInfo | None:

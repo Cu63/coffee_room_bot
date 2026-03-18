@@ -30,9 +30,11 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
+from bot.domain.tz import now_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
@@ -425,6 +427,7 @@ async def cb_ttt_move(
     score_service: FromDishka[ScoreService],
     score_repo: FromDishka[IScoreRepository],
     stats_repo: FromDishka[IUserStatsRepository],
+    lb_repo: FromDishka[IDailyLeaderboardRepository],
     pluralizer: FromDishka[ScorePluralizer],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
@@ -544,6 +547,7 @@ async def cb_ttt_move(
 
             # Записываем победу
             await stats_repo.add_win(winner_id, chat_id, "ttt")
+            await lb_repo.add_game_win(winner_id, chat_id, "ttt", now_msk().date())
 
             sw_pot = p.pluralize(total_pot)
             text = formatter._t["ttt_win"].format(

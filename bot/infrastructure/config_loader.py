@@ -276,6 +276,32 @@ class DailySummaryConfig(_BaseConfig):
     max_messages: int = 2000      # потолок на случай очень активного чата
 
 
+class DailyLeaderboardConfig(_BaseConfig):
+    """Настройки ежедневного лидерборда активности."""
+    enabled: bool = True
+    time: str = "23:00"               # HH:MM, MSK — когда подводить итоги
+    bonus_messages: int = 50          # за наибольшее кол-во сообщений
+    bonus_reactions_given: int = 50   # за наибольшее кол-во данных реакций
+    bonus_reactions_received: int = 50  # за наибольшее кол-во собранных реакций
+    bonus_replies: int = 50           # за наибольшее кол-во реплаев
+    bonus_ttt_wins: int = 50          # за наибольшее кол-во побед в TTT
+    bonus_wordgame_wins: int = 50     # за наибольшее кол-во побед в word/rword
+
+
+class ChatmodePresetConfig(_BaseConfig):
+    """Настройки одного пресета режима чата."""
+    cost_per_minute: int = 5
+    max_minutes: int = 30
+
+
+class ChatmodeConfig(_BaseConfig):
+    """Настройки режимов чата (/silence, /gif)."""
+    enabled: bool = True
+    default_minutes: int = 5
+    silence: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=10, max_minutes=30)
+    gif: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=5, max_minutes=20)
+
+
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
     model: str = "gpt-4.1-nano"
@@ -314,6 +340,8 @@ class AppConfig(_BaseConfig):
     logging: LoggingConfig = LoggingConfig()
     analyze: AnalyzeConfig = AnalyzeConfig()
     daily_summary: DailySummaryConfig = DailySummaryConfig()
+    daily_leaderboard: DailyLeaderboardConfig = DailyLeaderboardConfig()
+    chatmode: ChatmodeConfig = ChatmodeConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

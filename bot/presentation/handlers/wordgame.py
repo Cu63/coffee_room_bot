@@ -24,6 +24,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
@@ -34,7 +35,7 @@ from bot.domain.wordgame_entities import (
     merge_revealed,
     normalize_word,
 )
-from bot.domain.tz import TZ_MSK
+from bot.domain.tz import TZ_MSK, now_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.anon import NoAnonState
@@ -505,6 +506,7 @@ async def msg_reply_guess(
     store: FromDishka[RedisStore],
     score_service: FromDishka[ScoreService],
     user_repo: FromDishka[IUserRepository],
+    lb_repo: FromDishka[IDailyLeaderboardRepository],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
@@ -591,6 +593,13 @@ async def msg_reply_guess(
         await store.wg_chat_remove(chat_id, game.game_id)
 
         await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
+
+        # Записываем победу в дневной лидерборд
+        game_type = "rword" if game.is_random else "word"
+        try:
+            await lb_repo.add_game_win(user_id, chat_id, game_type, now_msk().date())
+        except Exception:
+            pass  # не прерываем победу из-за ошибки статистики
 
         bet_str = pluralizer.pluralize(game.bet)
         win_text = (

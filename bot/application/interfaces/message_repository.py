@@ -10,6 +10,7 @@ class MessageInfo:
     user_id: int
     sent_at: datetime
     text: str | None = None  # None = не сохраняем (команды, игровые ответы)
+    is_reply: bool = False
 
 
 @dataclass(slots=True)
