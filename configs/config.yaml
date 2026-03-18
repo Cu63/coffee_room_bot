@@ -174,7 +174,7 @@ analyze:
 
 daily_summary:
   enabled: true
-  time: "22:12"              # время отправки (HH:MM, MSK)
+  time: "22:00"              # время отправки (HH:MM, MSK)
   max_messages: 10000         # потолок на случай очень активного чата
 
 daily_leaderboard:
