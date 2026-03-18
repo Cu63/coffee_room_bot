@@ -151,7 +151,11 @@ class ChatmodeService:
         await self._repo.save(entry)
 
         # Выставляем ограничения
-        await bot.set_chat_permissions(chat_id, _MODE_PERMS[mode])
+        await bot.set_chat_permissions(
+            chat_id,
+            _MODE_PERMS[mode],
+            use_independent_chat_permissions=True,
+        )
 
         return ActivateResult(success=True, cost=total_cost, new_balance=spend.new_balance)
 
@@ -159,7 +163,11 @@ class ChatmodeService:
         """Восстановить права чата и удалить запись."""
         try:
             restored = dict_to_perms(entry.saved_perms)
-            await bot.set_chat_permissions(entry.chat_id, restored)
+            await bot.set_chat_permissions(
+                entry.chat_id,
+                restored,
+                use_independent_chat_permissions=True,
+            )
         except Exception:
             pass
         await self._repo.delete(entry.chat_id)
