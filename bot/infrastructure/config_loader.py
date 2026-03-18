@@ -226,6 +226,13 @@ class RwordgameConfig(_BaseConfig):
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
 
+class TicTacToeConfig(_BaseConfig):
+    """Настройки /ttt — исчезающие крестики-нолики."""
+    enabled: bool = True
+    min_bet: int = 1
+    max_bet: int = 100
+
+
 class BuyopConfig(_BaseConfig):
     """Настройки /buyop — покупка титула админа без прав."""
     cost: int = 500
@@ -282,6 +289,7 @@ class AppConfig(_BaseConfig):
     renew: RenewConfig = RenewConfig()
     wordgame: WordgameConfig = WordgameConfig()
     rwordgame: RwordgameConfig = RwordgameConfig()
+    tictactoe: TicTacToeConfig = TicTacToeConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
     bug: BugConfig = BugConfig()

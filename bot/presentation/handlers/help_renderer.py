@@ -114,6 +114,8 @@ class HelpRenderer:
             rwg_max_len=rwgc.max_word_length,
             rwg_max_games=rwgc.max_games_per_window,
             rwg_window=rwgc.game_window_hours,
+            ttt_min=config.tictactoe.min_bet,
+            ttt_max=config.tictactoe.max_bet,
             buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
         )
 
@@ -180,6 +182,10 @@ class HelpRenderer:
             return "\n".join(lines)
 
         if section == "wordgame":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "ttt":
             rows = [_fmt(r) for r in s.get("rows", [])]
             return s["header"] + "\n\n" + "\n".join(rows)
 
