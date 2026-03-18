@@ -42,6 +42,7 @@ from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.handlers.tictactoe import router as ttt_router
 from bot.presentation.handlers.buyop import router as buyop_router
 from bot.presentation.handlers.idea import router as idea_router
+from bot.presentation.handlers.selfban import router as selfban_router
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
 from bot.presentation.middlewares.owner_mute import OwnerMuteDeleteMiddleware
@@ -123,8 +124,16 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
 
 
 async def bj_cleanup_loop(container, bot: Bot) -> None:
-    """Фоновая задача: закрывает истёкшие игры блекджека (возвращает половину ставки)."""
-    from bot.application.score_service import ScoreService
+    """Фоновая задача: рефундит ставки за истёкшие дуэльные игры блекджека.
+
+    Сканирует ключи bj:duel:* с полем expires_at. Если время вышло:
+    - Лобби (state=lobby): возврат ставки создателю
+    - Игра (state=playing): возврат ставок обоим игрокам
+    """
+    import json as _json
+    import time as _time
+
+    from bot.application.interfaces.score_repository import IScoreRepository
     from bot.infrastructure.redis_store import RedisStore
 
     while True:
@@ -132,29 +141,58 @@ async def bj_cleanup_loop(container, bot: Bot) -> None:
         try:
             async with container() as scope:
                 store = await scope.get(RedisStore)
-                score_service = await scope.get(ScoreService)
-                for data in await store.bj_pop_expired():
-                    user_id = data["player_id"]
-                    chat_id = data["chat_id"]
-                    bet = data["bet"]
-                    refund = bet // 2
+                score_repo = await scope.get(IScoreRepository)
+                now = _time.time()
+                async for key in store._r.scan_iter("bj:duel:*"):
+                    raw = await store._r.get(key)
+                    if raw is None:
+                        continue
+                    data = _json.loads(raw)
+                    if data.get("expires_at", 0.0) > now:
+                        continue
+                    # Атомарно удаляем — 0 = уже удалён другим процессом
+                    if not await store._r.delete(key):
+                        continue
+
+                    state = data.get("state", "")
+                    bet = data.get("bet", 0)
+                    chat_id = data.get("chat_id", 0)
                     message_id = data.get("message_id", 0)
-                    logger.info(
-                        "BJ timeout: refunding %d/%d to user %d in chat %d",
-                        refund, bet, user_id, chat_id,
-                    )
-                    if refund > 0:
-                        await score_service.add_score(user_id, chat_id, refund, admin_id=user_id)
-                    if message_id:
-                        try:
-                            await bot.edit_message_text(
-                                f"⏰ Время вышло! Возвращено {refund} из {bet}.",
-                                chat_id=chat_id,
-                                message_id=message_id,
-                                reply_markup=None,
-                            )
-                        except Exception:
-                            pass
+
+                    if state == "lobby":
+                        p1_id = data.get("p1_id", 0)
+                        if bet > 0 and p1_id:
+                            await score_repo.add_delta(p1_id, chat_id, bet)
+                            logger.info("BJ lobby expired: refunded %d to %d", bet, p1_id)
+                        if message_id:
+                            try:
+                                await bot.edit_message_text(
+                                    "⏰ Время вышло. Никто не принял вызов. Ставка возвращена.",
+                                    chat_id=chat_id,
+                                    message_id=message_id,
+                                    reply_markup=None,
+                                )
+                            except Exception:
+                                pass
+                    elif state == "playing":
+                        p1_id = data.get("p1_id", 0)
+                        p2_id = data.get("p2_id", 0)
+                        if bet > 0:
+                            if p1_id:
+                                await score_repo.add_delta(p1_id, chat_id, bet)
+                            if p2_id:
+                                await score_repo.add_delta(p2_id, chat_id, bet)
+                            logger.info("BJ game expired: refunded %d each to %d, %d", bet, p1_id, p2_id)
+                        if message_id:
+                            try:
+                                await bot.edit_message_text(
+                                    "⏰ Время вышло! Ставки возвращены обоим игрокам.",
+                                    chat_id=chat_id,
+                                    message_id=message_id,
+                                    reply_markup=None,
+                                )
+                            except Exception:
+                                pass
         except Exception:
             logger.exception("BJ cleanup loop failed")
 
@@ -233,6 +271,7 @@ async def main() -> None:
         dp.include_router(ttt_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
+    dp.include_router(selfban_router)
     dp.include_router(tracker_router)
     dp.include_router(anon_router)
     dp.include_router(daily_router)

@@ -19,7 +19,9 @@ from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
-from bot.presentation.utils import reply_and_delete
+from bot.infrastructure.message_formatter import MessageFormatter
+from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.utils import check_gameban, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +52,19 @@ async def cmd_dice(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
+    store: FromDishka[RedisStore],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
     from datetime import datetime, timedelta
+
+    if message.from_user is None:
+        return
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, message.from_user.id, message.chat.id, formatter._t)
+    if ban_msg:
+        await reply_and_delete(message, ban_msg)
+        return
 
     args = (message.text or "").split()[1:]
     if len(args) < 2:
@@ -165,9 +178,17 @@ async def cb_dice_join(
     service: FromDishka[DiceService],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
+    store: FromDishka[RedisStore],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
     game_id = int(cb.data.split(":")[2])
     user_id = cb.from_user.id
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, user_id, cb.message.chat.id, formatter._t)
+    if ban_msg:
+        await safe_callback_answer(cb, ban_msg, show_alert=True)
+        return
 
     # Upsert пользователя — иначе FK на scores упадёт при списании баллов
     await user_repo.upsert(

@@ -38,7 +38,7 @@ from bot.domain.tz import now_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, check_gameban, reply_and_delete, safe_callback_answer, schedule_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="tictactoe")
@@ -168,6 +168,12 @@ async def cmd_ttt(
     formatter: FromDishka[MessageFormatter],
 ) -> None:
     if message.from_user is None or message.bot is None:
+        return
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, message.from_user.id, message.chat.id, formatter._t)
+    if ban_msg:
+        await reply_and_delete(message, ban_msg)
         return
 
     args = (message.text or "").split()[1:]
@@ -313,6 +319,13 @@ async def cb_ttt_accept(
     game_id = parts[2]
     chat_id = cb.message.chat.id
     user_id = cb.from_user.id
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, user_id, chat_id, formatter._t)
+    if ban_msg:
+        await safe_callback_answer(cb, ban_msg, show_alert=True)
+        return
+
     key = _ttt_key(chat_id, game_id)
 
     raw = await store._r.get(key)

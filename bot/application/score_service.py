@@ -36,6 +36,7 @@ SPECIAL_EMOJI = {
     "ttt": "🎮",
     "daily_leader": "🏆",
     "chatmode": "🔒",
+    "bj": "🃏",
 }
 
 

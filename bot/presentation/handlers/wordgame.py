@@ -37,10 +37,11 @@ from bot.domain.wordgame_entities import (
 )
 from bot.domain.tz import TZ_MSK, now_msk
 from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.anon import NoAnonState
 from bot.infrastructure.word_loader import pick_random_word
-from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
+from bot.presentation.utils import check_gameban, reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 router = Router(name="wordgame")
@@ -126,7 +127,17 @@ async def cmd_wordgame(
     user_repo: FromDishka[IUserRepository],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
+    if message.from_user is None:
+        return
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, message.from_user.id, message.chat.id, formatter._t)
+    if ban_msg:
+        await reply_and_delete(message, ban_msg)
+        return
+
     args = (message.text or "").split()[1:]
     wg = config.wordgame
 
@@ -248,7 +259,17 @@ async def cmd_random_wordgame(
     user_repo: FromDishka[IUserRepository],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
+    if message.from_user is None:
+        return
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, message.from_user.id, message.chat.id, formatter._t)
+    if ban_msg:
+        await reply_and_delete(message, ban_msg)
+        return
+
     args = (message.text or "").split()[1:]
     wg = config.wordgame
     rwg = config.rwordgame
