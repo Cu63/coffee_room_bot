@@ -114,6 +114,6 @@ class PostgresMessageRepository(IMessageRepository):
 
     async def get_active_chats(self) -> list[int]:
         rows = await self._conn.fetch(
-            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL"
+            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL AND chat_id < 0"
         )
         return [r["chat_id"] for r in rows]
