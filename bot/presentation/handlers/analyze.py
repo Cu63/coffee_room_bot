@@ -12,7 +12,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.analyze_service import AnalyzeService
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.infrastructure.config_loader import AnalyzeConfig
+from bot.infrastructure.config_loader import AppConfig
 
 logger = logging.getLogger(__name__)
 router = Router(name="analyze")
@@ -96,7 +96,7 @@ async def cmd_analyze(
     command: CommandObject,
     analyze_service: FromDishka[AnalyzeService],
     user_repo: FromDishka[IUserRepository],
-    config: FromDishka[AnalyzeConfig],
+    config: FromDishka[AppConfig],
 ) -> None:
     """/analyze [N] [@user1 @user2 ...]
 
@@ -104,7 +104,7 @@ async def cmd_analyze(
     N не может превышать analyze.max_messages из конфига.
     """
     n_raw, usernames = _parse_analyze_args(command.args)
-    n = min(n_raw or config.max_messages, config.max_messages)
+    n = min(n_raw or config.analyze.max_messages, config.analyze.max_messages)
 
     # Резолвим юзернеймы → user_id
     user_ids: list[int] | None = None
@@ -152,7 +152,7 @@ async def cmd_wir(
     message: Message,
     command: CommandObject,
     analyze_service: FromDishka[AnalyzeService],
-    config: FromDishka[AnalyzeConfig],
+    config: FromDishka[AppConfig],
 ) -> None:
     """/wir [N] — Who Is Right.
 
@@ -166,7 +166,7 @@ async def cmd_wir(
         if tokens and _INT_RE.match(tokens[0]):
             n_raw = int(tokens[0])
 
-    n = min(n_raw or config.wir_default_messages, config.wir_max_messages)
+    n = min(n_raw or config.analyze.wir_default_messages, config.analyze.wir_max_messages)
 
     thinking = await message.reply("⚖️ Разбираю ситуацию...")
 
