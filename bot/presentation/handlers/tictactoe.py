@@ -273,7 +273,7 @@ async def cmd_ttt(
     }
 
     key = _ttt_key(chat_id, game_id)
-    await store._redis.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
+    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
 
     lobby_text = formatter._t["ttt_lobby"].format(
         user=display, bet=bet, score_word=sw_bet,
@@ -287,7 +287,7 @@ async def cmd_ttt(
 
     # Сохраняем message_id
     data["message_id"] = sent.message_id
-    await store._redis.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
+    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
 
 
 # ─── Callback: принять вызов ──────────────────────────────────────────
@@ -313,7 +313,7 @@ async def cb_ttt_accept(
     user_id = cb.from_user.id
     key = _ttt_key(chat_id, game_id)
 
-    raw = await store._redis.get(key)
+    raw = await store._r.get(key)
     if raw is None:
         await safe_callback_answer(cb, formatter._t["ttt_expired"], show_alert=True)
         return
@@ -367,7 +367,7 @@ async def cb_ttt_accept(
     data["player_o_username"] = cb.from_user.username or ""
     data["turn"] = first
 
-    await store._redis.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
+    await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
 
     # Определяем имена
     x_display = user_link(
@@ -440,7 +440,7 @@ async def cb_ttt_move(
     user_id = cb.from_user.id
     key = _ttt_key(chat_id, game_id)
 
-    raw = await store._redis.get(key)
+    raw = await store._r.get(key)
     if raw is None:
         await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
         return
@@ -508,7 +508,7 @@ async def cb_ttt_move(
     if winner or draw:
         # Игра окончена
         data["state"] = "finished"
-        await store._redis.delete(key)
+        await store._r.delete(key)
 
         total_pot = bet * 2
         board_text = _render_board(board, history_x, history_o, turn)
@@ -566,7 +566,7 @@ async def cb_ttt_move(
     # Переключаем ход
     next_turn = "o" if turn == "x" else "x"
     data["turn"] = next_turn
-    await store._redis.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
+    await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
 
     turn_player = x_display if next_turn == "x" else o_display
     turn_symbol = _CELL_X if next_turn == "x" else _CELL_O
