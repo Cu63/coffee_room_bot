@@ -145,6 +145,11 @@ rwordgame:
   max_games_per_window: 5     # макс. игр за окно
   game_window_hours: 1        # окно лимита в часах
 
+tictactoe:
+  enabled: true
+  min_bet: 1
+  max_bet: 100
+
 buyop:
   cost: 500                     # стоимость /buyop (титул без прав)
   tag: ""                       # кастомный тег (пусто = без тега)
