@@ -197,7 +197,12 @@ async def _resolve_game(
     """Определить победителя и выплатить. Возвращает текст результата."""
     game_id = data["game_id"]
     key = _bj_key(chat_id, game_id)
-    await store._r.delete(key)
+
+    # Атомарно забираем ключ, чтобы cleanup loop не смог его обработать параллельно
+    # Если ключ уже удалён (cleanup loop опередил) — значит рефунд уже выполнен
+    if not await store._r.delete(key):
+        logger.warning("BJ game %s already cleaned up by loop, skipping resolve", game_id)
+        return "⏰ Игра была завершена по таймауту. Ставки возвращены."
 
     bet = data["bet"]
     total_pot = bet * 2
@@ -254,14 +259,22 @@ async def _resolve_game(
         result_line = f"🤝 Ничья ({p1_score}:{p2_score})! Ставки возвращены: по <b>{bet} {sw}</b>."
 
     if winner_id and not result_line:
-        await score_repo.add_delta(winner_id, chat_id, total_pot)
+        new_balance = await score_repo.add_delta(winner_id, chat_id, total_pot)
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
+        logger.info(
+            "BJ game %s: winner %d awarded %d, new balance %d",
+            game_id, winner_id, total_pot, new_balance,
+        )
         sw = p.pluralize(total_pot)
         result_line = f"🏆 {winner_display} выигрывает <b>{total_pot} {sw}</b>!"
     elif winner_id and result_line:
         # Blackjack case — already set result_line
-        await score_repo.add_delta(winner_id, chat_id, total_pot)
+        new_balance = await score_repo.add_delta(winner_id, chat_id, total_pot)
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
+        logger.info(
+            "BJ game %s: natural BJ winner %d awarded %d, new balance %d",
+            game_id, winner_id, total_pot, new_balance,
+        )
 
     return (
         f"🃏 <b>Блекджек — результат</b>\n\n"
@@ -638,6 +651,9 @@ async def cb_bj_hit(
 
     score = _hand_score_from_dicts(data[f"{turn}_hand"])
 
+    # Обновляем expires_at при каждом действии, чтобы cleanup loop не забрал активную игру
+    data["expires_at"] = time.time() + _BJ_GAME_TTL
+
     if score > 21:
         # Перебор
         data[f"{turn}_busted"] = True
@@ -784,6 +800,9 @@ async def cb_bj_stand(
 
     p = pluralizer
     data[f"{turn}_done"] = True
+
+    # Обновляем expires_at при каждом действии
+    data["expires_at"] = time.time() + _BJ_GAME_TTL
 
     other = "p2" if turn == "p1" else "p1"
     if data[f"{other}_done"]:
