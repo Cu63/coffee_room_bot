@@ -75,7 +75,7 @@ async def cmd_idea(
         return
 
     # Генерируем ID
-    idea_id = await store._redis.incr(_IDEA_COUNTER)
+    idea_id = await store._r.incr(_IDEA_COUNTER)
 
     user = message.from_user
     display = user_link(user.username, user.full_name or "", user.id)
@@ -106,7 +106,7 @@ async def cmd_idea(
         "notified": False,
         "created_at": time.time(),
     }
-    await store._redis.set(
+    await store._r.set(
         _idea_key(message.chat.id, idea_id),
         json.dumps(data),
         ex=ttl_seconds,
@@ -151,7 +151,7 @@ async def cb_idea_vote(
     user_id = callback.from_user.id
     key = _idea_key(chat_id, idea_id)
 
-    raw = await store._redis.get(key)
+    raw = await store._r.get(key)
     if raw is None:
         await safe_callback_answer(callback, formatter._t["idea_expired"], show_alert=True)
         return
@@ -173,11 +173,11 @@ async def cb_idea_vote(
     data[direction].append(user_id)
 
     # Сохраняем обратно с оставшимся TTL
-    ttl = await store._redis.ttl(key)
+    ttl = await store._r.ttl(key)
     if ttl and ttl > 0:
-        await store._redis.set(key, json.dumps(data), ex=ttl)
+        await store._r.set(key, json.dumps(data), ex=ttl)
     else:
-        await store._redis.set(key, json.dumps(data), ex=config.idea.vote_ttl_hours * 3600)
+        await store._r.set(key, json.dumps(data), ex=config.idea.vote_ttl_hours * 3600)
 
     up_count = len(data["up"])
     down_count = len(data["down"])
@@ -205,9 +205,9 @@ async def cb_idea_vote(
     threshold = config.idea.votes_threshold
     if up_count >= threshold and not data.get("notified"):
         data["notified"] = True
-        ttl = await store._redis.ttl(key)
+        ttl = await store._r.ttl(key)
         if ttl and ttl > 0:
-            await store._redis.set(key, json.dumps(data), ex=ttl)
+            await store._r.set(key, json.dumps(data), ex=ttl)
 
         # Отправляем в трекер
         await _notify_threshold(
