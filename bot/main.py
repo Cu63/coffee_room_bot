@@ -201,11 +201,14 @@ async def main() -> None:
     dp.message.middleware(AutoDeleteCommandMiddleware())
 
     dp.include_router(commands_router)
-    dp.include_router(blackjack_router)
-    dp.include_router(dice_router)
+    if config.blackjack.enabled:
+        dp.include_router(blackjack_router)
+    if config.dice.enabled:
+        dp.include_router(dice_router)
     dp.include_router(llm_router)
     dp.include_router(reactions_router)
-    dp.include_router(slots_router)
+    if config.slots.enabled:
+        dp.include_router(slots_router)
     dp.include_router(giveaway_router)
     dp.include_router(mute_router)
     dp.include_router(tag_router)
