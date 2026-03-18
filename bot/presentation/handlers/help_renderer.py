@@ -68,6 +68,8 @@ class HelpRenderer:
         wgc = config.wordgame
         rwgc = config.rwordgame
 
+        cmc = config.chatmode
+
         # Плейсхолдеры для секций с динамическими значениями
         ctx = dict(
             daily_reactions_given=lc.daily_negative_given,
@@ -98,6 +100,8 @@ class HelpRenderer:
             slots_cooldown=sc.cooldown_minutes,
             dice_min=dc.min_bet,
             dice_max=dc.max_bet,
+            dice_min_wait=dc.min_wait_seconds,
+            dice_max_wait=dc.max_wait_seconds,
             renew_cost=f"{rc.cost} {p.pluralize(rc.cost)}",
             renew_limit=rc.daily_limit,
             wg_min_bet=wgc.min_bet,
@@ -117,6 +121,11 @@ class HelpRenderer:
             buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
             selfban_min=config.selfban.min_minutes,
             selfban_max=config.selfban.max_minutes,
+            silence_cost=f"{cmc.silence.cost_per_minute} {p.pluralize(cmc.silence.cost_per_minute)}",
+            silence_max=cmc.silence.max_minutes,
+            gif_cost=f"{cmc.gif.cost_per_minute} {p.pluralize(cmc.gif.cost_per_minute)}",
+            gif_max=cmc.gif.max_minutes,
+            llm_daily_limit=config.llm.daily_limit_per_user,
         )
 
         def _fmt(tmpl: str) -> str:
@@ -179,6 +188,18 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "ttt":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "dice":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "chatmode":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "ai":
             rows = [_fmt(r) for r in s.get("rows", [])]
             return s["header"] + "\n\n" + "\n".join(rows)
 
