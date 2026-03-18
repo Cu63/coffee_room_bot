@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
 from aiogram.enums import ParseMode
-from aiogram.types import Message, MessageEntityType, ReactionTypeEmoji, TelegramObject
+from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.interfaces.message_repository import IMessageRepository, MessageInfo
@@ -324,7 +324,7 @@ class TrackMessageMiddleware(BaseMiddleware):
         for entity in entities:
             mentioned_id: int | None = None
 
-            if entity.type == MessageEntityType.MENTION:
+            if entity.type == "mention":
                 # @username — вытаскиваем юзернейм из текста
                 text = message.text or message.caption or ""
                 raw = text[entity.offset : entity.offset + entity.length]
@@ -333,7 +333,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                 if user is not None and not user.is_bot and user.id != message.from_user.id:
                     mentioned_id = user.id
 
-            elif entity.type == MessageEntityType.TEXT_MENTION:
+            elif entity.type == "text_mention":
                 # Пользователь без username — aiogram кладёт его в entity.user
                 if (
                     entity.user is not None
