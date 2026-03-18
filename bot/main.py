@@ -33,6 +33,8 @@ from bot.presentation.handlers.tag import router as tag_router
 from bot.presentation.handlers.renew import router as renew_router
 from bot.presentation.handlers.wordgame import router as wordgame_router
 from bot.presentation.handlers.transfer import router as transfer_router
+from bot.presentation.handlers.buyop import router as buyop_router
+from bot.presentation.handlers.idea import router as idea_router
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
 from bot.presentation.middlewares.owner_mute import OwnerMuteDeleteMiddleware
@@ -219,6 +221,8 @@ async def main() -> None:
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
+    dp.include_router(buyop_router)
+    dp.include_router(idea_router)
     dp.include_router(tracker_router)
     dp.include_router(anon_router)
 

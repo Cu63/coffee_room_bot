@@ -114,6 +114,7 @@ class HelpRenderer:
             rwg_max_len=rwgc.max_word_length,
             rwg_max_games=rwgc.max_games_per_window,
             rwg_window=rwgc.game_window_hours,
+            buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
         )
 
         def _fmt(tmpl: str) -> str:
@@ -189,5 +190,9 @@ class HelpRenderer:
         if section == "admin":
             cmds = s.get("commands", [])
             return s["header"] + "\n\n" + "\n".join(cmds)
+
+        if section == "tracker":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         return ""

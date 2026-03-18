@@ -32,6 +32,7 @@ SPECIAL_EMOJI = {
     "burst": "💬",
     "spark": "🔥",
     "chain": "🔗",
+    "buyop": "🎖",
 }
 
 
