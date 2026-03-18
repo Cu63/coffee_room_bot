@@ -269,6 +269,13 @@ class LoggingConfig(_BaseConfig):
         return v
 
 
+class DailySummaryConfig(_BaseConfig):
+    """Настройки ежедневной сводки чата."""
+    enabled: bool = False
+    time: str = "22:00"           # HH:MM, часовой пояс MSK
+    max_messages: int = 2000      # потолок на случай очень активного чата
+
+
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
     model: str = "gpt-4.1-nano"
@@ -306,6 +313,7 @@ class AppConfig(_BaseConfig):
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
     analyze: AnalyzeConfig = AnalyzeConfig()
+    daily_summary: DailySummaryConfig = DailySummaryConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

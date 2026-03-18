@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 
 from bot.application.interfaces.message_repository import ChatMessage, IMessageRepository
 from bot.infrastructure.config_loader import AnalyzeConfig
@@ -55,8 +56,9 @@ class AnalyzeService:
         chat_id: int,
         n: int,
         user_ids: list[int] | None,
+        since: datetime | None = None,
     ) -> AnalyzeResult:
-        messages = await self._repo.get_recent_with_text(chat_id, n, user_ids)
+        messages = await self._repo.get_recent_with_text(chat_id, n, user_ids, since)
         actual = len(messages)
 
         if actual == 0:
@@ -81,8 +83,13 @@ class AnalyzeService:
         )
         return AnalyzeResult(text=resp.text or "Нет ответа от модели.", requested=n, actual=actual)
 
-    async def wir(self, chat_id: int, n: int) -> AnalyzeResult:
-        messages = await self._repo.get_recent_with_text(chat_id, n)
+    async def wir(
+        self,
+        chat_id: int,
+        n: int,
+        since: datetime | None = None,
+    ) -> AnalyzeResult:
+        messages = await self._repo.get_recent_with_text(chat_id, n, since=since)
         actual = len(messages)
 
         if actual == 0:

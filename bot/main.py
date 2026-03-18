@@ -13,6 +13,7 @@ from bot.infrastructure.di import AppProvider, RequestProvider
 from bot.infrastructure.dice_loop import dice_loop
 from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
 from bot.infrastructure.wordgame_loop import wordgame_loop
+from bot.infrastructure.daily_summary_loop import daily_summary_loop
 from bot.infrastructure.logger import setup_logger
 from bot.presentation.handlers._admin_utils import _unmute_user
 from bot.presentation.handlers.admin_score import router as admin_score_router
@@ -267,6 +268,7 @@ async def main() -> None:
     bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
     wordgame_task = asyncio.create_task(wordgame_loop(bot, container))
     delete_task = asyncio.create_task(delete_loop(bot, redis))
+    daily_summary_task = asyncio.create_task(daily_summary_loop(bot, container))
 
     logger.info("Bot starting…")
     try:
@@ -283,6 +285,7 @@ async def main() -> None:
         mute_roulette_task.cancel()
         bj_cleanup_task.cancel()
         wordgame_task.cancel()
+        daily_summary_task.cancel()
         delete_task.cancel()
         if tg_log_handler:
             tg_log_handler.stop()
