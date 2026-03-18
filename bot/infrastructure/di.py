@@ -6,10 +6,12 @@ from dishka import Provider, Scope, provide
 
 from bot.application.cleanup_service import CleanupService
 from bot.application.analyze_service import AnalyzeService
+from bot.application.daily_leaderboard_service import DailyLeaderboardService
 from bot.application.dice_service import DiceService
 from bot.application.giveaway_service import GiveawayService
 from bot.application.history_service import HistoryService
 from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
+from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
@@ -33,6 +35,7 @@ from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.openai_client import OpenAiClient
 from bot.infrastructure.config_loader import AppConfig, BotSettings, DatabaseConfig, load_config, load_help_config, load_messages
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
+from bot.infrastructure.db.postgres_daily_leaderboard_repository import PostgresDailyLeaderboardRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
 from bot.infrastructure.db.postgres_dice_repository import PostgresDiceRepository
 from bot.infrastructure.db.postgres_giveaway_repository import PostgresGiveawayRepository
@@ -163,6 +166,10 @@ class RequestProvider(Provider):
         return PostgresUserStatsRepository(tm.get_connection())
 
     @provide
+    def get_daily_leaderboard_repo(self, tm: ITransactionManager) -> IDailyLeaderboardRepository:
+        return PostgresDailyLeaderboardRepository(tm.get_connection())
+
+    @provide
     def get_per_target_limits_repo(self, tm: ITransactionManager) -> IPerTargetLimitsRepository:
         return PostgresPerTargetLimitsRepository(tm.get_connection())
 
@@ -208,6 +215,15 @@ class RequestProvider(Provider):
     @provide
     def get_leaderboard_service(self, score_repo: IScoreRepository) -> LeaderboardService:
         return LeaderboardService(score_repo)
+
+    @provide
+    def get_daily_leaderboard_service(
+        self,
+        repo: IDailyLeaderboardRepository,
+        score_service: ScoreService,
+        pluralizer: ScorePluralizer,
+    ) -> DailyLeaderboardService:
+        return DailyLeaderboardService(repo, score_service, pluralizer)
 
     @provide
     def get_history_service(self, event_repo: IEventRepository, config: AppConfig) -> HistoryService:

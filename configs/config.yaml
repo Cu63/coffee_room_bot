@@ -61,10 +61,10 @@ blackjack:
   game_timeout_seconds: 60     # через сколько секунд незавершённая игра закрывается с возвратом ставки
 
 slots:
-  enabled: false                  # false — полностью отключить /slots
+  enabled: true                  # false — полностью отключить /slots
   min_bet: 1
   max_bet: 25               # джекпот (×30) = 750 — событие, но не ломает экономику
-  cooldown_minutes: 60      # кулдаун между спинами одного пользователя (в минутах)
+  cooldown_minutes: 1440    # кулдаун между спинами одного пользователя (в минутах)
 
 dice:
   enabled: true                  # false — полностью отключить /dice
@@ -170,3 +170,18 @@ analyze:
   max_messages: 500              # максимум N для /analyze
   wir_default_messages: 300      # N по умолчанию для /wir
   wir_max_messages: 1000         # максимум N для /wir
+
+daily_summary:
+  enabled: false
+  time: "22:00"              # время отправки (HH:MM, MSK)
+  max_messages: 10000         # потолок на случай очень активного чата
+
+daily_leaderboard:
+  enabled: true
+  time: "23:00"                  # время подведения итогов (HH:MM, MSK)
+  bonus_messages: 50             # бонус за наибольшее кол-во сообщений
+  bonus_reactions_given: 50      # бонус за наибольшее кол-во данных реакций
+  bonus_reactions_received: 50   # бонус за наибольшее кол-во собранных реакций
+  bonus_replies: 50              # бонус за наибольшее кол-во реплаев
+  bonus_ttt_wins: 50             # бонус за наибольшее кол-во побед в TTT
+  bonus_wordgame_wins: 50        # бонус за наибольшее кол-во побед в word/rword

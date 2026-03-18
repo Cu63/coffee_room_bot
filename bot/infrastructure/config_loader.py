@@ -269,6 +269,25 @@ class LoggingConfig(_BaseConfig):
         return v
 
 
+class DailySummaryConfig(_BaseConfig):
+    """Настройки ежедневной сводки чата."""
+    enabled: bool = False
+    time: str = "22:00"           # HH:MM, часовой пояс MSK
+    max_messages: int = 2000      # потолок на случай очень активного чата
+
+
+class DailyLeaderboardConfig(_BaseConfig):
+    """Настройки ежедневного лидерборда активности."""
+    enabled: bool = True
+    time: str = "23:00"               # HH:MM, MSK — когда подводить итоги
+    bonus_messages: int = 50          # за наибольшее кол-во сообщений
+    bonus_reactions_given: int = 50   # за наибольшее кол-во данных реакций
+    bonus_reactions_received: int = 50  # за наибольшее кол-во собранных реакций
+    bonus_replies: int = 50           # за наибольшее кол-во реплаев
+    bonus_ttt_wins: int = 50          # за наибольшее кол-во побед в TTT
+    bonus_wordgame_wins: int = 50     # за наибольшее кол-во побед в word/rword
+
+
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
     model: str = "gpt-4.1-nano"
@@ -306,6 +325,8 @@ class AppConfig(_BaseConfig):
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
     analyze: AnalyzeConfig = AnalyzeConfig()
+    daily_summary: DailySummaryConfig = DailySummaryConfig()
+    daily_leaderboard: DailyLeaderboardConfig = DailyLeaderboardConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

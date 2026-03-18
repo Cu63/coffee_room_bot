@@ -34,6 +34,7 @@ SPECIAL_EMOJI = {
     "chain": "🔗",
     "buyop": "🎖",
     "ttt": "🎮",
+    "daily_leader": "🏆",
 }
 
 
@@ -380,6 +381,14 @@ class ScoreService:
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
             user_id, user_id, chat_id, reward, SPECIAL_EMOJI["chain"],
+        )
+        return new_value
+
+    async def award_daily_leader(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Начисление бонуса лидеру дня."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["daily_leader"],
         )
         return new_value
 

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from datetime import datetime
+
 import asyncpg
 
 from bot.application.interfaces.message_repository import (
@@ -14,16 +18,18 @@ class PostgresMessageRepository(IMessageRepository):
     async def save(self, info: MessageInfo) -> None:
         await self._conn.execute(
             """
-            INSERT INTO messages (message_id, chat_id, user_id, sent_at, text)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO messages (message_id, chat_id, user_id, sent_at, text, is_reply)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (message_id, chat_id) DO UPDATE
-                SET text = COALESCE(EXCLUDED.text, messages.text)
+                SET text = COALESCE(EXCLUDED.text, messages.text),
+                    is_reply = EXCLUDED.is_reply OR messages.is_reply
             """,
             info.message_id,
             info.chat_id,
             info.user_id,
             info.sent_at,
             info.text,
+            info.is_reply,
         )
 
     async def get(self, chat_id: int, message_id: int) -> MessageInfo | None:
@@ -51,11 +57,13 @@ class PostgresMessageRepository(IMessageRepository):
         chat_id: int,
         limit: int,
         user_ids: list[int] | None = None,
+        since: datetime | None = None,
     ) -> list[ChatMessage]:
         """Вернуть до ``limit`` последних сообщений с непустым текстом.
 
-        Запрос делается через подзапрос: сначала берём последние N строк
-        (ORDER BY sent_at DESC, LIMIT), а потом разворачиваем в хронологию.
+        Фильтры:
+        - ``user_ids`` — только эти пользователи (None = все)
+        - ``since`` — только сообщения новее этого момента (None = без ограничения)
         """
         if user_ids is not None and len(user_ids) == 0:
             return []
@@ -80,6 +88,7 @@ class PostgresMessageRepository(IMessageRepository):
                 WHERE m.chat_id = $1
                   AND m.text IS NOT NULL
                   AND ($3::BIGINT[] IS NULL OR m.user_id = ANY($3))
+                  AND ($4::TIMESTAMPTZ IS NULL OR m.sent_at >= $4)
                 ORDER BY m.sent_at DESC
                 LIMIT $2
             ) sub
@@ -87,7 +96,8 @@ class PostgresMessageRepository(IMessageRepository):
             """,
             chat_id,
             limit,
-            user_ids,  # передаём None или список — asyncpg обрабатывает оба варианта
+            user_ids,
+            since,
         )
 
         return [
@@ -101,3 +111,9 @@ class PostgresMessageRepository(IMessageRepository):
             )
             for row in rows
         ]
+
+    async def get_active_chats(self) -> list[int]:
+        rows = await self._conn.fetch(
+            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL"
+        )
+        return [r["chat_id"] for r in rows]

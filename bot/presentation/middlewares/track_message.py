@@ -77,6 +77,11 @@ class TrackMessageMiddleware(BaseMiddleware):
                     user_id=event.from_user.id,
                     sent_at=event.date or datetime.now(TZ_MSK),
                     text=msg_text,
+                    is_reply=(
+                        event.reply_to_message is not None
+                        and event.reply_to_message.from_user is not None
+                        and not event.reply_to_message.from_user.is_bot
+                    ),
                 )
             )
 

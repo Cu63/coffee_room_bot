@@ -10,6 +10,7 @@ class MessageInfo:
     user_id: int
     sent_at: datetime
     text: str | None = None  # None = не сохраняем (команды, игровые ответы)
+    is_reply: bool = False
 
 
 @dataclass(slots=True)
@@ -36,10 +37,17 @@ class IMessageRepository(ABC):
         chat_id: int,
         limit: int,
         user_ids: list[int] | None = None,
+        since: datetime | None = None,
     ) -> list[ChatMessage]:
         """Вернуть до ``limit`` последних сообщений с текстом.
 
         Если ``user_ids`` указан — только от этих пользователей.
+        Если ``since`` указан — только сообщения новее этого момента.
         Результат в хронологическом порядке (старые → новые).
         """
+        ...
+
+    @abstractmethod
+    async def get_active_chats(self) -> list[int]:
+        """Вернуть все chat_id в которых есть хотя бы одно сообщение с текстом."""
         ...
