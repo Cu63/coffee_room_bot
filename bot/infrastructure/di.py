@@ -263,11 +263,13 @@ class RequestProvider(Provider):
         client: OpenAiClient,
         message_repo: IMessageRepository,
         config: AppConfig,
+        formatter: MessageFormatter,
     ) -> AnalyzeService:
         return AnalyzeService(
             client=client,
             message_repo=message_repo,
             config=config.analyze,
+            formatter=formatter,
         )
 
     @provide
