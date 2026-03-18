@@ -53,7 +53,7 @@ tag:
   max_length: 16                # максимальная длина тега
 
 blackjack:
-  enabled: true                  # false — полностью отключить /bj
+  enabled: false                  # false — полностью отключить /bj
   min_bet: 1
   max_bet: 50               # макс. ставка ~1/5 недельного заработка топ-игрока
   max_games_per_window: 5      # максимум игр в окне
@@ -61,7 +61,7 @@ blackjack:
   game_timeout_seconds: 60     # через сколько секунд незавершённая игра закрывается с возвратом ставки
 
 slots:
-  enabled: true                  # false — полностью отключить /slots
+  enabled: false                  # false — полностью отключить /slots
   min_bet: 1
   max_bet: 25               # джекпот (×30) = 750 — событие, но не ломает экономику
   cooldown_minutes: 60      # кулдаун между спинами одного пользователя (в минутах)
@@ -69,7 +69,7 @@ slots:
 dice:
   enabled: true                  # false — полностью отключить /dice
   min_bet: 1
-  max_bet: 1000
+  max_bet: 100
   min_wait_seconds: 10         # минимальное время сбора участников
   max_wait_seconds: 900        # максимальное время сбора (15 минут)
 
