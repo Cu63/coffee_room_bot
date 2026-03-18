@@ -25,7 +25,7 @@ class PostgresUserRepository(IUserRepository):
 
     async def get_by_username(self, username: str) -> User | None:
         row = await self._conn.fetchrow(
-            "SELECT id, username, full_name FROM users WHERE username = $1",
+            "SELECT id, username, full_name FROM users WHERE LOWER(username) = LOWER($1)",
             username,
         )
         return self._to_entity(row)

@@ -35,6 +35,7 @@ class BotSettings(BaseSettings):
 
     bot_token: str = ""
     aitunnel_api_key: str = ""
+    openai_api_key: str = ""      # API-ключ для /analyze и /wir (proxyapi.ru)
     openserp_url: str = "http://openserp:7000"
     redis_url: str = "redis://redis:6379/0"
     log_chat_id: int = 0   # Telegram chat ID для отправки логов (0 = отключено)
@@ -268,6 +269,23 @@ class LoggingConfig(_BaseConfig):
         return v
 
 
+class DailySummaryConfig(_BaseConfig):
+    """Настройки ежедневной сводки чата."""
+    enabled: bool = False
+    time: str = "22:00"           # HH:MM, часовой пояс MSK
+    max_messages: int = 2000      # потолок на случай очень активного чата
+
+
+class AnalyzeConfig(_BaseConfig):
+    """Настройки /analyze и /wir — анализ чата через OpenAI API."""
+    model: str = "gpt-4.1-nano"
+    base_url: str = "https://api.proxyapi.ru/openai/v1"
+    max_output_tokens: int = 4096
+    max_messages: int = 500           # максимум N для /analyze
+    wir_default_messages: int = 300   # N по умолчанию для /wir
+    wir_max_messages: int = 1000      # максимум N для /wir
+
+
 class AppConfig(_BaseConfig):
     score: ScoreConfig = ScoreConfig()
     reactions: dict[str, int] = {}
@@ -294,6 +312,8 @@ class AppConfig(_BaseConfig):
     idea: IdeaConfig = IdeaConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
+    analyze: AnalyzeConfig = AnalyzeConfig()
+    daily_summary: DailySummaryConfig = DailySummaryConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
