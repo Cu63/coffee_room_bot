@@ -358,14 +358,22 @@ async def cb_ttt_accept(
         )
         return
 
-    # Определяем первый ход случайно
-    first = random.choice(["x", "o"])
-
+    # Случайно распределяем роли X и O (X ходит первым)
     data["state"] = "playing"
-    data["player_o"] = user_id
-    data["player_o_name"] = cb.from_user.full_name or ""
-    data["player_o_username"] = cb.from_user.username or ""
-    data["turn"] = first
+    if random.choice([True, False]):
+        # Создатель остаётся X, принимающий — O
+        data["player_o"] = user_id
+        data["player_o_name"] = cb.from_user.full_name or ""
+        data["player_o_username"] = cb.from_user.username or ""
+    else:
+        # Меняем местами: принимающий становится X, создатель — O
+        data["player_o"] = data["player_x"]
+        data["player_o_name"] = data["player_x_name"]
+        data["player_o_username"] = data["player_x_username"]
+        data["player_x"] = user_id
+        data["player_x_name"] = cb.from_user.full_name or ""
+        data["player_x_username"] = cb.from_user.username or ""
+    data["turn"] = "x"  # X всегда ходит первым
 
     await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
 
@@ -377,10 +385,10 @@ async def cb_ttt_accept(
         data["player_o_username"] or None, data["player_o_name"], data["player_o"],
     )
 
-    turn_player = x_display if first == "x" else o_display
-    turn_symbol = _CELL_X if first == "x" else _CELL_O
+    turn_player = x_display
+    turn_symbol = _CELL_X
 
-    board_text = _render_board(data["board"], data["history_x"], data["history_o"], first)
+    board_text = _render_board(data["board"], data["history_x"], data["history_o"], "x")
     sw_bet = p.pluralize(bet)
 
     text = formatter._t["ttt_started"].format(
