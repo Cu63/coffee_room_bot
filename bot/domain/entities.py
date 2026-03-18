@@ -76,6 +76,7 @@ class UserStats:
     wins_slots: int = 0
     wins_dice: int = 0
     wins_giveaway: int = 0
+    wins_ttt: int = 0
 
 
 @dataclass(slots=True)
