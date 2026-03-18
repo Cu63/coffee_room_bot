@@ -53,6 +53,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                     id=event.from_user.id,
                     username=event.from_user.username,
                     full_name=event.from_user.full_name or "",
+                    is_bot=event.from_user.is_bot,
                 )
             )
 
@@ -139,6 +140,7 @@ class TrackMessageMiddleware(BaseMiddleware):
                 id=self._bot_me.id,
                 username=self._bot_me.username,
                 full_name=self._bot_me.full_name,
+                is_bot=True,
             )
         )
 

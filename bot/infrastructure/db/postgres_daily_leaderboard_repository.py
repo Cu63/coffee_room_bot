@@ -97,6 +97,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND m.sent_at >= $2
               AND m.sent_at < $3
               AND m.text IS NOT NULL
+              AND NOT u.is_bot
             GROUP BY m.user_id, u.username, u.full_name
             ORDER BY cnt DESC
             LIMIT 1
@@ -122,6 +123,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND se.direction = 'ADD'
               AND se.actor_id != se.target_id
               AND se.delta > 0
+              AND NOT u.is_bot
             GROUP BY se.actor_id, u.username, u.full_name
             ORDER BY cnt DESC
             LIMIT 1
@@ -147,6 +149,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND se.direction = 'ADD'
               AND se.actor_id != se.target_id
               AND se.delta > 0
+              AND NOT u.is_bot
             GROUP BY se.target_id, u.username, u.full_name
             ORDER BY cnt DESC
             LIMIT 1
@@ -170,6 +173,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND m.sent_at >= $2
               AND m.sent_at < $3
               AND m.is_reply = TRUE
+              AND NOT u.is_bot
             GROUP BY m.user_id, u.username, u.full_name
             ORDER BY cnt DESC
             LIMIT 1

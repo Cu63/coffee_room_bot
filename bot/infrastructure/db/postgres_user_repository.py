@@ -11,16 +11,18 @@ class PostgresUserRepository(IUserRepository):
     async def upsert(self, user: User) -> None:
         await self._conn.execute(
             """
-            INSERT INTO users (id, username, full_name, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO users (id, username, full_name, is_bot, updated_at)
+            VALUES ($1, $2, $3, $4, now())
             ON CONFLICT (id) DO UPDATE
-                SET username  = EXCLUDED.username,
-                    full_name = EXCLUDED.full_name,
+                SET username   = EXCLUDED.username,
+                    full_name  = EXCLUDED.full_name,
+                    is_bot     = EXCLUDED.is_bot,
                     updated_at = now()
             """,
             user.id,
             user.username,
             user.full_name,
+            user.is_bot,
         )
 
     async def get_by_username(self, username: str) -> User | None:

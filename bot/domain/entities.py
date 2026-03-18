@@ -10,6 +10,7 @@ class User:
     id: int
     username: str | None
     full_name: str
+    is_bot: bool = False
 
 
 @dataclass(slots=True)
