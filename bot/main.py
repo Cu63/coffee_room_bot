@@ -15,6 +15,7 @@ from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
 from bot.infrastructure.wordgame_loop import wordgame_loop
 from bot.infrastructure.daily_summary_loop import daily_summary_loop
 from bot.infrastructure.daily_leaderboard_loop import daily_leaderboard_loop
+from bot.infrastructure.chatmode_loop import chatmode_loop
 from bot.infrastructure.logger import setup_logger
 from bot.presentation.handlers._admin_utils import _unmute_user
 from bot.presentation.handlers.admin_score import router as admin_score_router
@@ -23,6 +24,7 @@ from bot.presentation.handlers.blackjack import router as blackjack_router
 from bot.presentation.handlers.tracker import router as tracker_router
 from bot.presentation.handlers.anon import router as anon_router
 from bot.presentation.handlers.daily import router as daily_router
+from bot.presentation.handlers.chatmode import router as chatmode_router
 from bot.presentation.handlers.commands import router as commands_router
 from bot.presentation.handlers.dice import router as dice_router
 from bot.presentation.handlers.giveaway import router as giveaway_router
@@ -234,6 +236,7 @@ async def main() -> None:
     dp.include_router(tracker_router)
     dp.include_router(anon_router)
     dp.include_router(daily_router)
+    dp.include_router(chatmode_router)
 
     setup_dishka(container, dp)
     dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))
@@ -273,6 +276,7 @@ async def main() -> None:
     delete_task = asyncio.create_task(delete_loop(bot, redis))
     daily_summary_task = asyncio.create_task(daily_summary_loop(bot, container))
     daily_leaderboard_task = asyncio.create_task(daily_leaderboard_loop(bot, container))
+    chatmode_task = asyncio.create_task(chatmode_loop(bot, container))
 
     logger.info("Bot starting…")
     try:
@@ -291,6 +295,7 @@ async def main() -> None:
         wordgame_task.cancel()
         daily_summary_task.cancel()
         daily_leaderboard_task.cancel()
+        chatmode_task.cancel()
         delete_task.cancel()
         if tg_log_handler:
             tg_log_handler.stop()

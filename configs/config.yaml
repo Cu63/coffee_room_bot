@@ -185,3 +185,13 @@ daily_leaderboard:
   bonus_replies: 50              # бонус за наибольшее кол-во реплаев
   bonus_ttt_wins: 50             # бонус за наибольшее кол-во побед в TTT
   bonus_wordgame_wins: 50        # бонус за наибольшее кол-во побед в word/rword
+
+chatmode:
+  enabled: true
+  default_minutes: 5             # минуты по умолчанию если не указаны
+  silence:
+    cost_per_minute: 10          # стоимость 1 минуты режима тишины
+    max_minutes: 30              # максимальная длительность
+  gif:
+    cost_per_minute: 5           # стоимость 1 минуты режима гифок
+    max_minutes: 20              # максимальная длительность

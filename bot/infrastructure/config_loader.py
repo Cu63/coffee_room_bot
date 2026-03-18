@@ -288,6 +288,20 @@ class DailyLeaderboardConfig(_BaseConfig):
     bonus_wordgame_wins: int = 50     # за наибольшее кол-во побед в word/rword
 
 
+class ChatmodePresetConfig(_BaseConfig):
+    """Настройки одного пресета режима чата."""
+    cost_per_minute: int = 5
+    max_minutes: int = 30
+
+
+class ChatmodeConfig(_BaseConfig):
+    """Настройки режимов чата (/silence, /gif)."""
+    enabled: bool = True
+    default_minutes: int = 5
+    silence: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=10, max_minutes=30)
+    gif: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=5, max_minutes=20)
+
+
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
     model: str = "gpt-4.1-nano"
@@ -327,6 +341,7 @@ class AppConfig(_BaseConfig):
     analyze: AnalyzeConfig = AnalyzeConfig()
     daily_summary: DailySummaryConfig = DailySummaryConfig()
     daily_leaderboard: DailyLeaderboardConfig = DailyLeaderboardConfig()
+    chatmode: ChatmodeConfig = ChatmodeConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

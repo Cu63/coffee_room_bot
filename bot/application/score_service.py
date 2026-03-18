@@ -35,6 +35,7 @@ SPECIAL_EMOJI = {
     "buyop": "🎖",
     "ttt": "🎮",
     "daily_leader": "🏆",
+    "chatmode": "🔒",
 }
 
 
