@@ -55,12 +55,28 @@ class TrackMessageMiddleware(BaseMiddleware):
                     full_name=event.from_user.full_name or "",
                 )
             )
+
+            # Сохраняем текст сообщения, но только «живые» реплики:
+            # — команды (начинаются с /) не сохраняем
+            # — ответы боту не сохраняем (игровые ходы, /help кнопки и т.п.)
+            msg_text: str | None = event.text or event.caption or None
+            if msg_text and msg_text.startswith("/"):
+                msg_text = None
+            elif (
+                msg_text
+                and event.reply_to_message is not None
+                and event.reply_to_message.from_user is not None
+                and event.reply_to_message.from_user.id == self._bot_me.id
+            ):
+                msg_text = None
+
             await message_repo.save(
                 MessageInfo(
                     message_id=event.message_id,
                     chat_id=event.chat.id,
                     user_id=event.from_user.id,
                     sent_at=event.date or datetime.now(TZ_MSK),
+                    text=msg_text,
                 )
             )
 

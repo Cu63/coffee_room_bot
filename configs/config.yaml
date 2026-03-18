@@ -162,3 +162,11 @@ idea:
 logging:
   level: "INFO"
   human_readable_logs: false
+
+analyze:
+  model: "gpt-4.1-nano"
+  base_url: "https://api.proxyapi.ru/openai/v1"
+  max_output_tokens: 4096        # лимит токенов на ответ
+  max_messages: 500              # максимум N для /analyze
+  wir_default_messages: 300      # N по умолчанию для /wir
+  wir_max_messages: 1000         # максимум N для /wir

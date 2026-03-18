@@ -5,6 +5,7 @@ import redis.asyncio as aioredis
 from dishka import Provider, Scope, provide
 
 from bot.application.cleanup_service import CleanupService
+from bot.application.analyze_service import AnalyzeService
 from bot.application.dice_service import DiceService
 from bot.application.giveaway_service import GiveawayService
 from bot.application.history_service import HistoryService
@@ -29,6 +30,7 @@ from bot.application.score_service import ScoreService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.infrastructure.aitunnel_client import AiTunnelClient
+from bot.infrastructure.openai_client import OpenAiClient
 from bot.infrastructure.config_loader import AppConfig, BotSettings, DatabaseConfig, load_config, load_help_config, load_messages
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
@@ -244,6 +246,28 @@ class RequestProvider(Provider):
             base_url=config.llm.base_url,
             model=config.llm.model,
             max_output_tokens=config.llm.max_output_tokens,
+        )
+
+    @provide
+    def get_openai_client(self, settings: BotSettings, config: AppConfig) -> OpenAiClient:
+        return OpenAiClient(
+            api_key=settings.openai_api_key,
+            base_url=config.analyze.base_url,
+            model=config.analyze.model,
+            max_output_tokens=config.analyze.max_output_tokens,
+        )
+
+    @provide
+    def get_analyze_service(
+        self,
+        client: OpenAiClient,
+        message_repo: IMessageRepository,
+        config: AppConfig,
+    ) -> AnalyzeService:
+        return AnalyzeService(
+            client=client,
+            message_repo=message_repo,
+            config=config.analyze,
         )
 
     @provide

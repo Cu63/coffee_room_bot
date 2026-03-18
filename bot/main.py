@@ -25,6 +25,7 @@ from bot.presentation.handlers.dice import router as dice_router
 from bot.presentation.handlers.giveaway import router as giveaway_router
 from bot.presentation.handlers.help import router as help_router
 from bot.presentation.handlers.llm_commands import router as llm_router
+from bot.presentation.handlers.analyze import router as analyze_router
 from bot.presentation.handlers.mute import router as mute_router
 from bot.presentation.handlers.protect import router as protect_router
 from bot.presentation.handlers.reactions import router as reactions_router
@@ -209,6 +210,7 @@ async def main() -> None:
     if config.dice.enabled:
         dp.include_router(dice_router)
     dp.include_router(llm_router)
+    dp.include_router(analyze_router)
     dp.include_router(reactions_router)
     if config.slots.enabled:
         dp.include_router(slots_router)
