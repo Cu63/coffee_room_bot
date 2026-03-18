@@ -173,8 +173,8 @@ analyze:
   wir_max_messages: 1000         # максимум N для /wir
 
 daily_summary:
-  enabled: false
-  time: "22:00"              # время отправки (HH:MM, MSK)
+  enabled: true
+  time: "22:12"              # время отправки (HH:MM, MSK)
   max_messages: 10000         # потолок на случай очень активного чата
 
 daily_leaderboard:
