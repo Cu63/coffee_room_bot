@@ -64,6 +64,7 @@ class LimitsConfig(_BaseConfig):
 
 
 class SlotsConfig(_BaseConfig):
+    enabled: bool = True
     min_bet: int = 1
     max_bet: int = 25
     cooldown_minutes: int = 60
@@ -113,6 +114,7 @@ class TagConfig(_BaseConfig):
 
 
 class BlackjackConfig(_BaseConfig):
+    enabled: bool = True
     min_bet: int = 1
     max_bet: int = 50
     max_games_per_window: int = 5
@@ -121,6 +123,7 @@ class BlackjackConfig(_BaseConfig):
 
 
 class DiceConfig(_BaseConfig):
+    enabled: bool = True
     min_bet: int = 1
     max_bet: int = 1000
     min_wait_seconds: int = 10
