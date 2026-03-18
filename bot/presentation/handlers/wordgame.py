@@ -576,6 +576,7 @@ async def msg_reply_guess(
     new_revealed = merge_revealed(game.revealed, matches)
     is_correct = all(matches)
     matched_count = sum(matches)
+    had_revealed = game.revealed_count > 0  # были ли открытые буквы ДО этой попытки
 
     game.guesses.append({"user_id": user_id, "word": guess})
     game.revealed = new_revealed
@@ -630,7 +631,7 @@ async def msg_reply_guess(
             f"({matched_count}/{len(game.word)} на месте)"
         ]
 
-        if game.bet > 0 and cost > 0:
+        if game.bet > 0 and cost > 0 and had_revealed:
             if game.is_random:
                 await score_service.add_score(bot.id, chat_id, cost, admin_id=bot.id)
             else:
