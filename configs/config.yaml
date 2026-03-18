@@ -53,12 +53,9 @@ tag:
   max_length: 16                # максимальная длина тега
 
 blackjack:
-  enabled: false                  # false — полностью отключить /bj
+  enabled: true                   # дуэльный блекджек
   min_bet: 1
-  max_bet: 50               # макс. ставка ~1/5 недельного заработка топ-игрока
-  max_games_per_window: 5      # максимум игр в окне
-  window_hours: 1              # размер временного окна в часах
-  game_timeout_seconds: 60     # через сколько секунд незавершённая игра закрывается с возвратом ставки
+  max_bet: 100
 
 slots:
   enabled: true                  # false — полностью отключить /slots
@@ -151,13 +148,17 @@ tictactoe:
   max_bet: 100
 
 buyop:
-  cost: 500                     # стоимость /buyop (титул без прав)
+  cost: 1000                    # стоимость /buyop (титул без прав)
   tag: ""                       # кастомный тег (пусто = без тега)
 
 idea:
   cost: 0                       # стоимость создания идеи (0 = бесплатно)
   votes_threshold: 5            # голосов 👍 для уведомления админов
   vote_ttl_hours: 72            # сколько часов принимать голоса
+
+selfban:
+  min_minutes: 30               # минимальная длительность самозапрета на игры
+  max_minutes: 10080            # максимальная (7 дней)
 
 logging:
   level: "INFO"

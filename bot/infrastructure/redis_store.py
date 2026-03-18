@@ -8,13 +8,9 @@ import time
 
 import redis.asyncio as aioredis
 
-from bot.application.blackjack_service import BlackjackRound, Card, GameResult
-
 logger = logging.getLogger(__name__)
 
 # Префиксы ключей
-_BJ_GAME = "bj:game:"  # bj:game:{user_id}:{chat_id}
-_BJ_HISTORY = "bj:hist:"  # bj:hist:{user_id}:{chat_id}  (sorted set)
 _SLOTS_DAILY = "slots:daily:"  # slots:daily:{user_id}:{chat_id}
 _SLOTS_LAST = "slots:last:"  # slots:last:{user_id}:{chat_id}
 _JACKPOT = "slots:jackpot:"  # slots:jackpot:{chat_id}
@@ -29,44 +25,7 @@ _SPARK_COOLDOWN = "spark:cd:" # spark:cd:{user_id}:{chat_id}
 _CHAIN_COUNT = "chain:cnt:"   # chain:cnt:{chat_id}:{min_id}:{max_id}
 _CHAIN_LAST = "chain:last:"   # chain:last:{chat_id}:{min_id}:{max_id}
 _CHAIN_COOLDOWN = "chain:cd:" # chain:cd:{chat_id}:{min_id}:{max_id}
-
-
-def _serialize_round(
-    rnd: BlackjackRound,
-    *,
-    message_id: int = 0,
-    expires_at: float = 0.0,
-) -> str:
-    """Сериализация BlackjackRound в JSON."""
-    data = {
-        "player_id": rnd.player_id,
-        "chat_id": rnd.chat_id,
-        "bet": rnd.bet,
-        "deck": [{"rank": c.rank, "suit": c.suit} for c in rnd.deck],
-        "player_hand": [{"rank": c.rank, "suit": c.suit} for c in rnd.player_hand],
-        "dealer_hand": [{"rank": c.rank, "suit": c.suit} for c in rnd.dealer_hand],
-        "finished": rnd.finished,
-        "result": rnd.result.value if rnd.result else None,
-        "message_id": message_id,
-        "expires_at": expires_at,
-    }
-    return json.dumps(data, ensure_ascii=False)
-
-
-def _deserialize_round(raw: str) -> BlackjackRound:
-    """Десериализация BlackjackRound из JSON."""
-    data = json.loads(raw)
-    rnd = BlackjackRound(
-        player_id=data["player_id"],
-        chat_id=data["chat_id"],
-        bet=data["bet"],
-        deck=[Card(rank=c["rank"], suit=c["suit"]) for c in data["deck"]],
-        player_hand=[Card(rank=c["rank"], suit=c["suit"]) for c in data["player_hand"]],
-        dealer_hand=[Card(rank=c["rank"], suit=c["suit"]) for c in data["dealer_hand"]],
-        finished=data["finished"],
-        result=GameResult(data["result"]) if data["result"] else None,
-    )
-    return rnd
+_GAMEBAN = "gameban:"         # gameban:{user_id}:{chat_id} → unix-timestamp окончания
 
 
 class RedisStore:
@@ -74,96 +33,6 @@ class RedisStore:
 
     def __init__(self, redis: aioredis.Redis) -> None:
         self._r = redis
-
-    # ── Blackjack: активные игры ─────────────────────────────────
-
-    async def bj_get(self, user_id: int, chat_id: int) -> BlackjackRound | None:
-        key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        raw = await self._r.get(key)
-        if raw is None:
-            return None
-        return _deserialize_round(raw)
-
-    async def bj_set(
-        self,
-        user_id: int,
-        chat_id: int,
-        rnd: BlackjackRound,
-        *,
-        message_id: int = 0,
-        timeout_seconds: int = 60,
-    ) -> None:
-        key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        expires_at = time.time() + timeout_seconds
-        raw = _serialize_round(rnd, message_id=message_id, expires_at=expires_at)
-        await self._r.set(key, raw, ex=timeout_seconds + 30)  # +30с буфер для cleanup
-
-    async def bj_set_message_id(self, user_id: int, chat_id: int, message_id: int) -> None:
-        """Обновить message_id игрового сообщения (вызывать после отправки)."""
-        key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        raw = await self._r.get(key)
-        if raw is None:
-            return
-        data = json.loads(raw)
-        data["message_id"] = message_id
-        ttl = await self._r.ttl(key)
-        await self._r.set(key, json.dumps(data), ex=max(ttl, 10))
-
-    async def bj_delete(self, user_id: int, chat_id: int) -> None:
-        key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        await self._r.delete(key)
-
-    async def bj_pop_expired(self) -> list[dict]:
-        """Найти и атомарно удалить все истёкшие игры. Возвращает их данные."""
-        now = time.time()
-        expired: list[dict] = []
-        async for key in self._r.scan_iter(f"{_BJ_GAME}*"):
-            raw = await self._r.get(key)
-            if raw is None:
-                continue
-            data = json.loads(raw)
-            if data.get("expires_at", 0.0) <= now:
-                # DEL возвращает кол-во удалённых ключей; 0 = уже удалён другим процессом
-                if await self._r.delete(key):
-                    expired.append(data)
-        return expired
-
-    async def bj_exists(self, user_id: int, chat_id: int) -> bool:
-        key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        return bool(await self._r.exists(key))
-
-    # ── Blackjack: лимит игр (fixed window) ─────────────────────
-
-    async def bj_check_start(
-        self,
-        user_id: int,
-        chat_id: int,
-        max_games: int,
-    ) -> tuple[bool, float | None]:
-        """Одним pipeline проверить активную игру и лимит окна.
-
-        Returns:
-            (has_active_game, wait_seconds)
-            wait_seconds = None если можно играть, иначе секунд до сброса окна.
-        """
-        game_key = f"{_BJ_GAME}{user_id}:{chat_id}"
-        hist_key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
-        pipe = self._r.pipeline()
-        pipe.exists(game_key)
-        pipe.get(hist_key)
-        pipe.ttl(hist_key)
-        game_exists, count_raw, ttl = await pipe.execute()
-        has_active = bool(game_exists)
-        if count_raw is None or int(count_raw) < max_games:
-            return has_active, None
-        return has_active, max(int(ttl), 0)
-
-    async def bj_window_record(self, user_id: int, chat_id: int, window_seconds: int) -> None:
-        """Записать игру. TTL устанавливается только при первой игре в окне."""
-        key = f"{_BJ_HISTORY}{user_id}:{chat_id}"
-        count = await self._r.incr(key)
-        if count == 1:
-            await self._r.expire(key, window_seconds)
 
     # ── Slots: дневной лимит ─────────────────────────────────────
 
@@ -257,13 +126,42 @@ class RedisStore:
         await pipe.execute()
 
     async def renew_game_limits(self, user_id: int, chat_id: int) -> None:
-        """Сбросить все игровые лимиты пользователя (слоты и блекджек)."""
+        """Сбросить все игровые лимиты пользователя (слоты)."""
         await self._r.delete(
             f"{_SLOTS_LAST}{user_id}:{chat_id}",
             f"{_SLOTS_DAILY}{user_id}:{chat_id}",
             f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}",
-            f"{_BJ_HISTORY}{user_id}:{chat_id}",
         )
+
+    # ── Самозапрет на игры ───────────────────────────────────────
+
+    async def gameban_set(self, user_id: int, chat_id: int, until_ts: float) -> None:
+        """Установить самозапрет на игры до until_ts (unix timestamp)."""
+        key = f"{_GAMEBAN}{user_id}:{chat_id}"
+        ttl = max(int(until_ts - time.time()) + 10, 60)
+        await self._r.set(key, str(until_ts), ex=ttl)
+
+    async def gameban_active(self, user_id: int, chat_id: int) -> bool:
+        """Проверить, активен ли самозапрет на игры."""
+        key = f"{_GAMEBAN}{user_id}:{chat_id}"
+        raw = await self._r.get(key)
+        if raw is None:
+            return False
+        return float(raw) > time.time()
+
+    async def gameban_get_until(self, user_id: int, chat_id: int) -> float | None:
+        """Получить unix timestamp окончания запрета. None если нет."""
+        key = f"{_GAMEBAN}{user_id}:{chat_id}"
+        raw = await self._r.get(key)
+        if raw is None:
+            return None
+        ts = float(raw)
+        return ts if ts > time.time() else None
+
+    async def gameban_delete(self, user_id: int, chat_id: int) -> None:
+        """Снять самозапрет досрочно."""
+        key = f"{_GAMEBAN}{user_id}:{chat_id}"
+        await self._r.delete(key)
 
     # ── Slots: прогрессивный джекпот ─────────────────────────────
 

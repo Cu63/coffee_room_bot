@@ -117,6 +117,26 @@ async def delete_loop(bot: Bot, redis: aioredis.Redis) -> None:
 # ── Вспомогательные ─────────────────────────────────────────────
 
 
+async def check_gameban(
+    store: Any,
+    user_id: int,
+    chat_id: int,
+    templates: dict[str, str],
+) -> str | None:
+    """Проверить самозапрет на игры. Возвращает текст ошибки или None."""
+    import time as _time
+
+    from bot.domain.bot_utils import format_duration
+
+    until = await store.gameban_get_until(user_id, chat_id)
+    if until is None:
+        return None
+    remaining = int(until - _time.time())
+    if remaining <= 0:
+        return None
+    return templates["selfban_blocked"].format(remaining=format_duration(remaining))
+
+
 async def safe_callback_answer(
     callback: CallbackQuery, text: str = "", show_alert: bool = False
 ) -> None:

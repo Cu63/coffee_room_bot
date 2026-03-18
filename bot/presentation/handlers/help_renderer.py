@@ -91,8 +91,6 @@ class HelpRenderer:
             max_bet=f"{bjc.max_bet} {p.pluralize(bjc.max_bet)}",
             bj_min=bjc.min_bet,
             bj_max=bjc.max_bet,
-            bj_max_games=bjc.max_games_per_window,
-            bj_window=bjc.window_hours,
             mute_min=mc.min_minutes,
             mute_max=mc.max_minutes,
             slots_min=sc.min_bet,
@@ -117,6 +115,8 @@ class HelpRenderer:
             ttt_min=config.tictactoe.min_bet,
             ttt_max=config.tictactoe.max_bet,
             buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
+            selfban_min=config.selfban.min_minutes,
+            selfban_max=config.selfban.max_minutes,
         )
 
         def _fmt(tmpl: str) -> str:
@@ -171,15 +171,8 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(rows) + "\n\n" + s["clear_note"]
 
         if section == "bj":
-            lines = [
-                s["header"],
-                "",
-                _fmt(s["bet_row"]),
-            ]
-            lines += s.get("rules", [])
-            lines += [""]
-            lines += s.get("commands", [])
-            return "\n".join(lines)
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "wordgame":
             rows = [_fmt(r) for r in s.get("rows", [])]

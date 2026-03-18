@@ -18,7 +18,7 @@ from bot.application.score_service import ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, check_gameban, reply_and_delete, schedule_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="slots")
@@ -77,6 +77,12 @@ async def cmd_slots(
     formatter: FromDishka[MessageFormatter],
 ) -> None:
     if message.from_user is None:
+        return
+
+    # Проверка самозапрета на игры
+    ban_msg = await check_gameban(store, message.from_user.id, message.chat.id, formatter._t)
+    if ban_msg:
+        await reply_and_delete(message, ban_msg)
         return
 
     user_id = message.from_user.id

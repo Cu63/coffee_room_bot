@@ -118,9 +118,6 @@ class BlackjackConfig(_BaseConfig):
     enabled: bool = True
     min_bet: int = 1
     max_bet: int = 50
-    max_games_per_window: int = 5
-    window_hours: int = 1
-    game_timeout_seconds: int = 60
 
 
 class DiceConfig(_BaseConfig):
@@ -247,6 +244,12 @@ class IdeaConfig(_BaseConfig):
     vote_ttl_hours: int = 72    # сколько часов принимать голоса
 
 
+class SelfbanConfig(_BaseConfig):
+    """Настройки /selfban — самозапрет на игры."""
+    min_minutes: int = 30             # минимальная длительность
+    max_minutes: int = 10080          # максимальная длительность (7 дней)
+
+
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
     recipients: list[int] = []
@@ -336,6 +339,7 @@ class AppConfig(_BaseConfig):
     tictactoe: TicTacToeConfig = TicTacToeConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
+    selfban: SelfbanConfig = SelfbanConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
     analyze: AnalyzeConfig = AnalyzeConfig()
