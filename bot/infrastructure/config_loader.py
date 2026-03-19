@@ -224,6 +224,17 @@ class RwordgameConfig(_BaseConfig):
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
 
+class LotConfig(_BaseConfig):
+    """Настройки /lot — аукцион."""
+    enabled: bool = True
+    min_duration_sec: int = 60         # минимальная длительность (1 минута)
+    max_duration_sec: int = 86400      # максимальная длительность (24 часа)
+    min_start_price: int = 0           # минимальная стартовая цена
+    max_start_price: int = 100_000     # максимальная стартовая цена
+    bid_steps: list[int] = [5, 10, 25, 50, 100]  # шаги ставок
+    delete_delay: int = 120            # секунд до удаления итога
+
+
 class AnagramConfig(_BaseConfig):
     """Настройки /anagram — угадай слово по перемешанным буквам."""
     enabled: bool = True
@@ -353,6 +364,7 @@ class AppConfig(_BaseConfig):
     wordgame: WordgameConfig = WordgameConfig()
     rwordgame: RwordgameConfig = RwordgameConfig()
     tictactoe: TicTacToeConfig = TicTacToeConfig()
+    lot: LotConfig = LotConfig()
     anagram: AnagramConfig = AnagramConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()

@@ -147,6 +147,15 @@ tictactoe:
   min_bet: 1
   max_bet: 100
 
+lot:
+  enabled: true
+  min_duration_sec: 60        # минимальная длительность (секунды)
+  max_duration_sec: 86400     # максимальная длительность (24 часа)
+  min_start_price: 0          # минимальная стартовая цена
+  max_start_price: 100000     # максимальная стартовая цена
+  bid_steps: [5, 10, 25, 50, 100]  # кнопки шагов ставки
+  delete_delay: 120           # секунд до удаления итогового сообщения
+
 anagram:
   enabled: true
   min_bet: 5                    # минимальная ставка (/anagram <ставка>)

@@ -41,7 +41,9 @@ from bot.presentation.handlers.wordgame import router as wordgame_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.handlers.tictactoe import router as ttt_router
 from bot.infrastructure.anagram_loop import anagram_expire_loop, anagram_auto_loop
+from bot.infrastructure.lot_loop import lot_loop
 from bot.presentation.handlers.anagram import router as anagram_router
+from bot.presentation.handlers.lot import router as lot_router
 from bot.presentation.handlers.duel import router as duel_router
 from bot.presentation.handlers.buyop import router as buyop_router
 from bot.presentation.handlers.idea import router as idea_router
@@ -330,6 +332,8 @@ async def main() -> None:
     dp.include_router(duel_router)
     if config.anagram.enabled:
         dp.include_router(anagram_router)
+    if config.lot.enabled:
+        dp.include_router(lot_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
     dp.include_router(selfban_router)
@@ -373,6 +377,7 @@ async def main() -> None:
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
     bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
     duel_cleanup_task = asyncio.create_task(duel_cleanup_loop(container, bot))
+    lot_task = asyncio.create_task(lot_loop(bot, container))
     anagram_expire_task = asyncio.create_task(anagram_expire_loop(bot, container))
     anagram_auto_task = asyncio.create_task(anagram_auto_loop(bot, container))
     wordgame_task = asyncio.create_task(wordgame_loop(bot, container))
@@ -396,6 +401,7 @@ async def main() -> None:
         mute_roulette_task.cancel()
         bj_cleanup_task.cancel()
         duel_cleanup_task.cancel()
+        lot_task.cancel()
         anagram_expire_task.cancel()
         anagram_auto_task.cancel()
         wordgame_task.cancel()
