@@ -255,7 +255,7 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
             logger.exception("Duel cleanup loop failed")
 
 
-
+async def main() -> None:
     config = load_config()
 
     # ── Логирование ──────────────────────────────────────────────
