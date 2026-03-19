@@ -116,7 +116,7 @@ async def cmd_anagram(
         return
 
     # Проверка кулдауна между играми /anagram
-    cd_remaining = await store.anagram_cooldown_active(message.from_user.id, message.chat.id)
+    cd_remaining = await store.anagram_cooldown_active(message.chat.id)
     if cd_remaining is not None:
         mins = cd_remaining // 60
         secs = cd_remaining % 60
@@ -242,7 +242,7 @@ async def cmd_anagram(
     await pipe.execute()
 
     # Устанавливаем кулдаун между играми /anagram
-    await store.anagram_cooldown_set(user_id, chat_id, cfg.cooldown_minutes * 60)
+    await store.anagram_cooldown_set(chat_id, cfg.cooldown_minutes * 60)
 
     try:
         await message.bot.pin_chat_message(

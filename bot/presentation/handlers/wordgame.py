@@ -276,7 +276,7 @@ async def cmd_random_wordgame(
     rwg = config.rwordgame
 
     # Проверка кулдауна между играми /rword
-    cd_remaining = await store.wg_rword_cooldown_active(message.from_user.id, message.chat.id)
+    cd_remaining = await store.wg_rword_cooldown_active(message.chat.id)
     if cd_remaining is not None:
         mins = cd_remaining // 60
         secs = cd_remaining % 60
@@ -365,7 +365,7 @@ async def cmd_random_wordgame(
     await store.wg_rate_record_rword(user_id, window_secs)
 
     # Устанавливаем кулдаун между играми /rword
-    await store.wg_rword_cooldown_set(user_id, chat_id, rwg.cooldown_minutes * 60)
+    await store.wg_rword_cooldown_set(chat_id, rwg.cooldown_minutes * 60)
 
     # Создаём объект игры с временным message_id=0, потом обновим
     game = WordGame(
