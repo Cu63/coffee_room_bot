@@ -17,6 +17,7 @@ import time
 from datetime import datetime
 
 from aiogram import Bot, F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
@@ -556,8 +557,8 @@ async def msg_reply_guess(
     # Ищем игру по message_id сообщения, на которое ответили
     raw = await store.wg_game_by_message_id(chat_id, replied.message_id)
     if raw is None:
-        # Это не игровое сообщение — игнорируем
-        return
+        # Не наша игра — передаём следующему хендлеру (например, анаграмме)
+        raise SkipHandler
 
     game = _raw_to_game(raw)
     if game.finished or game.is_expired:

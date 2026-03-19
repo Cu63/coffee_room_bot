@@ -148,6 +148,26 @@ tictactoe:
   min_bet: 1
   max_bet: 100
 
+lot:
+  enabled: true
+  min_duration_sec: 60        # минимальная длительность (секунды)
+  max_duration_sec: 86400     # максимальная длительность (24 часа)
+  min_start_price: 0          # минимальная стартовая цена
+  max_start_price: 100000     # максимальная стартовая цена
+  bid_steps: [5, 10, 25, 50, 100]  # кнопки шагов ставки
+  delete_delay: 120           # секунд до удаления итогового сообщения
+
+anagram:
+  enabled: true
+  min_bet: 1                    # минимальная ставка (/anagram <ставка>)
+  max_bet: 10                  # максимальная ставка
+  min_word_length: 7            # минимальная длина загадываемого слова
+  max_word_length: 20           # максимальная длина загадываемого слова
+  attempt_cost: 5               # баллов за неверную попытку (0 = бесплатно)
+  answer_timeout_seconds: 300   # секунд на угадывание (5 минут)
+  games_per_hour: 2.0           # авто-игры в час (0 = авто отключено)
+  auto_bet: 20                  # приз в авто-играх (из баланса бота)
+
 buyop:
   cost: 1000                    # стоимость /buyop (титул без прав)
   tag: ""                       # кастомный тег (пусто = без тега)
@@ -172,6 +192,9 @@ analyze:
   max_messages: 500              # максимум N для /analyze
   wir_default_messages: 300      # N по умолчанию для /wir
   wir_max_messages: 1000         # максимум N для /wir
+  # ── Лимиты ──────────────────────────────────────────────────────
+  daily_input_token_limit: 50000  # max input-токенов на юзера/день (0 = без лимита)
+  max_history_hours: 32           # максимальная глубина истории (часы)
 
 daily_summary:
   enabled: true

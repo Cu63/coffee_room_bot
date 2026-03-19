@@ -11,7 +11,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.analyze_service import AnalyzeService
+from bot.application.analyze_service import AnalyzeRateLimitExceeded, AnalyzeService
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
@@ -25,23 +25,16 @@ _USERNAME_RE = re.compile(r"@([\w]+)")
 _INT_RE = re.compile(r"^\d+$")
 
 # Форматы времени: 30m, 2h, 1d, 1h30m, 90m, ...
-# Поддерживаемые суффиксы: m/мин, h/ч, d/д
 _DURATION_RE = re.compile(
     r"^(?:(\d+)\s*(?:d|д|дн|days?))?"
     r"\s*(?:(\d+)\s*(?:h|ч|час?|hours?))?"
     r"\s*(?:(\d+)\s*(?:m|м|мин|min|minutes?))?$",
     re.IGNORECASE,
 )
-# Простой одиночный формат: 30m / 2h / 1d
 _SIMPLE_DURATION_RE = re.compile(r"^(\d+)\s*(m|м|мин|min|h|ч|час|d|д|дн)$", re.IGNORECASE)
 
 
 def _parse_duration(token: str) -> timedelta | None:
-    """Парсит строку вида '30m', '2h', '1d', '1h30m' в timedelta.
-
-    Возвращает None если токен не является временным интервалом.
-    """
-    # Простой случай: число + суффикс без пробелов
     m = _SIMPLE_DURATION_RE.match(token)
     if m:
         n, unit = int(m.group(1)), m.group(2).lower()
@@ -52,7 +45,6 @@ def _parse_duration(token: str) -> timedelta | None:
         if unit in ("d", "д", "дн"):
             return timedelta(days=n)
 
-    # Составной: 1h30m, 2d12h и т.п.
     m = _DURATION_RE.match(token)
     if m and any(m.groups()):
         days = int(m.group(1) or 0)
@@ -65,16 +57,6 @@ def _parse_duration(token: str) -> timedelta | None:
 
 
 def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
-    """Разобрать аргументы /analyze и /wir.
-
-    Формат: [N | duration] [@user1 @user2 ...]
-    N — количество сообщений (число)
-    duration — временной интервал (30m, 2h, 1d, ...)
-
-    Возвращает (limit, since_or_None, usernames_без_@).
-    Если задан интервал — limit большой (будем фильтровать по since),
-    если задано N — since=None.
-    """
     if not args:
         return 0, None, []
 
@@ -87,11 +69,10 @@ def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
         if token.startswith("@"):
             usernames.append(token.lstrip("@").lower())
         elif limit == 0 and since is None:
-            # Пробуем сначала как временной интервал
             td = _parse_duration(token)
             if td is not None:
                 since = datetime.now(TZ_MSK) - td
-                limit = 10_000  # при фильтре по времени берём все попавшие
+                limit = 10_000
             elif _INT_RE.match(token):
                 limit = int(token)
 
@@ -134,6 +115,24 @@ async def _send_parts(message: Message, thinking: Message, text: str) -> None:
                 await message.answer(stripped)
 
 
+def _rate_limit_text(used: int, limit: int) -> str:
+    """Сообщение о превышении лимита токенов."""
+    from datetime import date
+    tomorrow = "завтра в 00:00 МСК"
+    return (
+        f"⛔ Дневной лимит токенов исчерпан.\n\n"
+        f"Использовано: <b>{used:,}</b> / {limit:,} входящих токенов.\n"
+        f"Лимит сбросится <b>{tomorrow}</b>."
+    )
+
+
+def _depth_limit_text(requested_hours: float, max_hours: int) -> str:
+    return (
+        f"❌ Слишком большой диапазон анализа: <b>{requested_hours:.0f} ч</b>.\n"
+        f"Максимум — <b>{max_hours} ч</b>."
+    )
+
+
 @router.message(Command("analyze"))
 @inject
 async def cmd_analyze(
@@ -143,20 +142,31 @@ async def cmd_analyze(
     user_repo: FromDishka[IUserRepository],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/analyze [N | duration] [@user1 @user2 ...]
+    """/analyze [N | duration] [@user1 @user2 ...]"""
+    if message.from_user is None:
+        return
 
-    N — количество последних сообщений (макс. analyze.max_messages)
-    duration — временной интервал: 30m, 2h, 1d, 1h30m и т.п.
-    @users — анализировать только этих пользователей
-    """
+    user_id = message.from_user.id
+    username = message.from_user.username
     limit, since, usernames = _parse_args(command.args)
+
+    # ── Проверка глубины истории ─────────────────────────────────────────
+    max_hours = config.analyze.max_history_hours
+    if since is not None:
+        age_hours = (datetime.now(TZ_MSK) - since).total_seconds() / 3600
+        if age_hours > max_hours:
+            await message.reply(
+                _depth_limit_text(age_hours, max_hours),
+                parse_mode=ParseMode.HTML,
+            )
+            return
 
     if limit == 0 and since is None:
         limit = config.analyze.max_messages
 
     limit = min(limit, config.analyze.max_messages)
 
-    # Резолвим юзернеймы → user_id
+    # ── Резолвим юзернеймы → user_id ────────────────────────────────────
     user_ids: list[int] | None = None
     if usernames:
         resolved: list[int] = []
@@ -183,10 +193,18 @@ async def cmd_analyze(
     try:
         result = await analyze_service.analyze(
             chat_id=message.chat.id,
+            user_id=user_id,
+            username=username,
             n=limit,
             user_ids=user_ids,
             since=since,
         )
+    except AnalyzeRateLimitExceeded as e:
+        await thinking.edit_text(
+            _rate_limit_text(e.used, e.limit),
+            parse_mode=ParseMode.HTML,
+        )
+        return
     except Exception:
         logger.exception("analyze: LLM request failed")
         await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")
@@ -203,13 +221,24 @@ async def cmd_wir(
     analyze_service: FromDishka[AnalyzeService],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/wir [N | duration] — Who Is Right.
+    """/wir [N | duration] — Who Is Right."""
+    if message.from_user is None:
+        return
 
-    N — количество сообщений (макс. analyze.wir_max_messages)
-    duration — временной интервал: 30m, 2h, 1d и т.п.
-    По умолчанию — analyze.wir_default_messages сообщений.
-    """
+    user_id = message.from_user.id
+    username = message.from_user.username
     limit, since, _ = _parse_args(command.args)
+
+    # ── Проверка глубины истории ─────────────────────────────────────────
+    max_hours = config.analyze.max_history_hours
+    if since is not None:
+        age_hours = (datetime.now(TZ_MSK) - since).total_seconds() / 3600
+        if age_hours > max_hours:
+            await message.reply(
+                _depth_limit_text(age_hours, max_hours),
+                parse_mode=ParseMode.HTML,
+            )
+            return
 
     if limit == 0 and since is None:
         limit = config.analyze.wir_default_messages
@@ -217,16 +246,24 @@ async def cmd_wir(
     if since is None:
         limit = min(limit, config.analyze.wir_max_messages)
     else:
-        limit = 10_000  # при фильтре по времени берём все попавшие
+        limit = 10_000
 
     thinking = await message.reply("⚖️ Разбираю ситуацию...")
 
     try:
         result = await analyze_service.wir(
             chat_id=message.chat.id,
+            user_id=user_id,
+            username=username,
             n=limit,
             since=since,
         )
+    except AnalyzeRateLimitExceeded as e:
+        await thinking.edit_text(
+            _rate_limit_text(e.used, e.limit),
+            parse_mode=ParseMode.HTML,
+        )
+        return
     except Exception:
         logger.exception("wir: LLM request failed")
         await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")

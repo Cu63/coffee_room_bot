@@ -225,6 +225,30 @@ class RwordgameConfig(_BaseConfig):
     game_window_hours: int = 2         # окно лимита в часах
     cooldown_minutes: int = 15         # задержка между играми /rword
 
+class LotConfig(_BaseConfig):
+    """Настройки /lot — аукцион."""
+    enabled: bool = True
+    min_duration_sec: int = 60         # минимальная длительность (1 минута)
+    max_duration_sec: int = 86400      # максимальная длительность (24 часа)
+    min_start_price: int = 0           # минимальная стартовая цена
+    max_start_price: int = 100_000     # максимальная стартовая цена
+    bid_steps: list[int] = [5, 10, 25, 50, 100]  # шаги ставок
+    delete_delay: int = 120            # секунд до удаления итога
+
+
+class AnagramConfig(_BaseConfig):
+    """Настройки /anagram — угадай слово по перемешанным буквам."""
+    enabled: bool = True
+    min_bet: int = 5              # минимальная ставка (приз из баланса бота)
+    max_bet: int = 100            # максимальная ставка
+    min_word_length: int = 4      # минимальная длина загадываемого слова
+    max_word_length: int = 10     # максимальная длина загадываемого слова
+    attempt_cost: int = 1         # стоимость неверной попытки для игрока
+    answer_timeout_seconds: int = 300  # секунд на угадывание (5 минут)
+    games_per_hour: float = 2.0   # частота авто-игр в час (0 = авто отключено)
+    auto_bet: int = 20            # приз для авто-опубликованных игр
+
+
 class TicTacToeConfig(_BaseConfig):
     """Настройки /ttt — исчезающие крестики-нолики."""
     enabled: bool = True
@@ -314,6 +338,9 @@ class AnalyzeConfig(_BaseConfig):
     max_messages: int = 500           # максимум N для /analyze
     wir_default_messages: int = 300   # N по умолчанию для /wir
     wir_max_messages: int = 1000      # максимум N для /wir
+    # ── Лимиты ───────────────────────────────────────────────────
+    daily_input_token_limit: int = 50_000  # max input-токенов на юзера в сутки (0 = без лимита)
+    max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
 class AppConfig(_BaseConfig):
@@ -338,6 +365,8 @@ class AppConfig(_BaseConfig):
     wordgame: WordgameConfig = WordgameConfig()
     rwordgame: RwordgameConfig = RwordgameConfig()
     tictactoe: TicTacToeConfig = TicTacToeConfig()
+    lot: LotConfig = LotConfig()
+    anagram: AnagramConfig = AnagramConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
     selfban: SelfbanConfig = SelfbanConfig()

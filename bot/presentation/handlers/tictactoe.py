@@ -464,160 +464,183 @@ async def cb_ttt_move(
     user_id = cb.from_user.id
     key = _ttt_key(chat_id, game_id)
 
-    raw = await store._r.get(key)
-    if raw is None:
-        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+    # ── Баг 1: TOCTOU (двойное нажатие / ретрай сети) ─────────────────
+    # Берём per-game mutex: SET NX EX 5.
+    # Только один coroutine за раз проходит через критическую секцию
+    # GET → mutate → SET/DELETE. Остальные получают "не твой ход" и
+    # возвращаются без каких-либо изменений состояния.
+    lock_key = f"ttt:lock:{chat_id}:{game_id}"
+    acquired = await store._r.set(lock_key, "1", nx=True, ex=5)
+    if not acquired:
+        # Другой запрос уже обрабатывает этот ход — тихо игнорируем
+        await safe_callback_answer(cb)
         return
 
-    data = json.loads(raw)
+    try:
+        raw = await store._r.get(key)
+        if raw is None:
+            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+            return
 
-    if data["state"] != "playing":
-        await safe_callback_answer(cb, "Игра не активна.", show_alert=True)
-        return
+        data = json.loads(raw)
 
-    # Определяем, кто ходит
-    turn = data["turn"]
-    if turn == "x" and user_id != data["player_x"]:
-        if user_id == data["player_o"]:
-            await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
-        else:
-            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
-        return
-    if turn == "o" and user_id != data["player_o"]:
-        if user_id == data["player_x"]:
-            await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
-        else:
-            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
-        return
+        if data["state"] != "playing":
+            await safe_callback_answer(cb, "Игра не активна.", show_alert=True)
+            return
 
-    board = data["board"]
-    history_x = data["history_x"]
-    history_o = data["history_o"]
+        # Определяем, кто ходит
+        turn = data["turn"]
+        if turn == "x" and user_id != data["player_x"]:
+            if user_id == data["player_o"]:
+                await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
+            else:
+                await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
+            return
+        if turn == "o" and user_id != data["player_o"]:
+            if user_id == data["player_x"]:
+                await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
+            else:
+                await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
+            return
 
-    # Проверяем, что клетка свободна
-    if board[cell_idx] != 0:
-        await safe_callback_answer(cb, "Клетка занята!", show_alert=False)
-        return
+        board = data["board"]
+        history_x = data["history_x"]
+        history_o = data["history_o"]
 
-    # Ставим фигуру
-    piece = 1 if turn == "x" else 2
-    history = history_x if turn == "x" else history_o
+        # Проверяем, что клетка свободна
+        if board[cell_idx] != 0:
+            await safe_callback_answer(cb, "Клетка занята!", show_alert=False)
+            return
 
-    # Если у игрока уже MAX_PIECES, убираем самую старую
-    if len(history) >= _MAX_PIECES:
-        oldest = history.pop(0)
-        board[oldest] = 0
+        # Ставим фигуру
+        piece = 1 if turn == "x" else 2
+        history = history_x if turn == "x" else history_o
 
-    board[cell_idx] = piece
-    history.append(cell_idx)
+        # Если у игрока уже MAX_PIECES, убираем самую старую
+        if len(history) >= _MAX_PIECES:
+            oldest = history.pop(0)
+            board[oldest] = 0
 
-    data["board"] = board
-    data["history_x"] = history_x
-    data["history_o"] = history_o
+        board[cell_idx] = piece
+        history.append(cell_idx)
 
-    # Проверяем победу
-    winner = _check_winner(board)
-    draw = _is_draw(board, history_x, history_o) if winner == 0 else False
+        data["board"] = board
+        data["history_x"] = history_x
+        data["history_o"] = history_o
 
-    p = pluralizer
-    x_display = user_link(
-        data["player_x_username"] or None, data["player_x_name"], data["player_x"],
-    )
-    o_display = user_link(
-        data["player_o_username"] or None, data["player_o_name"], data["player_o"],
-    )
-    bet = data["bet"]
-    sw_bet = p.pluralize(bet)
+        # Проверяем победу
+        winner = _check_winner(board)
+        draw = _is_draw(board, history_x, history_o) if winner == 0 else False
 
-    if winner or draw:
-        # Игра окончена
-        data["state"] = "finished"
-        await store._r.delete(key)
+        p = pluralizer
+        x_display = user_link(
+            data["player_x_username"] or None, data["player_x_name"], data["player_x"],
+        )
+        o_display = user_link(
+            data["player_o_username"] or None, data["player_o_name"], data["player_o"],
+        )
+        bet = data["bet"]
+        sw_bet = p.pluralize(bet)
 
-        total_pot = bet * 2
-        board_text = _render_board(board, history_x, history_o, turn)
+        if winner or draw:
+            # Игра окончена.
+            # ── Баг 2: двойная выплата ────────────────────────────────
+            # Атомарно удаляем ключ игры. Если delete вернул 0 — другой
+            # запрос уже завершил игру и сделал выплату, выходим.
+            data["state"] = "finished"
+            deleted = await store._r.delete(key)
+            if not deleted:
+                logger.warning("ttt: game %s already finished by concurrent request", game_id)
+                await safe_callback_answer(cb)
+                return
 
-        if draw:
-            # Возврат ставок
-            await score_repo.add_delta(data["player_x"], chat_id, bet)
-            await score_repo.add_delta(data["player_o"], chat_id, bet)
+            total_pot = bet * 2
+            board_text = _render_board(board, history_x, history_o, turn)
 
-            text = formatter._t["ttt_draw"].format(
-                player_x=x_display,
-                player_o=o_display,
-                board=board_text,
-                bet=bet,
-                score_word=sw_bet,
-            )
-        else:
-            winner_id = data["player_x"] if winner == 1 else data["player_o"]
-            loser_id = data["player_o"] if winner == 1 else data["player_x"]
-            winner_display = x_display if winner == 1 else o_display
-            winner_symbol = _CELL_X if winner == 1 else _CELL_O
+            if draw:
+                # Возврат ставок
+                await score_repo.add_delta(data["player_x"], chat_id, bet)
+                await score_repo.add_delta(data["player_o"], chat_id, bet)
 
-            # Выплата победителю
-            await score_repo.add_delta(winner_id, chat_id, total_pot)
+                text = formatter._t["ttt_draw"].format(
+                    player_x=x_display,
+                    player_o=o_display,
+                    board=board_text,
+                    bet=bet,
+                    score_word=sw_bet,
+                )
+            else:
+                winner_id = data["player_x"] if winner == 1 else data["player_o"]
+                winner_display = x_display if winner == 1 else o_display
+                winner_symbol = _CELL_X if winner == 1 else _CELL_O
 
-            # Записываем победу
-            await stats_repo.add_win(winner_id, chat_id, "ttt")
-            await lb_repo.add_game_win(winner_id, chat_id, "ttt", now_msk().date())
+                # Выплата победителю
+                await score_repo.add_delta(winner_id, chat_id, total_pot)
 
-            sw_pot = p.pluralize(total_pot)
-            text = formatter._t["ttt_win"].format(
-                player_x=x_display,
-                player_o=o_display,
-                board=board_text,
-                winner=winner_display,
-                winner_symbol=winner_symbol,
-                prize=total_pot,
-                score_word=sw_pot,
-            )
+                # Записываем победу
+                await stats_repo.add_win(winner_id, chat_id, "ttt")
+                await lb_repo.add_game_win(winner_id, chat_id, "ttt", now_msk().date())
+
+                sw_pot = p.pluralize(total_pot)
+                text = formatter._t["ttt_win"].format(
+                    player_x=x_display,
+                    player_o=o_display,
+                    board=board_text,
+                    winner=winner_display,
+                    winner_symbol=winner_symbol,
+                    prize=total_pot,
+                    score_word=sw_pot,
+                )
+
+            try:
+                await cb.message.edit_text(
+                    text,
+                    parse_mode=ParseMode.HTML,
+                    link_preview_options=NO_PREVIEW,
+                    reply_markup=None,
+                )
+                if cb.message.bot:
+                    schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+            except Exception:
+                pass
+
+            await safe_callback_answer(cb)
+            return
+
+        # Переключаем ход
+        next_turn = "o" if turn == "x" else "x"
+        data["turn"] = next_turn
+        await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
+
+        turn_player = x_display if next_turn == "x" else o_display
+        turn_symbol = _CELL_X if next_turn == "x" else _CELL_O
+
+        board_text = _render_board(board, history_x, history_o, next_turn)
+        text = formatter._t["ttt_turn"].format(
+            player_x=x_display,
+            player_o=o_display,
+            bet=bet,
+            score_word=sw_bet,
+            board=board_text,
+            turn=turn_player,
+            turn_symbol=turn_symbol,
+        )
 
         try:
             await cb.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,
                 link_preview_options=NO_PREVIEW,
-                reply_markup=None,
+                reply_markup=_game_kb(game_id, board),
             )
-            if cb.message.bot:
-                schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
         except Exception:
             pass
 
         await safe_callback_answer(cb)
-        return
 
-    # Переключаем ход
-    next_turn = "o" if turn == "x" else "x"
-    data["turn"] = next_turn
-    await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
-
-    turn_player = x_display if next_turn == "x" else o_display
-    turn_symbol = _CELL_X if next_turn == "x" else _CELL_O
-
-    board_text = _render_board(board, history_x, history_o, next_turn)
-    text = formatter._t["ttt_turn"].format(
-        player_x=x_display,
-        player_o=o_display,
-        bet=bet,
-        score_word=sw_bet,
-        board=board_text,
-        turn=turn_player,
-        turn_symbol=turn_symbol,
-    )
-
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_game_kb(game_id, board),
-        )
-    except Exception:
-        pass
-
-    await safe_callback_answer(cb)
+    finally:
+        # Всегда освобождаем lock — даже при исключении
+        await store._r.delete(lock_key)
 
 
 # ─── Callback: noop (занятая клетка) ─────────────────────────────────
