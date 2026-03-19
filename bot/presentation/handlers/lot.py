@@ -314,6 +314,8 @@ async def cb_lot_bid(
             return
 
         new_price = data["current_price"] + step
+        prev_leader_id = data["leader_id"]
+        prev_price = data["current_price"]
 
         # Upsert участника
         await user_repo.upsert(User(
@@ -322,28 +324,23 @@ async def cb_lot_bid(
             full_name=cb.from_user.full_name,
         ))
 
-        # Проверяем баланс
+        # Проверяем баланс с учётом возврата своей же ставки:
+        # если пользователь уже лидер, его баланс занижен на prev_price —
+        # учитываем это, чтобы не блокировать повышение своей ставки.
         bal = await score_service.get_score(user_id, chat_id)
-        if bal.value < new_price:
+        refund_to_self = prev_price if prev_leader_id == user_id else 0
+        effective_balance = bal.value + refund_to_self
+        if effective_balance < new_price:
             sw = p.pluralize(new_price)
             await cb.answer(
-                f"❌ Недостаточно баллов. Нужно {new_price} {sw}, у тебя {bal.value}.",
+                f"❌ Недостаточно баллов. Нужно {new_price} {sw}, у тебя {effective_balance}.",
                 show_alert=True,
             )
             return
 
-        prev_leader_id = data["leader_id"]
-        prev_price = data["current_price"]
-
-        # Возвращаем деньги предыдущему лидеру
-        if prev_leader_id and prev_leader_id != user_id:
-            await score_repo.add_delta(prev_leader_id, chat_id, prev_price)
-
-        # Если ставящий уже лидер — возвращаем его предыдущую ставку
-        if prev_leader_id == user_id:
-            await score_repo.add_delta(user_id, chat_id, prev_price)
-
-        # Списываем новую ставку
+        # Порядок важен: сначала СПИСЫВАЕМ с нового участника, потом
+        # ВОЗВРАЩАЕМ предыдущему лидеру. Если spend упадёт — никто ничего
+        # лишнего не получит и состояние лота останется консистентным.
         result = await score_service.spend_score(
             actor_id=user_id,
             target_id=user_id,
@@ -351,14 +348,19 @@ async def cb_lot_bid(
             cost=new_price,
         )
         if not result.success:
-            # Возможна гонка — вернуть ранее возвращённые деньги нельзя атомарно,
-            # но lock минимизирует это. Просто сообщаем об ошибке.
             sw = p.pluralize(new_price)
             await cb.answer(
                 f"❌ Недостаточно баллов. Нужно {new_price} {sw}.",
                 show_alert=True,
             )
             return
+
+        # Только после успешного списания возвращаем деньги предыдущему лидеру
+        if prev_leader_id and prev_leader_id != user_id:
+            await score_repo.add_delta(prev_leader_id, chat_id, prev_price)
+        elif prev_leader_id == user_id:
+            # Пользователь повышает свою же ставку — возвращаем старую
+            await score_repo.add_delta(user_id, chat_id, prev_price)
 
         display = user_link(
             cb.from_user.username,
