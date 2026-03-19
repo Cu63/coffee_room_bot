@@ -150,9 +150,9 @@ tictactoe:
 anagram:
   enabled: true
   min_bet: 5                    # минимальная ставка (/anagram <ставка>)
-  max_bet: 10                  # максимальная ставка
-  min_word_length: 6            # минимальная длина загадываемого слова
-  max_word_length: 16           # максимальная длина загадываемого слова
+  max_bet: 200                  # максимальная ставка
+  min_word_length: 4            # минимальная длина загадываемого слова
+  max_word_length: 10           # максимальная длина загадываемого слова
   attempt_cost: 1               # баллов за неверную попытку (0 = бесплатно)
   answer_timeout_seconds: 300   # секунд на угадывание (5 минут)
   games_per_hour: 2.0           # авто-игры в час (0 = авто отключено)
@@ -182,6 +182,9 @@ analyze:
   max_messages: 500              # максимум N для /analyze
   wir_default_messages: 300      # N по умолчанию для /wir
   wir_max_messages: 1000         # максимум N для /wir
+  # ── Лимиты ──────────────────────────────────────────────────────
+  daily_input_token_limit: 50000  # max input-токенов на юзера/день (0 = без лимита)
+  max_history_hours: 32           # максимальная глубина истории (часы)
 
 daily_summary:
   enabled: true

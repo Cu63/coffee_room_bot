@@ -326,6 +326,9 @@ class AnalyzeConfig(_BaseConfig):
     max_messages: int = 500           # максимум N для /analyze
     wir_default_messages: int = 300   # N по умолчанию для /wir
     wir_max_messages: int = 1000      # максимум N для /wir
+    # ── Лимиты ───────────────────────────────────────────────────
+    daily_input_token_limit: int = 50_000  # max input-токенов на юзера в сутки (0 = без лимита)
+    max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
 class AppConfig(_BaseConfig):
