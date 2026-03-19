@@ -40,6 +40,7 @@ from bot.presentation.handlers.renew import router as renew_router
 from bot.presentation.handlers.wordgame import router as wordgame_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.handlers.tictactoe import router as ttt_router
+from bot.presentation.handlers.duel import router as duel_router
 from bot.presentation.handlers.buyop import router as buyop_router
 from bot.presentation.handlers.idea import router as idea_router
 from bot.presentation.handlers.selfban import router as selfban_router
@@ -197,7 +198,62 @@ async def bj_cleanup_loop(container, bot: Bot) -> None:
             logger.exception("BJ cleanup loop failed")
 
 
-async def main() -> None:
+async def duel_cleanup_loop(container, bot: Bot) -> None:
+    """Фоновая задача: рефундит ставки за истёкшие дуэльные приглашения.
+
+    Сканирует ключи duel:invite:* с полем expires_at. Если время вышло —
+    возвращает ставку создателю и редактирует сообщение.
+    """
+    import json as _json
+    import time as _time
+
+    from bot.application.interfaces.score_repository import IScoreRepository
+    from bot.infrastructure.redis_store import RedisStore
+
+    while True:
+        await asyncio.sleep(15)
+        try:
+            async with container() as scope:
+                store = await scope.get(RedisStore)
+                score_repo = await scope.get(IScoreRepository)
+                now = _time.time()
+                async for key in store._r.scan_iter("duel:invite:*"):
+                    raw = await store._r.get(key)
+                    if raw is None:
+                        continue
+                    data = _json.loads(raw)
+                    if data.get("expires_at", 0.0) > now:
+                        continue
+                    # Атомарно удаляем
+                    if not await store._r.delete(key):
+                        continue
+
+                    bet = data.get("bet", 0)
+                    chat_id = data.get("chat_id", 0)
+                    challenger_id = data.get("challenger_id", 0)
+                    message_id = data.get("message_id", 0)
+
+                    if bet > 0 and challenger_id:
+                        await score_repo.add_delta(challenger_id, chat_id, bet)
+                        logger.info(
+                            "Duel invite expired: refunded %d to challenger %d",
+                            bet, challenger_id,
+                        )
+                    if message_id:
+                        try:
+                            await bot.edit_message_text(
+                                "⏰ Время вышло. Дуэль не была принята. Ставка возвращена.",
+                                chat_id=chat_id,
+                                message_id=message_id,
+                                reply_markup=None,
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            logger.exception("Duel cleanup loop failed")
+
+
+
     config = load_config()
 
     # ── Логирование ──────────────────────────────────────────────
@@ -269,6 +325,7 @@ async def main() -> None:
     dp.include_router(help_router)
     if config.tictactoe.enabled:
         dp.include_router(ttt_router)
+    dp.include_router(duel_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
     dp.include_router(selfban_router)
@@ -311,6 +368,7 @@ async def main() -> None:
     dice_task = asyncio.create_task(dice_loop(bot, container))
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
     bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
+    duel_cleanup_task = asyncio.create_task(duel_cleanup_loop(container, bot))
     wordgame_task = asyncio.create_task(wordgame_loop(bot, container))
     delete_task = asyncio.create_task(delete_loop(bot, redis))
     daily_summary_task = asyncio.create_task(daily_summary_loop(bot, container))
@@ -331,6 +389,7 @@ async def main() -> None:
         dice_task.cancel()
         mute_roulette_task.cancel()
         bj_cleanup_task.cancel()
+        duel_cleanup_task.cancel()
         wordgame_task.cancel()
         daily_summary_task.cancel()
         daily_leaderboard_task.cancel()
