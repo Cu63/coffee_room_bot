@@ -567,6 +567,19 @@ class RedisStore:
         await self._r.zadd(key, {str(now): now})
         await self._r.expire(key, window_seconds)
 
+    _WG_RWORD_CD = "wg:rword_cd:"  # wg:rword_cd:{user_id}:{chat_id}
+
+    async def wg_rword_cooldown_active(self, user_id: int, chat_id: int) -> int | None:
+        """Проверить кулдаун /rword. Возвращает оставшееся время в секундах или None."""
+        key = f"{self._WG_RWORD_CD}{user_id}:{chat_id}"
+        ttl = await self._r.ttl(key)
+        return ttl if ttl and ttl > 0 else None
+
+    async def wg_rword_cooldown_set(self, user_id: int, chat_id: int, seconds: int) -> None:
+        """Установить кулдаун /rword."""
+        key = f"{self._WG_RWORD_CD}{user_id}:{chat_id}"
+        await self._r.set(key, "1", ex=seconds)
+
     async def wg_rate_check_rword(self, user_id: int, max_games: int, window_seconds: int) -> int:
         """Проверить лимит /rword отдельно от /word."""
         key = f"{self._WG_RATE}rword:{user_id}"

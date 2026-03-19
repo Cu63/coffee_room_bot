@@ -223,6 +223,7 @@ class RwordgameConfig(_BaseConfig):
     words_file: str = "configs/words_ru.txt"
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
+    cooldown_minutes: int = 15         # задержка между играми /rword
 
 class TicTacToeConfig(_BaseConfig):
     """Настройки /ttt — исчезающие крестики-нолики."""
