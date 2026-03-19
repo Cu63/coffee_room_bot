@@ -115,6 +115,22 @@ async def cmd_anagram(
         await reply_and_delete(message, "❌ Анаграммы отключены.")
         return
 
+    # Проверка кулдауна между играми /anagram
+    cd_remaining = await store.anagram_cooldown_active(message.from_user.id, message.chat.id)
+    if cd_remaining is not None:
+        mins = cd_remaining // 60
+        secs = cd_remaining % 60
+        if mins > 0:
+            cd_str = f"{mins} мин {secs} сек" if secs else f"{mins} мин"
+        else:
+            cd_str = f"{secs} сек"
+        await reply_and_delete(
+            message,
+            f"⏳ Подожди ещё <b>{cd_str}</b> перед следующей игрой /anagram.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
     args = (message.text or "").split()[1:]
     p = pluralizer
     chat_id = message.chat.id
@@ -224,6 +240,9 @@ async def cmd_anagram(
     pipe.set(_active_key(chat_id), game_id, ex=ttl)
     pipe.zadd(_CHATS_KEY, {str(chat_id): time.time()})
     await pipe.execute()
+
+    # Устанавливаем кулдаун между играми /anagram
+    await store.anagram_cooldown_set(user_id, chat_id, cfg.cooldown_minutes * 60)
 
     try:
         await message.bot.pin_chat_message(

@@ -580,6 +580,19 @@ class RedisStore:
         key = f"{self._WG_RWORD_CD}{user_id}:{chat_id}"
         await self._r.set(key, "1", ex=seconds)
 
+    _ANAGRAM_CD = "anagram:cd:"  # anagram:cd:{user_id}:{chat_id}
+
+    async def anagram_cooldown_active(self, user_id: int, chat_id: int) -> int | None:
+        """Проверить кулдаун /anagram. Возвращает оставшееся время в секундах или None."""
+        key = f"{self._ANAGRAM_CD}{user_id}:{chat_id}"
+        ttl = await self._r.ttl(key)
+        return ttl if ttl and ttl > 0 else None
+
+    async def anagram_cooldown_set(self, user_id: int, chat_id: int, seconds: int) -> None:
+        """Установить кулдаун /anagram."""
+        key = f"{self._ANAGRAM_CD}{user_id}:{chat_id}"
+        await self._r.set(key, "1", ex=seconds)
+
     async def wg_rate_check_rword(self, user_id: int, max_games: int, window_seconds: int) -> int:
         """Проверить лимит /rword отдельно от /word."""
         key = f"{self._WG_RATE}rword:{user_id}"
