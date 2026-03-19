@@ -94,6 +94,10 @@ async def _expire_tick(bot: Bot, container) -> None:
 
             if msg_id:
                 try:
+                    await bot.unpin_chat_message(chat_id=chat_id, message_id=msg_id)
+                except Exception:
+                    pass
+                try:
                     await bot.edit_message_text(
                         chat_id=chat_id,
                         message_id=msg_id,

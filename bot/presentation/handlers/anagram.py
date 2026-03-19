@@ -16,7 +16,8 @@ import logging
 import random
 import time
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
@@ -224,6 +225,15 @@ async def cmd_anagram(
     pipe.zadd(_CHATS_KEY, {str(chat_id): time.time()})
     await pipe.execute()
 
+    try:
+        await message.bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=sent.message_id,
+            disable_notification=True,
+        )
+    except TelegramBadRequest:
+        pass
+
     # Удаляем исходную команду
     schedule_delete(sent.bot, message, delay=5)
 
@@ -298,6 +308,15 @@ async def create_anagram_game(
     pipe.set(_active_key(chat_id), game_id, ex=ttl)
     pipe.zadd(_CHATS_KEY, {str(chat_id): time.time()})
     await pipe.execute()
+
+    try:
+        await bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=sent.message_id,
+            disable_notification=True,
+        )
+    except TelegramBadRequest:
+        pass
 
     logger.info(
         "anagram_loop: создана авто-игра %s в чате %d, слово длиной %d, ставка %d",
@@ -415,6 +434,12 @@ async def msg_reply_guess(
             f"Приз: <b>+{bet} {sw_bet}</b> 🏆"
         )
 
+        try:
+            await message.bot.unpin_chat_message(
+                chat_id=chat_id, message_id=data["message_id"]
+            )
+        except Exception:
+            pass
         try:
             await message.bot.edit_message_text(
                 chat_id=chat_id,
