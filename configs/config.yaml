@@ -167,6 +167,7 @@ anagram:
   answer_timeout_seconds: 300   # секунд на угадывание (5 минут)
   games_per_hour: 2.0           # авто-игры в час (0 = авто отключено)
   auto_bet: 20                  # приз в авто-играх (из баланса бота)
+  cooldown_minutes: 15          # задержка между играми /anagram (в минутах)
 
 buyop:
   cost: 1000                    # стоимость /buyop (титул без прав)

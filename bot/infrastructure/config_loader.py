@@ -247,6 +247,7 @@ class AnagramConfig(_BaseConfig):
     answer_timeout_seconds: int = 300  # секунд на угадывание (5 минут)
     games_per_hour: float = 2.0   # частота авто-игр в час (0 = авто отключено)
     auto_bet: int = 20            # приз для авто-опубликованных игр
+    cooldown_minutes: int = 15    # задержка между играми /anagram (в минутах)
 
 
 class TicTacToeConfig(_BaseConfig):
