@@ -17,6 +17,7 @@ import random
 import time
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -336,8 +337,8 @@ async def msg_reply_guess(
     # Ищем игру по message_id сообщения, на которое ответили
     game_id = await store._r.get(_msg_key(chat_id, replied.message_id))
     if game_id is None:
-        # Это не сообщение анаграммы — пропускаем
-        return
+        # Не наша игра — передаём следующему хендлеру
+        raise SkipHandler
 
     raw = await store._r.get(_game_key(game_id))
     if raw is None:
