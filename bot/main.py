@@ -40,6 +40,8 @@ from bot.presentation.handlers.renew import router as renew_router
 from bot.presentation.handlers.wordgame import router as wordgame_router
 from bot.presentation.handlers.transfer import router as transfer_router
 from bot.presentation.handlers.tictactoe import router as ttt_router
+from bot.infrastructure.anagram_loop import anagram_expire_loop, anagram_auto_loop
+from bot.presentation.handlers.anagram import router as anagram_router
 from bot.presentation.handlers.duel import router as duel_router
 from bot.presentation.handlers.buyop import router as buyop_router
 from bot.presentation.handlers.idea import router as idea_router
@@ -326,6 +328,8 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
     if config.tictactoe.enabled:
         dp.include_router(ttt_router)
     dp.include_router(duel_router)
+    if config.anagram.enabled:
+        dp.include_router(anagram_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
     dp.include_router(selfban_router)
@@ -369,6 +373,8 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
     mute_roulette_task = asyncio.create_task(mute_roulette_loop(container, bot))
     bj_cleanup_task = asyncio.create_task(bj_cleanup_loop(container, bot))
     duel_cleanup_task = asyncio.create_task(duel_cleanup_loop(container, bot))
+    anagram_expire_task = asyncio.create_task(anagram_expire_loop(bot, container))
+    anagram_auto_task = asyncio.create_task(anagram_auto_loop(bot, container))
     wordgame_task = asyncio.create_task(wordgame_loop(bot, container))
     delete_task = asyncio.create_task(delete_loop(bot, redis))
     daily_summary_task = asyncio.create_task(daily_summary_loop(bot, container))
@@ -390,6 +396,8 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
         mute_roulette_task.cancel()
         bj_cleanup_task.cancel()
         duel_cleanup_task.cancel()
+        anagram_expire_task.cancel()
+        anagram_auto_task.cancel()
         wordgame_task.cancel()
         daily_summary_task.cancel()
         daily_leaderboard_task.cancel()

@@ -224,6 +224,19 @@ class RwordgameConfig(_BaseConfig):
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
 
+class AnagramConfig(_BaseConfig):
+    """Настройки /anagram — угадай слово по перемешанным буквам."""
+    enabled: bool = True
+    min_bet: int = 5              # минимальная ставка (приз из баланса бота)
+    max_bet: int = 100            # максимальная ставка
+    min_word_length: int = 4      # минимальная длина загадываемого слова
+    max_word_length: int = 10     # максимальная длина загадываемого слова
+    attempt_cost: int = 1         # стоимость неверной попытки для игрока
+    answer_timeout_seconds: int = 300  # секунд на угадывание (5 минут)
+    games_per_hour: float = 2.0   # частота авто-игр в час (0 = авто отключено)
+    auto_bet: int = 20            # приз для авто-опубликованных игр
+
+
 class TicTacToeConfig(_BaseConfig):
     """Настройки /ttt — исчезающие крестики-нолики."""
     enabled: bool = True
@@ -337,6 +350,7 @@ class AppConfig(_BaseConfig):
     wordgame: WordgameConfig = WordgameConfig()
     rwordgame: RwordgameConfig = RwordgameConfig()
     tictactoe: TicTacToeConfig = TicTacToeConfig()
+    anagram: AnagramConfig = AnagramConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
     selfban: SelfbanConfig = SelfbanConfig()
