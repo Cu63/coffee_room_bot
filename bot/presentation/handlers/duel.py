@@ -20,7 +20,7 @@ import random
 import time
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
+from aiogram.enums import ButtonStyle, ParseMode
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -93,10 +93,12 @@ def _invite_kb(invite_id: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="✅ Принять",
                     callback_data=f"duel:accept:{invite_id}",
+                    style=ButtonStyle.SUCCESS,
                 ),
                 InlineKeyboardButton(
                     text="❌ Отказаться",
                     callback_data=f"duel:decline:{invite_id}",
+                    style=ButtonStyle.DANGER,
                 ),
             ]
         ]
