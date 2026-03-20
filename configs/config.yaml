@@ -37,8 +37,8 @@ mute:
   cost_per_minute: 3                # стоимость 1 минуты мута в баллах
   min_minutes: 1
   max_minutes: 15                   # максимальная длительность одного мута
-  daily_limit: 3                    # сколько мутов в сутки может выдать один пользователь
-  target_cooldown_hours: 2          # кулдаун между мутами одного и того же человека
+  daily_limit: 0                    # 0 = без лимита; сколько мутов в сутки может выдать один пользователь
+  target_cooldown_hours: 0          # 0 = без кулдауна; кулдаун между мутами одного и того же человека
   selfmute_min_minutes: 1           # лимиты /selfmute
   selfmute_max_minutes: 1440        # 24 часа
   protection_cost: 200              # баллов за одно использование /protect
