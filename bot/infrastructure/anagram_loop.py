@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 
@@ -18,15 +17,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 logger = logging.getLogger(__name__)
 
-# Ключи — идентичны тем, что объявлены в handlers/anagram.py
-_GAME_KEY       = "anagram:game:{game_id}"
-_MSG_KEY        = "anagram:msg:{chat_id}:{message_id}"
-_ACTIVE_KEY     = "anagram:active:{chat_id}"
-_CHATS_KEY      = "anagram:chats"
-_NEXT_AUTO_KEY  = "anagram:next_auto:{chat_id}"
-
 _RESULT_DELETE_DELAY = 60   # секунд до удаления итогового сообщения
-_AUTO_BET_DEFAULT   = 20    # резервный приз если auto_bet не задан в конфиге
 
 
 async def anagram_expire_loop(bot: Bot, container) -> None:
@@ -59,29 +50,13 @@ async def _expire_tick(bot: Bot, container) -> None:
     async with container() as scope:
         store: RedisStore = await scope.get(RedisStore)
         score_service: ScoreService = await scope.get(ScoreService)
-        now = time.time()
 
-        async for key in store._r.scan_iter("anagram:game:*"):
-            raw = await store._r.get(key)
-            if raw is None:
-                continue
-            data = json.loads(raw)
-            if data.get("expires_at", 0) > now:
-                continue
-
-            # Атомарно забираем ключ
-            if not await store._r.delete(key):
-                continue
-
+        for data in await store.anagram_scan_expired():
             game_id  = data["game_id"]
             chat_id  = data["chat_id"]
             word     = data["word"]
             bet      = data.get("bet", 0)
             msg_id   = data.get("message_id", 0)
-
-            await store._r.delete(_ACTIVE_KEY.format(chat_id=chat_id))
-            if msg_id:
-                await store._r.delete(_MSG_KEY.format(chat_id=chat_id, message_id=msg_id))
 
             # Возвращаем деньги боту (если никто не угадал, банк вернуть)
             if bet > 0:
@@ -122,7 +97,6 @@ async def _auto_tick(bot: Bot, container) -> None:
     from bot.domain.pluralizer import ScorePluralizer
     from bot.infrastructure.config_loader import AppConfig
     from bot.infrastructure.redis_store import RedisStore
-    from bot.application.interfaces.user_repository import IUserRepository
     from bot.presentation.handlers.anagram import create_anagram_game
 
     async with container() as scope:
@@ -139,15 +113,13 @@ async def _auto_tick(bot: Bot, container) -> None:
         interval = 3600.0 / acfg.games_per_hour  # секунд между играми
 
         # Берём все зарегистрированные чаты
-        chat_entries = await store._r.zrange(_CHATS_KEY, 0, -1, withscores=True)
+        chat_entries = await store.anagram_chats_all()
 
-        for entry in chat_entries:
-            chat_id_str, last_ts = entry
-            chat_id = int(chat_id_str)
-
+        for chat_id, last_ts in chat_entries:
             # Проверяем время следующей авто-игры
-            next_ts_raw = await store._r.get(_NEXT_AUTO_KEY.format(chat_id=chat_id))
-            next_ts = float(next_ts_raw) if next_ts_raw else (float(last_ts) + interval)
+            next_ts = await store.anagram_next_auto_get(chat_id)
+            if next_ts is None:
+                next_ts = last_ts + interval
 
             if now < next_ts:
                 continue
@@ -166,11 +138,7 @@ async def _auto_tick(bot: Bot, container) -> None:
 
             # Планируем следующую авто-игру в любом случае (чтобы не спамить)
             next_auto = now + interval
-            await store._r.set(
-                _NEXT_AUTO_KEY.format(chat_id=chat_id),
-                str(next_auto),
-                ex=int(interval * 3),
-            )
+            await store.anagram_next_auto_set(chat_id, next_auto, int(interval * 3))
 
             if success:
                 logger.info(
