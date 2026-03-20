@@ -52,6 +52,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.anagram import router as anagram_router
     from bot.presentation.handlers.anon import router as anon_router
     from bot.presentation.handlers.blackjack import router as blackjack_router
+    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.buyop import router as buyop_router
     from bot.presentation.handlers.chatmode import router as chatmode_router
     from bot.presentation.handlers.commands import router as commands_router
@@ -110,3 +111,4 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     dp.include_router(anon_router)
     dp.include_router(daily_router)
     dp.include_router(chatmode_router)
+    dp.include_router(news_router)

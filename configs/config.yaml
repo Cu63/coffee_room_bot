@@ -186,6 +186,25 @@ logging:
   level: "INFO"
   human_readable_logs: false
 
+news:
+  hourly_limit: 2          # максимум вызовов /news для не-админа в час (0 = без лимита)
+  use_llm: false            # фильтровать кандидатов через LLM (IT + позитив)
+  feeds:
+    - name: "Habr"
+      url: "https://habr.com/ru/rss/articles/all/?fl=ru"
+    - name: "TechCrunch"
+      url: "https://techcrunch.com/feed/"
+    - name: "The Verge"
+      url: "https://www.theverge.com/rss/index.xml"
+    - name: "Ars Technica"
+      url: "http://feeds.arstechnica.com/arstechnica/index"
+    - name: "VentureBeat"
+      url: "https://venturebeat.com/feed/"
+    - name: "Wired"
+      url: "https://www.wired.com/feed/rss"
+    - name: "MIT Technology Review"
+      url: "https://www.technologyreview.com/feed/"
+
 analyze:
   model: "gpt-4.1-nano"
   base_url: "https://api.proxyapi.ru/openai/v1"

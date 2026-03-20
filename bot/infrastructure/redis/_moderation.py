@@ -44,6 +44,24 @@ class ModerationStoreMixin:
         raw = await self._r.get(key)
         return int(raw or 0)
 
+    # ── /news ──────────────────────────────────────────────
+
+    _NEWS_HOURLY = "news:hourly:"
+
+    async def news_hourly_count(self, user_id: int) -> int:
+        """Количество вызовов /news пользователем за текущий час."""
+        key = f"{self._NEWS_HOURLY}{user_id}"
+        raw = await self._r.get(key)
+        return int(raw or 0)
+
+    async def news_hourly_increment(self, user_id: int) -> None:
+        """Увеличивает счётчик /news. TTL = 3600 сек (1 час)."""
+        key = f"{self._NEWS_HOURLY}{user_id}"
+        pipe = self._r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 3600)
+        await pipe.execute()
+
     async def renew_daily_increment(self, user_id: int, chat_id: int) -> None:
         key = f"{self._RENEW_DAILY}{user_id}:{chat_id}"
         pipe = self._r.pipeline()
