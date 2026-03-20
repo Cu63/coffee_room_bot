@@ -119,10 +119,7 @@ async def cmd_amute(
             admin_permissions=admin_perms,
         )
     )
-<<<<<<< HEAD
     await mute_service.log_mute(target.id, message.from_user.id, chat_id)
-=======
->>>>>>> origin/master
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     target_link = user_link(target.username, target.full_name, target.id)
     amute_total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
