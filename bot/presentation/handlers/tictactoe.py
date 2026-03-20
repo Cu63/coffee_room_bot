@@ -54,8 +54,6 @@ _DELETE_DELAY = 120  # задержка удаления результатов
 _CELL_EMPTY = "⬜"
 _CELL_X = "❌"
 _CELL_O = "⭕"
-_CELL_X_FADE = "🟥"  # фигура X, которая исчезнет при следующем ходе
-_CELL_O_FADE = "🟧"  # фигура O, которая исчезнет при следующем ходе
 
 # Выигрышные комбинации
 _WIN_COMBOS = [
@@ -69,10 +67,19 @@ def _ttt_key(chat_id: int, game_id: str) -> str:
     return f"{_TTT_PREFIX}{chat_id}:{game_id}"
 
 
-def _check_winner(board: list[int]) -> int:
-    """Возвращает 1 (X wins), 2 (O wins) или 0 (нет победителя)."""
+def _check_winner(board: list[int], fade_cell: int = -1, fade_piece: int = 0) -> int:
+    """Возвращает 1 (X wins), 2 (O wins) или 0 (нет победителя).
+
+    fade_cell  — клетка с затухающей фигурой текущего игрока.
+    fade_piece — тип фигуры (1=X, 2=O), которой принадлежит fade_cell.
+    Ряд текущего игрока с fade_cell не считается выигрышным,
+    но ряд противника НЕ затрагивается.
+    """
     for a, b, c in _WIN_COMBOS:
         if board[a] == board[b] == board[c] != 0:
+            # Игнорируем ряд только если он принадлежит игроку с затухающей фигурой
+            if fade_cell in (a, b, c) and board[a] == fade_piece:
+                continue
             return board[a]
     return 0
 
@@ -85,28 +92,16 @@ def _is_draw(board: list[int], history_x: list[int], history_o: list[int]) -> bo
     return (len(history_x) + len(history_o)) >= 50
 
 
-def _render_board(
-    board: list[int],
-    history_x: list[int],
-    history_o: list[int],
-    turn: str,
-) -> str:
+def _render_board(board: list[int]) -> str:
     """Рендерит текстовое представление поля."""
     cells = []
-    # Определяем, какая фигура исчезнет при следующем ходе текущего игрока
-    fade_cell = -1
-    if turn == "x" and len(history_x) >= _MAX_PIECES:
-        fade_cell = history_x[0]  # самая старая фигура X
-    elif turn == "o" and len(history_o) >= _MAX_PIECES:
-        fade_cell = history_o[0]  # самая старая фигура O
-
-    for i, val in enumerate(board):
+    for val in board:
         if val == 0:
             cells.append(_CELL_EMPTY)
         elif val == 1:
-            cells.append(_CELL_X_FADE if i == fade_cell else _CELL_X)
-        elif val == 2:
-            cells.append(_CELL_O_FADE if i == fade_cell else _CELL_O)
+            cells.append(_CELL_X)
+        else:
+            cells.append(_CELL_O)
     return (
         f"{cells[0]}{cells[1]}{cells[2]}\n"
         f"{cells[3]}{cells[4]}{cells[5]}\n"
@@ -403,7 +398,7 @@ async def cb_ttt_accept(
     turn_player = x_display
     turn_symbol = _CELL_X
 
-    board_text = _render_board(data["board"], data["history_x"], data["history_o"], "x")
+    board_text = _render_board(data["board"])
     sw_bet = p.pluralize(bet)
 
     text = formatter._t["ttt_started"].format(
@@ -528,8 +523,12 @@ async def cb_ttt_move(
         data["history_x"] = history_x
         data["history_o"] = history_o
 
-        # Проверяем победу
-        winner = _check_winner(board)
+        # Определяем затухающую фигуру текущего игрока (исчезнет на его следующем ходу)
+        # Ряд с этой фигурой не считается выигрышным
+        fade = history[0] if len(history) >= _MAX_PIECES else -1
+
+        # Проверяем победу (исключая ряды с затухающей фигурой текущего игрока)
+        winner = _check_winner(board, fade_cell=fade, fade_piece=piece)
         draw = _is_draw(board, history_x, history_o) if winner == 0 else False
 
         p = pluralizer
@@ -555,7 +554,7 @@ async def cb_ttt_move(
                 return
 
             total_pot = bet * 2
-            board_text = _render_board(board, history_x, history_o, turn)
+            board_text = _render_board(board)
 
             if draw:
                 # Возврат ставок
@@ -615,7 +614,7 @@ async def cb_ttt_move(
         turn_player = x_display if next_turn == "x" else o_display
         turn_symbol = _CELL_X if next_turn == "x" else _CELL_O
 
-        board_text = _render_board(board, history_x, history_o, next_turn)
+        board_text = _render_board(board)
         text = formatter._t["ttt_turn"].format(
             player_x=x_display,
             player_o=o_display,
