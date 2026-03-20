@@ -22,10 +22,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import random
-import re
 import time
 from datetime import datetime, timedelta
 
@@ -44,7 +42,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
-from bot.domain.bot_utils import is_admin
+from bot.domain.bot_utils import is_admin, parse_duration
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
@@ -56,32 +54,8 @@ from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
 logger = logging.getLogger(__name__)
 router = Router(name="lot")
 
-# ── Redis-ключи ─────────────────────────────────────────────────────────
-_LOT_KEY    = "lot:game:{chat_id}:{lot_id}"   # данные лота
-_ACTIVE_KEY = "lot:active:{chat_id}"           # → lot_id текущего лота в чате
-
-_DURATION_RE = re.compile(r"^(\d+)(m|h)$", re.IGNORECASE)
-
-
-def _lot_key(chat_id: int, lot_id: str) -> str:
-    return _LOT_KEY.format(chat_id=chat_id, lot_id=lot_id)
-
-def _active_key(chat_id: int) -> str:
-    return _ACTIVE_KEY.format(chat_id=chat_id)
-
 def _make_lot_id() -> str:
     return f"{int(time.time() * 1000)}{random.randint(100, 999)}"
-
-
-# ── Парсинг длительности ─────────────────────────────────────────────────
-
-def _parse_duration(token: str) -> int | None:
-    """Парсит '10m', '2h' → секунды."""
-    m = _DURATION_RE.match(token)
-    if not m:
-        return None
-    val, unit = int(m.group(1)), m.group(2).lower()
-    return val * 60 if unit == "m" else val * 3600
 
 
 # ── Рендер текста лота ───────────────────────────────────────────────────
@@ -164,7 +138,7 @@ async def cmd_lot(
         return
 
     # Парсим длительность
-    duration_sec = _parse_duration(args[0])
+    duration_sec = parse_duration(args[0])
     if duration_sec is None:
         await reply_and_delete(message, "❌ Неверный формат времени. Используй <code>Xm</code> или <code>Xh</code>.", parse_mode=ParseMode.HTML)
         return
@@ -201,12 +175,12 @@ async def cmd_lot(
     chat_id = message.chat.id
 
     # Проверяем активный лот в чате
-    existing = await store._r.get(_active_key(chat_id))
+    existing = await store.lot_active_get(chat_id)
     if existing:
-        if await store._r.exists(_lot_key(chat_id, existing)):
+        if await store.lot_game_exists(chat_id, existing):
             await reply_and_delete(message, "❌ В этом чате уже идёт аукцион. Дождитесь завершения.")
             return
-        await store._r.delete(_active_key(chat_id))
+        await store.lot_active_delete(chat_id)
 
     lot_id = _make_lot_id()
     expires_at = time.time() + duration_sec
@@ -238,10 +212,7 @@ async def cmd_lot(
     data["message_id"] = sent.message_id
     ttl = duration_sec + 60
 
-    pipe = store._r.pipeline()
-    pipe.set(_lot_key(chat_id, lot_id), json.dumps(data, ensure_ascii=False), ex=ttl)
-    pipe.set(_active_key(chat_id), lot_id, ex=ttl)
-    await pipe.execute()
+    await store.lot_create(chat_id, lot_id, data, ttl)
 
     # Пинаем сообщение
     try:
@@ -284,22 +255,18 @@ async def cb_lot_bid(
 
     chat_id = cb.message.chat.id
     user_id = cb.from_user.id
-    key = _lot_key(chat_id, lot_id)
 
     # ── Mutex: один ход за раз ───────────────────────────────────────────
-    lock_key = f"lot:lock:{chat_id}:{lot_id}"
-    acquired = await store._r.set(lock_key, "1", nx=True, ex=5)
+    acquired = await store.lot_lock_acquire(chat_id, lot_id)
     if not acquired:
         await cb.answer("⏳ Подожди секунду…")
         return
 
     try:
-        raw = await store._r.get(key)
-        if raw is None:
+        data = await store.lot_game_get(chat_id, lot_id)
+        if data is None:
             await cb.answer("⏰ Аукцион завершён.", show_alert=True)
             return
-
-        data = json.loads(raw)
 
         if data["expires_at"] < time.time():
             await cb.answer("⏰ Аукцион завершён.", show_alert=True)
@@ -374,7 +341,7 @@ async def cb_lot_bid(
         data["bids_count"] += 1
 
         ttl_left = max(30, int(data["expires_at"] - time.time()))
-        await store._r.set(key, json.dumps(data, ensure_ascii=False), ex=ttl_left + 60)
+        await store.lot_game_save(chat_id, lot_id, data, ttl_left + 60)
 
         # Обновляем сообщение
         new_text = _lot_text(data, p)
@@ -392,7 +359,7 @@ async def cb_lot_bid(
         await cb.answer(f"✅ Твоя ставка: {new_price} {sw_new}!")
 
     finally:
-        await store._r.delete(lock_key)
+        await store.lot_lock_release(chat_id, lot_id)
 
 
 # ── Публичная функция завершения (используется loop'ом) ───────────────────
@@ -406,17 +373,14 @@ async def finish_lot(
     delete_delay: int = 120,
 ) -> None:
     """Завершает аукцион: редактирует сообщение с итогом, анпинит, планирует удаление."""
-    key = _lot_key(chat_id, lot_id)
-    raw = await store._r.get(key)
-    if raw is None:
+    data = await store.lot_game_get(chat_id, lot_id)
+    if data is None:
         return
 
     # Атомарно удаляем
-    if not await store._r.delete(key):
+    if not await store.lot_game_delete(chat_id, lot_id):
         return
-    await store._r.delete(_active_key(chat_id))
-
-    data = json.loads(raw)
+    await store.lot_active_delete(chat_id)
     msg_id = data.get("message_id", 0)
 
     # Анпиним

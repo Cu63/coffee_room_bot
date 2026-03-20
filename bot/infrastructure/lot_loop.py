@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 
 from aiogram import Bot
 
@@ -32,16 +30,8 @@ async def _tick(bot: Bot, container) -> None:
         store: RedisStore = await scope.get(RedisStore)
         p: ScorePluralizer = await scope.get(ScorePluralizer)
         cfg: AppConfig = await scope.get(AppConfig)
-        now = time.time()
 
-        async for key in store._r.scan_iter("lot:game:*"):
-            raw = await store._r.get(key)
-            if raw is None:
-                continue
-            data = json.loads(raw)
-            if data.get("expires_at", 0) > now:
-                continue
-
+        for data in await store.lot_scan_expired():
             chat_id = data["chat_id"]
             lot_id = data["lot_id"]
             logger.info("lot_loop: завершаем лот %s в чате %d", lot_id, chat_id)

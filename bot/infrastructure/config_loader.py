@@ -331,6 +331,24 @@ class ChatmodeConfig(_BaseConfig):
     gif: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=5, max_minutes=20)
 
 
+class NewsFeedConfig(_BaseConfig):
+    """Один RSS-источник новостей."""
+    name: str
+    url: str
+
+
+class NewsConfig(_BaseConfig):
+    """Настройки /news — лента IT-новостей."""
+    hourly_limit: int = 2   # вызовов на пользователя в час (0 = без лимита)
+    use_llm: bool = True    # фильтровать через LLM (IT + позитив)
+    translate: bool = True  # переводить иноязычные новости на русский через LLM
+    feeds: list[NewsFeedConfig] = []
+
+    def as_tuples(self) -> list[tuple[str, str]]:
+        """Возвращает список (name, url) для news_fetcher."""
+        return [(f.name, f.url) for f in self.feeds]
+
+
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
     model: str = "gpt-4.1-nano"
@@ -377,6 +395,7 @@ class AppConfig(_BaseConfig):
     daily_summary: DailySummaryConfig = DailySummaryConfig()
     daily_leaderboard: DailyLeaderboardConfig = DailyLeaderboardConfig()
     chatmode: ChatmodeConfig = ChatmodeConfig()
+    news: NewsConfig = NewsConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

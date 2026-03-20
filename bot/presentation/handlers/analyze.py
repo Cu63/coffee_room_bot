@@ -13,6 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.analyze_service import AnalyzeRateLimitExceeded, AnalyzeService
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.domain.bot_utils import parse_duration
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 
@@ -23,37 +24,6 @@ _TG_LIMIT = 4096
 
 _USERNAME_RE = re.compile(r"@([\w]+)")
 _INT_RE = re.compile(r"^\d+$")
-
-# Форматы времени: 30m, 2h, 1d, 1h30m, 90m, ...
-_DURATION_RE = re.compile(
-    r"^(?:(\d+)\s*(?:d|д|дн|days?))?"
-    r"\s*(?:(\d+)\s*(?:h|ч|час?|hours?))?"
-    r"\s*(?:(\d+)\s*(?:m|м|мин|min|minutes?))?$",
-    re.IGNORECASE,
-)
-_SIMPLE_DURATION_RE = re.compile(r"^(\d+)\s*(m|м|мин|min|h|ч|час|d|д|дн)$", re.IGNORECASE)
-
-
-def _parse_duration(token: str) -> timedelta | None:
-    m = _SIMPLE_DURATION_RE.match(token)
-    if m:
-        n, unit = int(m.group(1)), m.group(2).lower()
-        if unit in ("m", "м", "мин", "min"):
-            return timedelta(minutes=n)
-        if unit in ("h", "ч", "час"):
-            return timedelta(hours=n)
-        if unit in ("d", "д", "дн"):
-            return timedelta(days=n)
-
-    m = _DURATION_RE.match(token)
-    if m and any(m.groups()):
-        days = int(m.group(1) or 0)
-        hours = int(m.group(2) or 0)
-        minutes = int(m.group(3) or 0)
-        if days or hours or minutes:
-            return timedelta(days=days, hours=hours, minutes=minutes)
-
-    return None
 
 
 def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
@@ -69,9 +39,9 @@ def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
         if token.startswith("@"):
             usernames.append(token.lstrip("@").lower())
         elif limit == 0 and since is None:
-            td = _parse_duration(token)
-            if td is not None:
-                since = datetime.now(TZ_MSK) - td
+            secs = parse_duration(token)
+            if secs is not None:
+                since = datetime.now(TZ_MSK) - timedelta(seconds=secs)
                 limit = 10_000
             elif _INT_RE.match(token):
                 limit = int(token)

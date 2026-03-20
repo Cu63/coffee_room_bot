@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -21,17 +19,9 @@ async def wordgame_loop(bot: Bot, container) -> None:
             async with container() as scope:
                 from bot.infrastructure.redis_store import RedisStore
                 store: RedisStore = await scope.get(RedisStore)
-                now = time.time()
 
-                async for key in store._r.scan_iter("wg:game:*"):
-                    raw = await store._r.get(key)
-                    if raw is None:
-                        continue
-                    data = json.loads(raw)
-                    if data.get("finished") or data.get("ends_at", 0) > now:
-                        continue
-
-                    finished = await store.wg_game_finish(data["game_id"])
+                for game_id in await store.wg_scan_expired():
+                    finished = await store.wg_game_finish(game_id)
                     if not finished:
                         continue
 

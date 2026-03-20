@@ -149,7 +149,10 @@ async def cmd_mute(
             )
             return
         await store.owner_mute_set(chat_id, target.id, until.timestamp())
+<<<<<<< HEAD
         await mute_service.log_mute(target.id, message.from_user.id, chat_id)
+=======
+>>>>>>> origin/master
         # Фиксируем в Redis
         if mute_cfg.daily_limit > 0:
             await store.mute_daily_increment(message.from_user.id, chat_id)
@@ -242,7 +245,10 @@ async def cmd_mute(
         await store.mute_daily_increment(message.from_user.id, chat_id)
     if mute_cfg.target_cooldown_hours > 0:
         await store.mute_target_cooldown_set(message.from_user.id, target.id, chat_id, mute_cfg.target_cooldown_hours)
+<<<<<<< HEAD
     await mute_service.log_mute(target.id, message.from_user.id, chat_id)
+=======
+>>>>>>> origin/master
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
     stack_note = f" (итого: {total_minutes} мин)" if mute_was_stacked else ""
