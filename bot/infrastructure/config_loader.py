@@ -341,6 +341,7 @@ class NewsConfig(_BaseConfig):
     """Настройки /news — лента IT-новостей."""
     hourly_limit: int = 2   # вызовов на пользователя в час (0 = без лимита)
     use_llm: bool = True    # фильтровать через LLM (IT + позитив)
+    translate: bool = True  # переводить иноязычные новости на русский через LLM
     feeds: list[NewsFeedConfig] = []
 
     def as_tuples(self) -> list[tuple[str, str]]:

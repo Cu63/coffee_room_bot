@@ -1,11 +1,10 @@
 """Хендлер /news — случайная IT-новость из RSS-лент.
 
 Фичи:
-- Источники берутся из config.yaml (news.feeds), а не захардкожены.
-- LLM (AiTunnelClient) фильтрует кандидатов, оставляя IT-релевантные
-  и позитивные новости, при необходимости перефразируя заголовок.
-- Для пользователей не из списка admin.users действует hourly_limit:
-  не более N вызовов /news за скользящий час (через Redis).
+- Источники берутся из config.yaml (news.feeds).
+- OpenAiClient (analyze/proxyapi) фильтрует кандидатов: IT + позитив.
+- При translate=true — отдельный LLM-вызов переводит description на русский.
+- Hourly rate limit для не-админов через Redis.
 """
 
 from __future__ import annotations
@@ -18,10 +17,10 @@ from aiogram.filters import Command
 from aiogram.types import LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.news_fetcher import NewsItem, fetch_random_news
+from bot.infrastructure.openai_client import OpenAiClient
 from bot.infrastructure.redis.store import RedisStore
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,6 @@ router = Router(name="news")
 
 
 def _format_news_item(item: NewsItem, template: str) -> str:
-    """Форматирует одну новость в Telegram HTML по шаблону из messages.yaml."""
     desc = item.description[:300]
     if len(item.description) > 300:
         desc += "…"
@@ -53,17 +51,17 @@ async def cmd_news(
     message: Message,
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
-    llm: FromDishka[AiTunnelClient],
+    llm: FromDishka[OpenAiClient],
     redis: FromDishka[RedisStore],
 ) -> None:
-    """Отправляет случайную IT-новость, отфильтрованную через LLM."""
+    """Отправляет случайную IT-новость, отфильтрованную и переведённую через LLM."""
     if message.from_user is None:
         return
 
     user_id = message.from_user.id
     username = message.from_user.username
 
-    # ── Проверка hourly rate limit для не-админов ────────────────────────
+    # ── Hourly rate limit для не-админов ────────────────────────────────
     hourly_limit = config.news.hourly_limit
     if hourly_limit > 0 and not _is_admin(username, config.admin.users):
         count = await redis.news_hourly_count(user_id)
@@ -75,14 +73,13 @@ async def cmd_news(
             return
         await redis.news_hourly_increment(user_id)
 
-    # ── Получаем фиды из конфига ─────────────────────────────────────────
     feeds = config.news.as_tuples()
-
     thinking = await message.reply("🔍 Ищу свежие IT-новости…")
 
     items = await fetch_random_news(
         feeds=feeds,
         llm=llm if config.news.use_llm else None,
+        translate=config.news.translate,
     )
     if not items:
         await thinking.edit_text(formatter._t["news_error"])
