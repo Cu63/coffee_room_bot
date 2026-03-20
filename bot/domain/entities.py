@@ -10,6 +10,7 @@ class User:
     id: int
     username: str | None
     full_name: str
+    is_bot: bool = False
 
 
 @dataclass(slots=True)
@@ -76,6 +77,7 @@ class UserStats:
     wins_slots: int = 0
     wins_dice: int = 0
     wins_giveaway: int = 0
+    wins_ttt: int = 0
 
 
 @dataclass(slots=True)

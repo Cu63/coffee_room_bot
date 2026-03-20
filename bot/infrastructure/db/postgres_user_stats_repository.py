@@ -3,7 +3,7 @@ from asyncpg import Connection
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.domain.entities import UserStats
 
-_ALLOWED_GAMES = {"blackjack", "slots", "dice", "giveaway"}
+_ALLOWED_GAMES = {"blackjack", "slots", "dice", "giveaway", "ttt"}
 
 
 class PostgresUserStatsRepository(IUserStatsRepository):
@@ -14,7 +14,7 @@ class PostgresUserStatsRepository(IUserStatsRepository):
         row = await self._conn.fetchrow(
             """
             SELECT score_given, score_taken,
-                   wins_blackjack, wins_slots, wins_dice, wins_giveaway
+                   wins_blackjack, wins_slots, wins_dice, wins_giveaway, wins_ttt
             FROM user_stats
             WHERE user_id = $1 AND chat_id = $2
             """,
@@ -32,6 +32,7 @@ class PostgresUserStatsRepository(IUserStatsRepository):
             wins_slots=row["wins_slots"],
             wins_dice=row["wins_dice"],
             wins_giveaway=row["wins_giveaway"],
+            wins_ttt=row["wins_ttt"],
         )
 
     async def add_score_given(self, user_id: int, chat_id: int, delta: int) -> None:

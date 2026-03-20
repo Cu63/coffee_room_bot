@@ -28,6 +28,8 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers._admin_utils import _ADMIN_PERM_FIELDS, _extract_admin_permissions
+from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,14 @@ router = Router(name="giveaway")
 
 _DURATION_RE = re.compile(r"^(\d+)(m|h)$")
 
+# Алиасы периодов и расширенный формат (m/h/d/w)
+_PERIOD_ALIASES: dict[str, int] = {
+    "hourly": 3600,
+    "daily": 86400,
+    "weekly": 604800,
+}
+_PERIOD_RE = re.compile(r"^(\d+)(m|h|d|w)$")
+
 
 def _parse_duration(token: str) -> timedelta | None:
     m = _DURATION_RE.match(token.lower())
@@ -44,6 +54,39 @@ def _parse_duration(token: str) -> timedelta | None:
         return None
     value, unit = int(m.group(1)), m.group(2)
     return timedelta(minutes=value) if unit == "m" else timedelta(hours=value)
+
+
+def _parse_period(token: str) -> int | None:
+    """Разобрать период гивэвея в секундах.
+
+    Поддерживаемые форматы: hourly, daily, weekly, Xm, Xh, Xd, Xw.
+    """
+    ltoken = token.lower()
+    if ltoken in _PERIOD_ALIASES:
+        return _PERIOD_ALIASES[ltoken]
+    m = _PERIOD_RE.match(ltoken)
+    if not m:
+        return None
+    value, unit = int(m.group(1)), m.group(2)
+    multipliers = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
+    secs = value * multipliers[unit]
+    return secs if secs >= 60 else None
+
+
+def _period_label(period_seconds: int) -> str:
+    """Человекочитаемое название периода."""
+    if period_seconds % 604800 == 0:
+        n = period_seconds // 604800
+        return f"{n}н" if n > 1 else "еженедельно"
+    if period_seconds % 86400 == 0:
+        n = period_seconds // 86400
+        return f"{n}д" if n > 1 else "ежедневно"
+    if period_seconds % 3600 == 0:
+        n = period_seconds // 3600
+        return f"{n}ч" if n > 1 else "ежечасно"
+    if period_seconds % 60 == 0:
+        return f"{period_seconds // 60}м"
+    return f"{period_seconds}с"
 
 
 # is_admin imported from bot.domain.bot_utils
@@ -90,12 +133,13 @@ async def cmd_giveaway(
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("⛔ Только администраторы могут создавать розыгрыши.")
+        await reply_and_delete(message, "⛔ Только администраторы могут создавать розыгрыши.")
         return
 
     args = (message.text or "").split()[1:]
     if not args:
-        await message.answer(
+        await reply_and_delete(
+            message,
             "Использование: <code>/giveaway 500 100 50 [30m|2h]</code>\n"
             "Призовые места через пробел, в конце опционально — время.",
             parse_mode="HTML",
@@ -111,12 +155,12 @@ async def cmd_giveaway(
     prizes: list[int] = []
     for token in args:
         if not token.isdigit() or int(token) <= 0:
-            await message.answer(f"❌ Неверное значение приза: <code>{token}</code>", parse_mode="HTML")
+            await reply_and_delete(message, f"❌ Неверное значение приза: <code>{token}</code>", parse_mode="HTML")
             return
         prizes.append(int(token))
 
     if not prizes:
-        await message.answer("❌ Укажи хотя бы один приз.")
+        await reply_and_delete(message, "❌ Укажи хотя бы один приз.")
         return
 
     giveaway = await service.create(
@@ -136,6 +180,159 @@ async def cmd_giveaway(
     await service.set_message_id(giveaway.id, sent.message_id)
 
 
+# ─── /giveaway_period ───────────────────────────────────────────────────────
+
+
+@router.message(Command("giveaway_period"))
+@inject
+async def cmd_giveaway_period(
+    message: Message,
+    service: FromDishka[GiveawayService],
+    store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
+    pluralizer: FromDishka[ScorePluralizer],
+) -> None:
+    """Запускает периодический розыгрыш.
+
+    Синтаксис: /giveaway_period <период> <приз1> [приз2 ...] [длительность_раунда]
+
+    Примеры:
+      /giveaway_period hourly 500 100       — ежечасно, без ограничения времени
+      /giveaway_period daily 1000 500 2h    — ежедневно, каждый раунд 2 часа
+      /giveaway_period weekly 5000 1000 1d  — еженедельно, раунд 1 день
+      /giveaway_period 6h 200 100           — каждые 6 часов
+    """
+    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+        await reply_and_delete(message, "⛔ Только администраторы могут создавать периодические розыгрыши.")
+        return
+
+    args = (message.text or "").split()[1:]
+    if len(args) < 2:
+        await reply_and_delete(
+            message,
+            "Использование: <code>/giveaway_period &lt;период&gt; &lt;приз1&gt; [приз2 ...] [длительность]</code>\n\n"
+            "Периоды: <code>hourly</code>, <code>daily</code>, <code>weekly</code>, <code>6h</code>, <code>30m</code> и т.д.\n"
+            "Длительность раунда (опционально): <code>30m</code>, <code>2h</code>\n\n"
+            "Пример: <code>/giveaway_period daily 500 100 2h</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    period_seconds = _parse_period(args[0])
+    if period_seconds is None:
+        await reply_and_delete(
+            message,
+            f"❌ Неверный период: <code>{args[0]}</code>\n"
+            "Используй: <code>hourly</code>, <code>daily</code>, <code>weekly</code> или формат <code>Xm/Xh/Xd/Xw</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    rest = args[1:]
+    # Последний аргумент может быть длительностью раунда
+    round_duration: timedelta | None = None
+    if rest:
+        dur = _parse_duration(rest[-1])
+        if dur is not None:
+            round_duration = dur
+            rest = rest[:-1]
+
+    prizes: list[int] = []
+    for token in rest:
+        if not token.isdigit() or int(token) <= 0:
+            await reply_and_delete(message, f"❌ Неверное значение приза: <code>{token}</code>", parse_mode="HTML")
+            return
+        prizes.append(int(token))
+
+    if not prizes:
+        await reply_and_delete(message, "❌ Укажи хотя бы один приз.")
+        return
+
+    round_dur_secs = int(round_duration.total_seconds()) if round_duration else None
+    gp_id = await store.giveaway_period_create(
+        chat_id=message.chat.id,
+        created_by=message.from_user.id,
+        prizes=prizes,
+        period_seconds=period_seconds,
+        round_duration_seconds=round_dur_secs,
+    )
+
+    period_str = _period_label(period_seconds)
+    prizes_str = _format_prizes(prizes, pluralizer)
+    round_str = f"{round_duration}" if round_duration else "вручную"
+    if round_duration:
+        total_minutes = int(round_duration.total_seconds() // 60)
+        if total_minutes >= 60:
+            round_str = f"{total_minutes // 60}ч"
+        else:
+            round_str = f"{total_minutes}м"
+
+    await reply_and_delete(
+        message,
+        f"🔁 <b>Периодический розыгрыш создан!</b>\n\n"
+        f"{prizes_str}\n\n"
+        f"🕐 Период: <b>{period_str}</b>\n"
+        f"⏰ Длительность раунда: <b>{round_str}</b>\n"
+        f"🆔 GP ID: <code>{gp_id}</code>\n\n"
+        f"Первый раунд стартует через ~1 минуту.\n"
+        f"Остановить: <code>/giveaway_period_stop {gp_id}</code>",
+        parse_mode="HTML",
+        delay=60,
+    )
+
+
+# ─── /giveaway_period_stop ───────────────────────────────────────────────────
+
+
+@router.message(Command("giveaway_period_stop"))
+@inject
+async def cmd_giveaway_period_stop(
+    message: Message,
+    store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
+    pluralizer: FromDishka[ScorePluralizer],
+) -> None:
+    """Останавливает периодический розыгрыш по ID или единственный активный."""
+    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+        await reply_and_delete(message, "⛔ Только администраторы могут останавливать периодические розыгрыши.")
+        return
+
+    chat_id = message.chat.id
+    args = (message.text or "").split()[1:]
+
+    gp_id: str | None = args[0] if args else None
+
+    if gp_id is None:
+        active = await store.giveaway_period_list(chat_id)
+        if not active:
+            await reply_and_delete(message, "Нет активных периодических розыгрышей.")
+            return
+        if len(active) == 1:
+            gp_id = active[0][0]
+        else:
+            lines = ["Несколько активных периодических розыгрышей, укажи ID:\n"]
+            for pid, data in active:
+                prizes_str = " / ".join(f"{p} {pluralizer.pluralize(p)}" for p in data["prizes"])
+                lines.append(
+                    f"<code>/giveaway_period_stop {pid}</code> — {prizes_str}, {_period_label(data['period_seconds'])}"
+                )
+            await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
+            return
+
+    data = await store.giveaway_period_delete(chat_id, gp_id)
+    if data is None:
+        await reply_and_delete(message, "❌ Периодический розыгрыш не найден.")
+        return
+
+    prizes_str = " / ".join(f"{p} {pluralizer.pluralize(p)}" for p in data["prizes"])
+    await reply_and_delete(
+        message,
+        f"⏹ Периодический розыгрыш <code>{gp_id}</code> остановлен.\n"
+        f"Призы были: {prizes_str}",
+        parse_mode="HTML",
+    )
+
+
 # ─── /giveaway_end ──────────────────────────────────────────────────────────
 
 
@@ -149,7 +346,7 @@ async def cmd_giveaway_end(
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("⛔ Только администраторы могут завершать розыгрыши.")
+        await reply_and_delete(message, "⛔ Только администраторы могут завершать розыгрыши.")
         return
 
     args = (message.text or "").split()[1:]
@@ -160,7 +357,7 @@ async def cmd_giveaway_end(
     else:
         active = await service.get_active_in_chat(message.chat.id)
         if not active:
-            await message.answer("Нет активных розыгрышей.")
+            await reply_and_delete(message, "Нет активных розыгрышей.")
             return
         if len(active) == 1:
             giveaway_id = active[0].id
@@ -169,12 +366,12 @@ async def cmd_giveaway_end(
             for g in active:
                 prizes_str = " / ".join(f"{p} {pluralizer.pluralize(p)}" for p in g.prizes)
                 lines.append(f"<code>/giveaway_end {g.id}</code> — {prizes_str}")
-            await message.answer("\n".join(lines), parse_mode="HTML")
+            await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
             return
 
     result = await service.finish(giveaway_id)
     if result is None:
-        await message.answer("❌ Розыгрыш не найден или уже завершён.")
+        await reply_and_delete(message, "❌ Розыгрыш не найден или уже завершён.")
         return
 
     await _post_results(bot, result.giveaway, result.winners, result.participants_count, pluralizer)
@@ -243,7 +440,8 @@ async def _post_results(
             lines.append(f"{medal} {mention} — +{prize_str}")
         text = "\n".join(lines)
 
-    await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
+    result_msg = await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
+    schedule_delete(bot, result_msg, delay=30)
 
     if giveaway.message_id:
         try:
@@ -254,6 +452,7 @@ async def _post_results(
             )
         except Exception:
             pass
+        schedule_delete_id(bot, giveaway.chat_id, giveaway.message_id, delay=30)
 
 
 # ─── Мут-рулетка ────────────────────────────────────────────────────────────
@@ -281,14 +480,15 @@ async def cmd_mute_roulette(
     store: FromDishka[RedisStore],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("Только администраторы могут запускать мут-гивэвей.")
+        await reply_and_delete(message, "Только администраторы могут запускать мут-гивэвей.")
         return
 
     args = (message.text or "").split()[1:]
     # /mutegiveaway <время_мута> <кол-во_проигравших> <время_сбора>
     # /mutegiveaway 10m 2 5m
     if len(args) < 3:
-        await message.answer(
+        await reply_and_delete(
+            message,
             "Использование: <code>/mutegiveaway &lt;мут&gt; &lt;кол-во&gt; &lt;сбор&gt;</code>\n"
             "Пример: <code>/mutegiveaway 10m 2 5m</code>\n"
             "= мут 10 минут, 2 проигравших, сбор участников 5 минут.",
@@ -298,7 +498,7 @@ async def cmd_mute_roulette(
 
     mute_secs = parse_duration(args[0])
     if mute_secs is None or mute_secs < 60:
-        await message.answer("Неверное время мута (мин. 1m).")
+        await reply_and_delete(message, "Неверное время мута (мин. 1m).")
         return
 
     try:
@@ -306,12 +506,12 @@ async def cmd_mute_roulette(
         if losers_count < 1:
             raise ValueError
     except ValueError:
-        await message.answer("Кол-во проигравших должно быть >= 1.")
+        await reply_and_delete(message, "Кол-во проигравших должно быть >= 1.")
         return
 
     collect_secs = parse_duration(args[2])
     if collect_secs is None or collect_secs < 30:
-        await message.answer("Время сбора минимум 30 секунд.")
+        await reply_and_delete(message, "Время сбора минимум 30 секунд.")
         return
 
     chat_id = message.chat.id
@@ -337,7 +537,8 @@ async def cmd_mute_roulette(
         f"🆔 ID: <code>{roulette_id}</code>\n\n"
         f"Жми кнопку, если не трус!"
     )
-    await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0))
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0))
+    await store.mute_roulette_set_message_id(chat_id, roulette_id, sent.message_id)
 
 
 @router.callback_query(F.data.startswith("mutegiveaway:join:"))
@@ -375,7 +576,7 @@ async def cmd_mute_roulette_end(
     mute_service: FromDishka[MuteService],
 ) -> None:
     if not is_admin(message.from_user and message.from_user.username, config.admin.users):
-        await message.answer("Только администраторы.")
+        await reply_and_delete(message, "Только администраторы.")
         return
 
     chat_id = message.chat.id
@@ -386,7 +587,7 @@ async def cmd_mute_roulette_end(
     if roulette_id is None:
         active = await store.mute_roulette_list(chat_id)
         if not active:
-            await message.answer("Нет активных мут-гивэвеев.")
+            await reply_and_delete(message, "Нет активных мут-гивэвеев.")
             return
         if len(active) == 1:
             roulette_id = active[0][0]
@@ -399,12 +600,12 @@ async def cmd_mute_roulette_end(
                     f"проигравших {data['losers_count']}, "
                     f"участников {len(data['participants'])}"
                 )
-            await message.answer("\n".join(lines), parse_mode="HTML")
+            await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
             return
 
     data = await store.mute_roulette_delete(chat_id, roulette_id)
     if data is None:
-        await message.answer("❌ Мут-гивэвей не найден или уже завершён.")
+        await reply_and_delete(message, "❌ Мут-гивэвей не найден или уже завершён.")
         return
 
     await _finish_mute_roulette(bot, chat_id, data, mute_service)
@@ -422,29 +623,17 @@ async def _finish_mute_roulette(
     mute_minutes = data["mute_minutes"]
     creator_id = data["creator_id"]
 
+    lobby_message_id: int = data.get("message_id", 0)
+
     if not participants:
-        await bot.send_message(chat_id, "🎰 Мут-гивэвей завершён, но никто не участвовал.")
+        result_msg = await bot.send_message(chat_id, "🎰 Мут-гивэвей завершён, но никто не участвовал.")
+        schedule_delete(bot, result_msg, delay=30)
+        if lobby_message_id:
+            schedule_delete_id(bot, chat_id, lobby_message_id, delay=30)
         return
 
     losers = random.sample(participants, min(losers_count, len(participants)))
     until = datetime.now(TZ_MSK) + timedelta(minutes=mute_minutes)
-
-    _ADMIN_PERM_FIELDS = (
-        "can_manage_chat",
-        "can_change_info",
-        "can_delete_messages",
-        "can_invite_users",
-        "can_restrict_members",
-        "can_pin_messages",
-        "can_manage_video_chats",
-        "can_promote_members",
-        "can_post_messages",
-        "can_edit_messages",
-        "can_post_stories",
-        "can_edit_stories",
-        "can_delete_stories",
-        "can_manage_topics",
-    )
 
     lines = [f"🎰 <b>Мут-гивэвей завершён!</b> Участников: {len(participants)}\n"]
     for user_id in losers:
@@ -459,9 +648,7 @@ async def _finish_mute_roulette(
         was_admin = isinstance(member, ChatMemberAdministrator)
         admin_perms: dict | None = None
         if was_admin:
-            admin_perms = {f: getattr(member, f, False) or False for f in _ADMIN_PERM_FIELDS}
-            if member.custom_title:
-                admin_perms["custom_title"] = member.custom_title
+            admin_perms = _extract_admin_permissions(member)
 
         try:
             # Если админ — сначала снимаем права, потом мутим
@@ -502,4 +689,7 @@ async def _finish_mute_roulette(
             logger.exception("Failed to mute %d in roulette", user_id)
             lines.append(f"⚠️ {name} — не удалось замутить")
 
-    await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+    schedule_delete(bot, result_msg, delay=30)
+    if lobby_message_id:
+        schedule_delete_id(bot, chat_id, lobby_message_id, delay=30)

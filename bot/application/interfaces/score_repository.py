@@ -24,3 +24,8 @@ class IScoreRepository(ABC):
     async def bottom(self, chat_id: int, limit: int) -> list[Score]:
         """Пользователи с наименьшим счётом (антирейтинг), ascending."""
         ...
+
+    @abstractmethod
+    async def get_rank(self, user_id: int, chat_id: int) -> int | None:
+        """Место пользователя в рейтинге чата (1 = первое). None если нет счёта."""
+        ...

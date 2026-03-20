@@ -60,6 +60,8 @@ class PostgresGiveawayRepository(IGiveawayRepository):
             """
             SELECT * FROM giveaways
             WHERE status = 'active' AND ends_at IS NOT NULL AND ends_at <= $1
+            ORDER BY ends_at
+            LIMIT 50
             """,
             now,
         )

@@ -1,0 +1,150 @@
+{
+  "title": "Bot Overview",
+  "uid": "bot-overview",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "Europe/Moscow",
+  "tags": ["bot"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Logs per minute",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate({service=\"bot\"}[1m])) by (level)",
+          "legendFormat": "{{level}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warning" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "info" }, "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "title": "Log level breakdown",
+      "type": "piechart",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"info\"}[24h]))", "legendFormat": "info", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"warning\"}[24h]))", "legendFormat": "warning", "refId": "B" },
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"error\"}[24h]))", "legendFormat": "error", "refId": "C" }
+      ],
+      "options": { "pieType": "donut", "legend": { "displayMode": "list", "placement": "right" } },
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warning" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "info" }, "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "title": "Total logs (24h)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"}[24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 4,
+      "title": "Errors (24h)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 8, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\", level=\"error\"}[24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+    },
+    {
+      "id": 5,
+      "title": "Warnings (24h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 8, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\", level=\"warning\"}[24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } } }
+    },
+    {
+      "id": 6,
+      "title": "Bot restarts",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 8, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "count_over_time({service=\"bot\"} |= \"Bot starting\" [24h])", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 2 }] } } }
+    },
+    {
+      "id": 7,
+      "title": "Top loggers by volume",
+      "type": "bargauge",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (logger) (count_over_time({service=\"bot\"}[24h])))",
+          "legendFormat": "{{logger}}",
+          "refId": "A"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient" },
+      "fieldConfig": { "defaults": { "color": { "mode": "continuous-BlPu" } } }
+    },
+    {
+      "id": 8,
+      "title": "All services — logs per minute",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(rate({compose_project=~\".+\"}[1m])) by (service)",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 1, "fillOpacity": 5 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 9,
+      "title": "Recent logs",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "{service=\"bot\"}", "refId": "A" }],
+      "options": { "dedupStrategy": "none", "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "pluginId": "loki",
+        "query": "loki",
+        "label": "Datasource",
+        "hide": 0,
+        "refresh": 1,
+        "current": { "selected": true, "text": "Loki", "value": "Loki" }
+      }
+    ]
+  }
+}

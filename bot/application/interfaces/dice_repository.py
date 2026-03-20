@@ -45,3 +45,8 @@ class IDiceRepository(ABC):
 
     @abstractmethod
     async def count_participants(self, game_id: int) -> int: ...
+
+    @abstractmethod
+    async def is_user_in_active_game(self, chat_id: int, user_id: int) -> bool:
+        """True если пользователь уже является участником любой pending-игры в чате."""
+        ...

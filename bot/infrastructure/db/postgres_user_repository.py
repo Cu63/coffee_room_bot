@@ -11,21 +11,23 @@ class PostgresUserRepository(IUserRepository):
     async def upsert(self, user: User) -> None:
         await self._conn.execute(
             """
-            INSERT INTO users (id, username, full_name, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO users (id, username, full_name, is_bot, updated_at)
+            VALUES ($1, $2, $3, $4, now())
             ON CONFLICT (id) DO UPDATE
-                SET username  = EXCLUDED.username,
-                    full_name = EXCLUDED.full_name,
+                SET username   = EXCLUDED.username,
+                    full_name  = EXCLUDED.full_name,
+                    is_bot     = EXCLUDED.is_bot,
                     updated_at = now()
             """,
             user.id,
             user.username,
             user.full_name,
+            user.is_bot,
         )
 
     async def get_by_username(self, username: str) -> User | None:
         row = await self._conn.fetchrow(
-            "SELECT id, username, full_name FROM users WHERE username = $1",
+            "SELECT id, username, full_name FROM users WHERE LOWER(username) = LOWER($1)",
             username,
         )
         return self._to_entity(row)
@@ -36,6 +38,19 @@ class PostgresUserRepository(IUserRepository):
             user_id,
         )
         return self._to_entity(row)
+
+    async def get_by_ids(self, user_ids: list[int]) -> dict[int, User]:
+        """Загрузить несколько пользователей одним запросом ANY($1)."""
+        if not user_ids:
+            return {}
+        rows = await self._conn.fetch(
+            "SELECT id, username, full_name FROM users WHERE id = ANY($1)",
+            user_ids,
+        )
+        return {
+            row["id"]: User(id=row["id"], username=row["username"], full_name=row["full_name"])
+            for row in rows
+        }
 
     @staticmethod
     def _to_entity(row: asyncpg.Record | None) -> User | None:

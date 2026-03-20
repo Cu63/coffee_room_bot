@@ -12,3 +12,8 @@ class IUserRepository(ABC):
 
     @abstractmethod
     async def get_by_id(self, user_id: int) -> User | None: ...
+
+    @abstractmethod
+    async def get_by_ids(self, user_ids: list[int]) -> dict[int, User]:
+        """Загрузить несколько пользователей одним запросом. Ключ — user_id."""
+        ...

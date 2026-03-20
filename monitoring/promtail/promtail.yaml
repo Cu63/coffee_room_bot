@@ -1,0 +1,53 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: status
+            values: ["running"]
+    relabel_configs:
+      # Имя контейнера без слеша
+      - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
+        target_label: container
+      # Имя образа
+      - source_labels: [__meta_docker_container_image]
+        target_label: image
+      # Compose-сервис (если запущен через docker compose)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      # Compose-проект
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: compose_project
+    pipeline_stages:
+      # Пробуем распарсить JSON (structlog в prod-режиме)
+      - json:
+          expressions:
+            level: level
+            logger: logger
+            event: event
+            timestamp: timestamp
+      # Если level удалось извлечь — используем его как метку
+      - labels:
+          level:
+          logger:
+      # Только для контейнера bot — дополнительно маппим уровень в стандартный
+      - match:
+          selector: '{service="bot"}'
+          stages:
+            - template:
+                source: level
+                template: '{{ ToLower .Value }}'
+            - labels:
+                level:

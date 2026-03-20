@@ -1,0 +1,125 @@
+{
+  "title": "Errors & Warnings",
+  "uid": "bot-errors",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "Europe/Moscow",
+  "tags": ["bot"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Errors per 5 min",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 16, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"error\"}[5m]))", "legendFormat": "errors", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"warning\"}[5m]))", "legendFormat": "warnings", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 15 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "#F2495C", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warnings" }, "properties": [{ "id": "color", "value": { "fixedColor": "#FF9830", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "title": "Error rate (last 1h)",
+      "type": "gauge",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\", level=\"error\"}[1h])) / sum(count_over_time({service=\"bot\"}[1h])) * 100", "refId": "A" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true, "showThresholdMarkers": true },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "orange", "value": 5 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Errors by logger",
+      "type": "bargauge",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (logger) (count_over_time({service=\"bot\", level=\"error\"}[24h])))",
+          "legendFormat": "{{logger}}",
+          "refId": "A"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient" },
+      "fieldConfig": { "defaults": { "color": { "mode": "continuous-RdYlGr" } } }
+    },
+    {
+      "id": 4,
+      "title": "Exception types",
+      "type": "bargauge",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"TelegramBadRequest\" [24h]))", "legendFormat": "TelegramBadRequest", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"asyncpg\" |= \"Error\" [24h]))", "legendFormat": "asyncpg errors", "refId": "B" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"NetworkError\" [24h]))", "legendFormat": "NetworkError", "refId": "C" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"TimeoutError\" [24h]))", "legendFormat": "TimeoutError", "refId": "D" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient" },
+      "fieldConfig": { "defaults": { "color": { "mode": "continuous-RdYlGr" } } }
+    },
+    {
+      "id": 5,
+      "title": "Failed operations",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"mute_failed\" [15m]))", "legendFormat": "mute failed", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"Failed to mute\" [15m]))", "legendFormat": "restrict failed", "refId": "B" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"Failed to restore admin\" [15m]))", "legendFormat": "restore admin failed", "refId": "C" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"task failed\" [15m]))", "legendFormat": "background task failed", "refId": "D" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "title": "Error log stream",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "{service=\"bot\"} | json | level=~\"error|warning\"", "refId": "A" }
+      ],
+      "options": { "dedupStrategy": "none", "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "pluginId": "loki",
+        "query": "loki",
+        "label": "Datasource",
+        "hide": 0,
+        "refresh": 1,
+        "current": { "selected": true, "text": "Loki", "value": "Loki" }
+      }
+    ]
+  }
+}

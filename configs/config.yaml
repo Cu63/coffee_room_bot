@@ -34,36 +34,41 @@ admin:
 
 
 mute:
-  cost_per_minute: 20               # стоимость 1 минуты мута в баллах
+  cost_per_minute: 3                # стоимость 1 минуты мута в баллах
   min_minutes: 1
-  max_minutes: 120
+  max_minutes: 15                   # максимальная длительность одного мута
+  daily_limit: 3                    # сколько мутов в сутки может выдать один пользователь
+  target_cooldown_hours: 2          # кулдаун между мутами одного и того же человека
   selfmute_min_minutes: 1           # лимиты /selfmute
   selfmute_max_minutes: 1440        # 24 часа
-  protection_cost: 200            # баллов за одно использование /protect
-  protection_duration_hours: 24   # сколько часов даёт /protect
+  protection_cost: 200              # баллов за одно использование /protect
+  protection_duration_hours: 24     # сколько часов даёт /protect
+  unmute_multiplier: 1.5            # множитель стоимости /unmute (оставшиеся мин × cost_per_minute × множитель)
 
 tag:
   cost_self: 50                 # сменить тег себе
   cost_member: 100              # сменить тег обычному участнику
   cost_admin: 200               # сменить тег админу/модератору
   cost_owner: 500               # сменить тег создателю чата
-  max_length: 32                # максимальная длина тега
+  max_length: 16                # максимальная длина тега
 
 blackjack:
+  enabled: true                   # дуэльный блекджек
   min_bet: 1
-  max_bet: 500
-  max_games_per_window: 5      # максимум игр в окне
-  window_hours: 1              # размер временного окна в часах
+  max_bet: 100
 
 slots:
+  enabled: true                  # false — полностью отключить /slots
   min_bet: 1
-  max_bet: 200
+  max_bet: 25               # джекпот (×30) = 750 — событие, но не ломает экономику
+  cooldown_minutes: 1440    # кулдаун между спинами одного пользователя (в минутах)
 
 dice:
+  enabled: true                  # false — полностью отключить /dice
   min_bet: 1
-  max_bet: 1000
+  max_bet: 100
   min_wait_seconds: 10         # минимальное время сбора участников
-  max_wait_seconds: 3600       # максимальное время сбора (1 час)
+  max_wait_seconds: 900        # максимальное время сбора (15 минут)
 
 llm:
   model: "gemini-2.5-flash-lite"
@@ -73,10 +78,33 @@ llm:
   search_max_results: 7         # сколько результатов поиска парсить
 
 
+burst:
+  enabled: true
+  messages_required: 8          # сколько сообщений нужно
+  window_minutes: 20            # за какой период (скользящее окно)
+  min_length: 15                # минимальная длина сообщения (символов)
+  reward: 15                    # награда в кирчиках
+  cooldown_hours: 4             # кулдаун после срабатывания
+
+spark:
+  enabled: true
+  unique_responders: 4          # сколько разных людей должны написать после сообщения
+  window_minutes: 10            # за какой период
+  reward: 10                    # награда автору-зачинщику
+  cooldown_hours: 6             # кулдаун
+
+reply_chain:
+  enabled: true
+  replies_required: 6           # сколько чередующихся реплаев нужно (A→B→A→B→...)
+  window_minutes: 15            # за какой период
+  reward: 8                     # награда каждому из двоих
+  cooldown_hours: 4             # кулдаун на пару
+
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем
-  positive_only: false # только 👍❤️🔥 итд, без 💩👎
+  positive_only: true
+
 # Системные интервалы и параметры
 system:
   cleanup_interval_hours: 6       # как часто удалять устаревшие события
@@ -84,5 +112,112 @@ system:
   auto_delete_seconds: 120        # через сколько секунд удалять служебные сообщения
   history_page_size: 30           # строк на страницу в /history
 
-# Лимиты блекджека
-# (max_bet и min_bet уже есть в blackjack, добавляем rate limiting)
+renew:
+  cost: 100           # стоимость одного /renew
+  daily_limit: 2      # сколько раз в сутки можно использовать /renew
+
+# Баг-репорты: кому отправлять в личку
+# Каждый получатель должен предварительно написать боту в личку
+bug:
+  recipients:
+    - 758647978   # замените на реальные Telegram user_id
+    - 450588708
+
+wordgame:
+  min_bet: 0
+  max_bet: 200
+  min_duration_seconds: 180   # 3 минуты минимум
+  max_duration_seconds: 3600  # 1 час максимум
+  attempt_cost: 1             # баллов за неудачную попытку
+  min_word_length: 2
+  max_word_length: 16
+  max_games_per_window: 3     # макс. игр за окно
+  game_window_hours: 4        # окно лимита в часах
+
+rwordgame:
+  max_bet: 15                 # лимит ставки для /rword (0–N)
+  min_word_length: 2          # минимальная длина случайного слова
+  max_word_length: 21         # максимальная длина случайного слова
+  words_file: "configs/words_ru.txt"  # путь к файлу словаря
+  max_games_per_window: 5     # макс. игр за окно
+  game_window_hours: 1        # окно лимита в часах
+  cooldown_minutes: 15        # задержка между играми /rword (в минутах)
+
+tictactoe:
+  enabled: true
+  min_bet: 1
+  max_bet: 100
+
+lot:
+  enabled: true
+  min_duration_sec: 60        # минимальная длительность (секунды)
+  max_duration_sec: 86400     # максимальная длительность (24 часа)
+  min_start_price: 0          # минимальная стартовая цена
+  max_start_price: 100000     # максимальная стартовая цена
+  bid_steps: [5, 10, 25, 50, 100]  # кнопки шагов ставки
+  delete_delay: 120           # секунд до удаления итогового сообщения
+
+anagram:
+  enabled: true
+  min_bet: 1                    # минимальная ставка (/anagram <ставка>)
+  max_bet: 10                  # максимальная ставка
+  min_word_length: 7            # минимальная длина загадываемого слова
+  max_word_length: 20           # максимальная длина загадываемого слова
+  attempt_cost: 3               # баллов за неверную попытку (0 = бесплатно)
+  answer_timeout_seconds: 300   # секунд на угадывание (5 минут)
+  games_per_hour: 0         # авто-игры в час (0 = авто отключено)
+  auto_bet: 10                  # приз в авто-играх (из баланса бота)
+  cooldown_minutes: 15          # задержка между играми /anagram (в минутах)
+
+buyop:
+  cost: 1100                    # стоимость /buyop (титул без прав)
+  tag: "налудил"                # кастомный тег (пусто = без тега)
+
+idea:
+  cost: 0                       # стоимость создания идеи (0 = бесплатно)
+  votes_threshold: 5            # голосов 👍 для уведомления админов
+  vote_ttl_hours: 72            # сколько часов принимать голоса
+
+selfban:
+  min_minutes: 30               # минимальная длительность самозапрета на игры
+  max_minutes: 10080            # максимальная (7 дней)
+
+logging:
+  level: "INFO"
+  human_readable_logs: false
+
+analyze:
+  model: "gpt-4.1-nano"
+  base_url: "https://api.proxyapi.ru/openai/v1"
+  max_output_tokens: 4096        # лимит токенов на ответ
+  max_messages: 500              # максимум N для /analyze
+  wir_default_messages: 300      # N по умолчанию для /wir
+  wir_max_messages: 1000         # максимум N для /wir
+  # ── Лимиты ──────────────────────────────────────────────────────
+  daily_input_token_limit: 50000  # max input-токенов на юзера/день (0 = без лимита)
+  max_history_hours: 32           # максимальная глубина истории (часы)
+
+daily_summary:
+  enabled: true
+  time: "22:00"              # время отправки (HH:MM, MSK)
+  max_messages: 10000         # потолок на случай очень активного чата
+
+daily_leaderboard:
+  enabled: true
+  time: "23:00"                  # время подведения итогов (HH:MM, MSK)
+  bonus_messages: 50             # бонус за наибольшее кол-во сообщений
+  bonus_reactions_given: 50      # бонус за наибольшее кол-во данных реакций
+  bonus_reactions_received: 50   # бонус за наибольшее кол-во собранных реакций
+  bonus_replies: 50              # бонус за наибольшее кол-во реплаев
+  bonus_ttt_wins: 50             # бонус за наибольшее кол-во побед в TTT
+  bonus_wordgame_wins: 50        # бонус за наибольшее кол-во побед в word/rword
+
+chatmode:
+  enabled: true
+  default_minutes: 5             # минуты по умолчанию если не указаны
+  silence:
+    cost_per_minute: 10          # стоимость 1 минуты режима тишины
+    max_minutes: 30              # максимальная длительность
+  gif:
+    cost_per_minute: 5           # стоимость 1 минуты режима гифок
+    max_minutes: 20              # максимальная длительность

@@ -29,6 +29,14 @@ SPECIAL_EMOJI = {
     "tag": "🏷",
     "transfer": "💸",
     "protect": "🛡",
+    "burst": "💬",
+    "spark": "🔥",
+    "chain": "🔗",
+    "buyop": "🎖",
+    "ttt": "🎮",
+    "daily_leader": "🏆",
+    "chatmode": "🔒",
+    "bj": "🃏",
 }
 
 
@@ -243,6 +251,11 @@ class ScoreService:
             return Score(user_id=user_id, chat_id=chat_id, value=0)
         return score
 
+    async def get_bot_balance(self, bot_id: int, chat_id: int) -> int:
+        """Получить текущий баланс бота в данном чате."""
+        score = await self._score_repo.get(bot_id, chat_id)
+        return score.value if score else 0
+
     async def set_score(
         self,
         user_id: int,
@@ -348,6 +361,38 @@ class ScoreService:
             sender_balance=sender_new,
             receiver_balance=receiver_new,
         )
+
+    async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за burst-активность. Возвращает новый баланс."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["burst"],
+        )
+        return new_value
+
+    async def award_spark(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за разжигание дискуссии."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["spark"],
+        )
+        return new_value
+
+    async def award_chain(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Тихое начисление за цепочку реплаев."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["chain"],
+        )
+        return new_value
+
+    async def award_daily_leader(self, user_id: int, chat_id: int, reward: int) -> int:
+        """Начисление бонуса лидеру дня."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        await self._save_special_event(
+            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["daily_leader"],
+        )
+        return new_value
 
     async def _save_special_event(
         self,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
@@ -13,18 +15,21 @@ from cachetools import TTLCache
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.history_service import HistoryService
+from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
+from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.score_service import ScoreService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
 
 router = Router(name="commands")
 
-# TTLCache: страницы истории живут 10 минут, max 500 записей (chat_id, user_id)
-_history_pages: TTLCache = TTLCache(maxsize=500, ttl=600)
+# TTLCache: страницы истории живут 2 минуты, max 100 записей (chat_id, user_id)
+_history_pages: TTLCache = TTLCache(maxsize=100, ttl=120)
 
 
 def _history_kb(page: int, total: int, chat_id: int, uid: int) -> InlineKeyboardMarkup | None:
@@ -55,7 +60,7 @@ async def cmd_score(
     if command.args:
         target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
         if target_user is None:
-            await message.reply(formatter._t["error_user_not_found"])
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
             return
         display_name = user_link(target_user.username, target_user.full_name, target_user.id)
     else:
@@ -64,7 +69,7 @@ async def cmd_score(
         display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     user_id = target_user.id if target_user else message.from_user.id  # type: ignore[union-attr]
     score = await score_service.get_score(user_id, chat_id)
-    await message.reply(
+    await reply_and_delete(message,
         formatter.score_info(display_name, score.value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
@@ -94,9 +99,10 @@ async def cmd_top(
     else:
         scores = await leaderboard_service.get_top(message.chat.id, limit)
 
+    users = await user_repo.get_by_ids([s.user_id for s in scores])
     rows: list[tuple[int, str, int]] = []
     for rank, score in enumerate(scores, start=1):
-        user = await user_repo.get_by_id(score.user_id)
+        user = users.get(score.user_id)
         name = user_link(user.username, user.full_name, user.id) if user else str(score.user_id)
         rows.append((rank, name, score.value))
 
@@ -106,9 +112,9 @@ async def cmd_top(
         for rank, name, value in rows:
             lines.append(f"{rank}. {name} — {value} {p.pluralize(value)}")
         text = "\n".join(lines) if rows else "🔻 <b>Антирейтинг</b>\n<i>Нет данных</i>"
-        await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
     else:
-        await message.reply(formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(message, formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("stats"))
@@ -117,21 +123,24 @@ async def cmd_stats(
     message: Message,
     command: CommandObject,
     score_service: FromDishka[ScoreService],
+    score_repo: FromDishka[IScoreRepository],
+    stats_repo: FromDishka[IUserStatsRepository],
+    limits_repo: FromDishka[IDailyLimitsRepository],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
 ) -> None:
-    """Статистика по реакциям и победам в играх."""
+    """Подробная статистика пользователя: счёт, лимиты, реакции, игры."""
     chat_id = message.chat.id
 
-    # Определяем пользователя: реплай, @username или сам
+    # Определяем цель: реплай → @username → сам
     target_user = None
     if message.reply_to_message and message.reply_to_message.from_user:
-        ru = message.reply_to_message.from_user
-        target_user = await user_repo.get_by_id(ru.id)
+        target_user = await user_repo.get_by_id(message.reply_to_message.from_user.id)
     elif command.args:
         target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
         if target_user is None:
-            await message.reply(formatter._t.get("error_user_not_found", "Пользователь не найден."))
+            await reply_and_delete(message, formatter._t.get("error_user_not_found", "Пользователь не найден."))
             return
 
     if target_user is not None:
@@ -143,25 +152,77 @@ async def cmd_stats(
         user_id = message.from_user.id
         display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
 
-    stats = await score_service.get_stats(user_id, chat_id)
+    # Параллельно тянем все данные
+    today = datetime.date.today()
+    score_obj = await score_service.get_score(user_id, chat_id)
+    rank = await score_repo.get_rank(user_id, chat_id)
+    stats = await stats_repo.get(user_id, chat_id)
+    daily = await limits_repo.get(user_id, chat_id, today)
+
     p = formatter._p
-    icon = formatter._p._icon
+    lc = config.limits
+    icon = config.score.icon
 
-    total_games = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway
+    # ── Счёт + место ────────────────────────────────────────────
+    score_val = score_obj.value
+    rank_str = f"  · #{rank} в чате" if rank else ""
+    score_line = f"{icon} <b>{score_val} {p.pluralize(score_val)}</b>{rank_str}"
 
-    text = (
-        f"📊 <b>Статистика</b> {display_name}\n\n"
-        f"<b>Реакции:</b>\n"
+    # ── Лимиты сегодня ──────────────────────────────────────────
+    neg_used = daily.reactions_given
+    neg_left = max(0, lc.daily_negative_given - neg_used)
+    recv_used = daily.score_received
+    recv_left = max(0, lc.daily_score_received - recv_used)
+
+    limits_block = (
+        f"<b>Сегодня:</b>\n"
+        f"  ➖ Негативных реакций: {neg_used} / {lc.daily_negative_given}"
+        f"  <i>(осталось {neg_left})</i>\n"
+        f"  📥 Получено баллов: {recv_used} / {lc.daily_score_received}"
+        f"  <i>(осталось {recv_left})</i>"
+    )
+
+    # ── Реакции за всё время ─────────────────────────────────────
+    netto = stats.score_given - stats.score_taken
+    netto_sign = "+" if netto >= 0 else ""
+    reactions_block = (
+        f"<b>Реакции (всё время):</b>\n"
         f"  🎁 Подарено: {stats.score_given} {p.pluralize(stats.score_given)}\n"
-        f"  💀 Отнято: {stats.score_taken} {p.pluralize(stats.score_taken)}\n\n"
+        f"  💀 Отнято: {stats.score_taken} {p.pluralize(stats.score_taken)}\n"
+        f"  ∑ Нетто: {netto_sign}{netto} {p.pluralize(abs(netto))}"
+    )
+
+    # ── Игры ────────────────────────────────────────────────────
+    total_wins = stats.wins_blackjack + stats.wins_slots + stats.wins_dice + stats.wins_giveaway + stats.wins_ttt
+    games_block = (
         f"<b>Победы в играх:</b>\n"
         f"  🃏 Блекджек: {stats.wins_blackjack}\n"
         f"  🎰 Слоты: {stats.wins_slots}\n"
         f"  🎲 Кубики: {stats.wins_dice}\n"
         f"  🎟 Розыгрыши: {stats.wins_giveaway}\n"
-        f"  <i>Итого: {total_games}</i>"
+        f"  🎮 Крестики-нолики: {stats.wins_ttt}\n"
+        f"  <i>Итого: {total_wins} {_wins_plural(total_wins)}</i>"
     )
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+
+    text = (
+        f"📊 <b>Статистика</b> {display_name}\n\n"
+        f"{score_line}\n\n"
+        f"{limits_block}\n\n"
+        f"{reactions_block}\n\n"
+        f"{games_block}"
+    )
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+
+
+def _wins_plural(n: int) -> str:
+    if 11 <= n % 100 <= 19:
+        return "побед"
+    r = n % 10
+    if r == 1:
+        return "победа"
+    if 2 <= r <= 4:
+        return "победы"
+    return "побед"
 
 
 @router.message(Command("history"))
@@ -179,10 +240,12 @@ async def cmd_history(
     chat_id = message.chat.id
     uid = message.from_user.id
     events = await history_service.get_history(chat_id)
+    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
+    users = await user_repo.get_by_ids(all_ids)
     event_dicts: list[dict] = []
     for e in events:
-        actor = await user_repo.get_by_id(e.actor_id)
-        target = await user_repo.get_by_id(e.target_id)
+        actor = users.get(e.actor_id)
+        target = users.get(e.target_id)
         event_dicts.append(
             {
                 "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
@@ -197,7 +260,7 @@ async def cmd_history(
     _history_pages[(chat_id, uid)] = pages
     text = formatter.history(pages[0], config.history.retention_days)
     kb = _history_kb(0, len(pages), chat_id, uid)
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("hist:"))
@@ -207,34 +270,25 @@ async def cb_history(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    async def safe_answer() -> None:
-        try:
-            await callback.answer()
-        except Exception:
-            pass
-
     if callback.data == "hist:noop":
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     parts = callback.data.split(":")
     if len(parts) != 4:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     _, chat_id_str, uid_str, page_str = parts
     try:
         chat_id, uid, page = int(chat_id_str), int(uid_str), int(page_str)
     except ValueError:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     if callback.from_user.id != uid:
-        try:
-            await callback.answer("Это не твоя история.", show_alert=True)
-        except Exception:
-            pass
+        await safe_callback_answer(callback, "Это не твоя история.", show_alert=True)
         return
     pages = _history_pages.get((chat_id, uid))
     if not pages or page < 0 or page >= len(pages):
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     text = formatter.history(pages[page], config.history.retention_days)
     kb = _history_kb(page, len(pages), chat_id, uid)
@@ -244,7 +298,7 @@ async def cb_history(
         )
     except Exception:
         pass
-    await safe_answer()
+    await safe_callback_answer(callback)
 
 
 @router.message(Command("limits"))
@@ -272,7 +326,9 @@ async def cmd_limits(
         f"  Хранится: {config.history.retention_days} дн.\n\n"
         f"<b>Мут:</b>\n"
         f"  Стоимость: {mc.cost_per_minute} {p.pluralize(mc.cost_per_minute)} / мин\n"
-        f"  Диапазон: {mc.min_minutes}–{mc.max_minutes} мин\n\n"
+        f"  Диапазон: {mc.min_minutes}–{mc.max_minutes} мин\n"
+        f"  Лимит: {mc.daily_limit} мутов в сутки\n"
+        f"  Кулдаун на цель: {mc.target_cooldown_hours} ч.\n\n"
         f"<b>Тег:</b>\n"
         f"  Себе: {tc.cost_self} {p.pluralize(tc.cost_self)}\n"
         f"  Участнику: {tc.cost_member} {p.pluralize(tc.cost_member)}\n"
@@ -282,11 +338,11 @@ async def cmd_limits(
         f"<b>Блекджек:</b>\n"
         f"  Ставка: {bjc.min_bet}–{bjc.max_bet} {p.pluralize(bjc.max_bet)}"
     )
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 # ── Кэш для пагинации истории пользователя ───────────────────────
-_uhistory_pages: TTLCache = TTLCache(maxsize=500, ttl=600)
+_uhistory_pages: TTLCache = TTLCache(maxsize=100, ttl=120)
 
 
 def _uhistory_kb(page: int, total: int, chat_id: int, uid: int, target_id: int) -> InlineKeyboardMarkup | None:
@@ -327,7 +383,7 @@ async def cmd_uhistory(
         target = await user_repo.get_by_username(username)
 
     if target is None:
-        await message.reply(
+        await reply_and_delete(message,
             "Использование: <code>/uhistory @username</code> или реплай на сообщение.",
             parse_mode=ParseMode.HTML,
         )
@@ -337,17 +393,19 @@ async def cmd_uhistory(
     target_link = user_link(target.username, target.full_name, target.id)
 
     if not events:
-        await message.reply(
+        await reply_and_delete(message,
             f"Нет событий для {target_link} за последние {config.history.retention_days} дн.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
 
+    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
+    users = await user_repo.get_by_ids(all_ids)
     event_dicts: list[dict] = []
     for e in events:
-        actor = await user_repo.get_by_id(e.actor_id)
-        tgt = await user_repo.get_by_id(e.target_id)
+        actor = users.get(e.actor_id)
+        tgt = users.get(e.target_id)
         event_dicts.append(
             {
                 "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
@@ -371,7 +429,7 @@ async def cmd_uhistory(
     text = f"{title}\n<blockquote expandable>{body}</blockquote>"
 
     kb = _uhistory_kb(0, len(pages), chat_id, uid, target.id)
-    await message.reply(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("uhist:"))
@@ -382,37 +440,28 @@ async def cb_uhistory(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    async def safe_answer() -> None:
-        try:
-            await callback.answer()
-        except Exception:
-            pass
-
     if callback.data == "uhist:noop":
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     parts = callback.data.split(":")
     if len(parts) != 5:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
     _, chat_id_str, uid_str, target_id_str, page_str = parts
     try:
         chat_id, uid, target_id, page = int(chat_id_str), int(uid_str), int(target_id_str), int(page_str)
     except ValueError:
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     if callback.from_user.id != uid:
-        try:
-            await callback.answer("Это не твой запрос.", show_alert=True)
-        except Exception:
-            pass
+        await safe_callback_answer(callback, "Это не твой запрос.", show_alert=True)
         return
 
     pages = _uhistory_pages.get((chat_id, uid, target_id))
     if not pages or page < 0 or page >= len(pages):
-        await safe_answer()
+        await safe_callback_answer(callback)
         return
 
     target = await user_repo.get_by_id(target_id)
@@ -437,4 +486,4 @@ async def cb_uhistory(
         )
     except Exception:
         pass
-    await safe_answer()
+    await safe_callback_answer(callback)

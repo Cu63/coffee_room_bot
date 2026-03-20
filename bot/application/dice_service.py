@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.score_repository import IScoreRepository
@@ -13,16 +13,18 @@ from bot.domain.dice_entities import DiceGame, DiceGameStatus
 class CreateResult:
     game: DiceGame | None
     not_enough: bool = False
-    already_active: bool = False
+    user_already_in_game: bool = False  # создатель уже участвует в активной игре чата
 
 
 @dataclass
 class JoinResult:
     success: bool
-    already_joined: bool = False
+    already_joined: bool = False        # уже в этой игре
+    already_in_other_game: bool = False  # уже в другой активной игре чата
     not_enough: bool = False
     game_not_found: bool = False
     balance: int = 0
+    bet: int = 0
 
 
 @dataclass
@@ -54,10 +56,9 @@ class DiceService:
         ends_at: datetime,
     ) -> CreateResult:
         """Создаёт игру и списывает ставку с создателя."""
-        # Только одна активная игра в чате
-        existing = await self._dice_repo.get_pending_in_chat(chat_id)
-        if existing is not None:
-            return CreateResult(game=None, already_active=True)
+        # Игрок не может участвовать более чем в одной активной игре
+        if await self._dice_repo.is_user_in_active_game(chat_id, created_by):
+            return CreateResult(game=None, user_already_in_game=True)
 
         score = await self._score_repo.get(created_by, chat_id)
         balance = score.value if score else 0
@@ -73,23 +74,33 @@ class DiceService:
     async def set_message_id(self, game_id: int, message_id: int) -> None:
         await self._dice_repo.update_message_id(game_id, message_id)
 
-    async def get_pending_in_chat(self, chat_id: int) -> DiceGame | None:
-        return await self._dice_repo.get_pending_in_chat(chat_id)
+    async def join(self, game_id: int, user_id: int, *, join_cutoff_seconds: int = 10) -> JoinResult:
+        """Участник присоединяется к игре. Списывает ставку.
 
-    async def join(self, game_id: int, user_id: int) -> JoinResult:
-        """Участник присоединяется к игре. Списывает ставку."""
+        join_cutoff_seconds — за сколько секунд до конца закрыть приём.
+        """
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:
+            return JoinResult(success=False, game_not_found=True)
+
+        # Закрыть приём за N секунд до конца — чтобы бросок не опередил присоединение
+        tz = game.ends_at.tzinfo or timezone.utc
+        now = datetime.now(tz)
+        if (game.ends_at - now).total_seconds() < join_cutoff_seconds:
             return JoinResult(success=False, game_not_found=True)
 
         participants = await self._dice_repo.get_participants(game_id)
         if user_id in participants:
             return JoinResult(success=False, already_joined=True)
 
+        # Проверяем, не участвует ли уже в другой игре этого чата
+        if await self._dice_repo.is_user_in_active_game(game.chat_id, user_id):
+            return JoinResult(success=False, already_in_other_game=True)
+
         score = await self._score_repo.get(user_id, game.chat_id)
         balance = score.value if score else 0
         if balance < game.bet:
-            return JoinResult(success=False, not_enough=True, balance=balance)
+            return JoinResult(success=False, not_enough=True, balance=balance, bet=game.bet)
 
         await self._dice_repo.add_participant(game_id, user_id)
         await self._score_repo.add_delta(user_id, game.chat_id, -game.bet)
@@ -98,7 +109,7 @@ class DiceService:
     async def count_participants(self, game_id: int) -> int:
         return await self._dice_repo.count_participants(game_id)
 
-    async def finish(self, game_id: int, dice_results: dict[int, int]) -> FinishResult | None:
+    async def finish(self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None) -> FinishResult | None:
         """Завершает игру с уже известными значениями костей. Распределяет призы."""
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:
@@ -128,9 +139,12 @@ class DiceService:
 
         for winner_id in winners:
             await self._score_repo.add_delta(winner_id, game.chat_id, prize_per_winner)
-        # Остаток (при нечётном делении) — первому победителю
+        # Остаток (при нечётном делении) — боту, если bot_id передан; иначе первому победителю
         if remainder > 0:
-            await self._score_repo.add_delta(winners[0], game.chat_id, remainder)
+            if bot_id is not None:
+                await self._score_repo.add_delta(bot_id, game.chat_id, remainder)
+            else:
+                await self._score_repo.add_delta(winners[0], game.chat_id, remainder)
 
         # Победа засчитывается только в многопользовательской игре
         if len(participants) > 1:

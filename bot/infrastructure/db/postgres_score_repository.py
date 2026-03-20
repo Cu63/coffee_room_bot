@@ -51,10 +51,11 @@ class PostgresScoreRepository(IScoreRepository):
     async def top(self, chat_id: int, limit: int) -> list[Score]:
         rows = await self._conn.fetch(
             """
-            SELECT user_id, chat_id, value
-            FROM scores
-            WHERE chat_id = $1 AND value != 0
-            ORDER BY value DESC
+            SELECT s.user_id, s.chat_id, s.value
+            FROM scores s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.chat_id = $1 AND s.value != 0 AND NOT u.is_bot
+            ORDER BY s.value DESC
             LIMIT $2
             """,
             chat_id,
@@ -65,13 +66,31 @@ class PostgresScoreRepository(IScoreRepository):
     async def bottom(self, chat_id: int, limit: int) -> list[Score]:
         rows = await self._conn.fetch(
             """
-            SELECT user_id, chat_id, value
-            FROM scores
-            WHERE chat_id = $1 AND value != 0
-            ORDER BY value ASC
+            SELECT s.user_id, s.chat_id, s.value
+            FROM scores s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.chat_id = $1 AND s.value != 0 AND NOT u.is_bot
+            ORDER BY s.value ASC
             LIMIT $2
             """,
             chat_id,
             limit,
         )
         return [Score(user_id=r["user_id"], chat_id=r["chat_id"], value=r["value"]) for r in rows]
+
+    async def get_rank(self, user_id: int, chat_id: int) -> int | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT rank FROM (
+                SELECT s.user_id,
+                       RANK() OVER (ORDER BY s.value DESC) AS rank
+                FROM scores s
+                JOIN users u ON u.id = s.user_id
+                WHERE s.chat_id = $1 AND s.value != 0 AND NOT u.is_bot
+            ) ranked
+            WHERE user_id = $2
+            """,
+            chat_id,
+            user_id,
+        )
+        return int(row["rank"]) if row else None

@@ -1,0 +1,149 @@
+{
+  "title": "Bot Activity",
+  "uid": "bot-activity",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "timezone": "Europe/Moscow",
+  "tags": ["bot"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Mutes issued (24h)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"mute_success\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" } } }
+    },
+    {
+      "id": 2,
+      "title": "Owner mutes (24h)",
+      "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"owner_mute\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "dark-purple" } } }
+    },
+    {
+      "id": 3,
+      "title": "Giveaways started (24h)",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"giveaway\" |= \"started\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "green" } } }
+    },
+    {
+      "id": 4,
+      "title": "Auto-unmutes (24h)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"Unmuting user\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 5,
+      "title": "Bug reports sent (24h)",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"bug\" |= \"принят\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" } } }
+    },
+    {
+      "id": 6,
+      "title": "Periodic giveaways started (24h)",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [{ "expr": "sum(count_over_time({service=\"bot\"} |= \"periodic giveaway\" [24h]))", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "teal" } } }
+    },
+    {
+      "id": 7,
+      "title": "Mute activity over time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"mute_success\" [30m]))", "legendFormat": "mutes issued", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"Unmuting user\" [30m]))", "legendFormat": "unmutes", "refId": "B" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"selfmute\" [30m]))", "legendFormat": "selfmutes", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 8,
+      "title": "Giveaway activity over time",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"giveaway\" |= \"started\" [30m]))", "legendFormat": "started", "refId": "A" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"Auto-finished giveaway\" [30m]))", "legendFormat": "auto-finished", "refId": "B" },
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"periodic giveaway\" [30m]))", "legendFormat": "periodic rounds", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 9,
+      "title": "BJ timeout refunds over time",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"BJ timeout\" [30m]))", "legendFormat": "BJ timeouts", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 15 }, "color": { "mode": "fixed", "fixedColor": "yellow" } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 10,
+      "title": "Mute roulette completions",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 7 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "sum(count_over_time({service=\"bot\"} |= \"Auto-finishing mutegiveaway\" [30m]))", "legendFormat": "auto-finished", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "lineWidth": 2, "fillOpacity": 15 }, "color": { "mode": "fixed", "fixedColor": "purple" } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 11,
+      "title": "Mute log stream",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 19, "w": 24, "h": 9 },
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "targets": [
+        { "expr": "{service=\"bot\"} |~ \"mute|unmute|giveaway|roulette\"", "refId": "A" }
+      ],
+      "options": { "dedupStrategy": "none", "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "pluginId": "loki",
+        "query": "loki",
+        "label": "Datasource",
+        "hide": 0,
+        "refresh": 1,
+        "current": { "selected": true, "text": "Loki", "value": "Loki" }
+      }
+    ]
+  }
+}

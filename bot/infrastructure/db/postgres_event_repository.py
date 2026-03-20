@@ -59,6 +59,7 @@ class PostgresEventRepository(IEventRepository):
             FROM score_events
             WHERE chat_id = $1 AND created_at >= $2
             ORDER BY created_at DESC
+            LIMIT 500
             """,
             chat_id,
             since,
@@ -74,6 +75,7 @@ class PostgresEventRepository(IEventRepository):
               AND (actor_id = $2 OR target_id = $2)
               AND created_at >= $3
             ORDER BY created_at DESC
+            LIMIT 500
             """,
             chat_id,
             user_id,

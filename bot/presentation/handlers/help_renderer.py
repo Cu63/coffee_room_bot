@@ -61,11 +61,18 @@ class HelpRenderer:
         mc = config.mute
         tc = config.tag
         bjc = config.blackjack
+        sc = config.slots
+        dc = config.dice
+        rc = config.renew
         lc = config.limits
+        wgc = config.wordgame
+        rwgc = config.rwordgame
+
+        cmc = config.chatmode
 
         # Плейсхолдеры для секций с динамическими значениями
         ctx = dict(
-            daily_reactions_given=lc.daily_reactions_given,
+            daily_reactions_given=lc.daily_negative_given,
             daily_score_received=lc.daily_score_received,
             max_message_age_hours=lc.max_message_age_hours,
             retention_days=config.history.retention_days,
@@ -76,6 +83,7 @@ class HelpRenderer:
             selfmute_max=mc.selfmute_max_minutes,
             protection_hours=mc.protection_duration_hours,
             protection_cost=mc.protection_cost,
+            unmute_multiplier=mc.unmute_multiplier,
             cost_self=f"{tc.cost_self} {p.pluralize(tc.cost_self)}",
             cost_member=f"{tc.cost_member} {p.pluralize(tc.cost_member)}",
             cost_admin=f"{tc.cost_admin} {p.pluralize(tc.cost_admin)}",
@@ -87,6 +95,37 @@ class HelpRenderer:
             bj_max=bjc.max_bet,
             mute_min=mc.min_minutes,
             mute_max=mc.max_minutes,
+            slots_min=sc.min_bet,
+            slots_max=sc.max_bet,
+            slots_cooldown=sc.cooldown_minutes,
+            dice_min=dc.min_bet,
+            dice_max=dc.max_bet,
+            dice_min_wait=dc.min_wait_seconds,
+            dice_max_wait=dc.max_wait_seconds,
+            renew_cost=f"{rc.cost} {p.pluralize(rc.cost)}",
+            renew_limit=rc.daily_limit,
+            wg_min_bet=wgc.min_bet,
+            wg_max_bet=wgc.max_bet,
+            wg_min_dur=wgc.min_duration_seconds // 60,
+            wg_max_dur=wgc.max_duration_seconds // 60,
+            wg_max_games=wgc.max_games_per_window,
+            wg_window=wgc.game_window_hours,
+            attempt_cost=wgc.attempt_cost,
+            rwg_max_bet=rwgc.max_bet,
+            rwg_min_len=rwgc.min_word_length,
+            rwg_max_len=rwgc.max_word_length,
+            rwg_max_games=rwgc.max_games_per_window,
+            rwg_window=rwgc.game_window_hours,
+            ttt_min=config.tictactoe.min_bet,
+            ttt_max=config.tictactoe.max_bet,
+            buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
+            selfban_min=config.selfban.min_minutes,
+            selfban_max=config.selfban.max_minutes,
+            silence_cost=f"{cmc.silence.cost_per_minute} {p.pluralize(cmc.silence.cost_per_minute)}",
+            silence_max=cmc.silence.max_minutes,
+            gif_cost=f"{cmc.gif.cost_per_minute} {p.pluralize(cmc.gif.cost_per_minute)}",
+            gif_max=cmc.gif.max_minutes,
+            llm_daily_limit=config.llm.daily_limit_per_user,
         )
 
         def _fmt(tmpl: str) -> str:
@@ -125,6 +164,11 @@ class HelpRenderer:
                 s["selfmute_header"],
                 _fmt(s["selfmute_row"]),
                 "",
+                s["unmute_header"],
+            ]
+            parts += [_fmt(r) for r in s.get("unmute_rows", [])]
+            parts += [
+                "",
                 s["protect_header"],
             ]
             parts += [_fmt(r) for r in s.get("protect_rows", [])]
@@ -136,15 +180,28 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(rows) + "\n\n" + s["clear_note"]
 
         if section == "bj":
-            lines = [
-                s["header"],
-                "",
-                _fmt(s["bet_row"]),
-            ]
-            lines += s.get("rules", [])
-            lines += [""]
-            lines += s.get("commands", [])
-            return "\n".join(lines)
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "wordgame":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "ttt":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "dice":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "chatmode":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "ai":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "commands":
             cmds = [_fmt(c) for c in s.get("static_commands", [])]
@@ -153,5 +210,9 @@ class HelpRenderer:
         if section == "admin":
             cmds = s.get("commands", [])
             return s["header"] + "\n\n" + "\n".join(cmds)
+
+        if section == "tracker":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         return ""

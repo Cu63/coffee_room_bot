@@ -1,32 +1,37 @@
+"""Middleware: upsert пользователя, сохранение сообщения, регистрация анон-чата."""
+
 from __future__ import annotations
 
 import logging
-import random
 from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, ReactionTypeEmoji, TelegramObject
+from aiogram.types import Message, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.interfaces.message_repository import IMessageRepository, MessageInfo
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.application.score_service import ScoreService
 from bot.domain.entities import User
-from bot.domain.reaction_registry import ReactionRegistry
 from bot.domain.tz import TZ_MSK
-from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.redis_store import RedisStore
 
 logger = logging.getLogger(__name__)
 
 
 class TrackMessageMiddleware(BaseMiddleware):
     """Записывает автора и время каждого входящего сообщения.
-    Опционально ставит случайную реакцию с заданной вероятностью.
 
     Работает как outer-middleware на Message — вызывается ДО хэндлеров,
     поэтому и команды, и обычные сообщения трекаются.
+
+    bot_me передаётся при инициализации из main() — один раз при старте,
+    чтобы не делать лишний запрос к Telegram API.
     """
+
+    def __init__(self, bot_me) -> None:
+        super().__init__()
+        self._bot_me = bot_me
 
     async def __call__(
         self,
@@ -45,76 +50,42 @@ class TrackMessageMiddleware(BaseMiddleware):
                     id=event.from_user.id,
                     username=event.from_user.username,
                     full_name=event.from_user.full_name or "",
+                    is_bot=event.from_user.is_bot,
                 )
             )
+
+            # Сохраняем текст сообщения, но только «живые» реплики:
+            # — команды (начинаются с /) не сохраняем
+            # — ответы боту не сохраняем (игровые ходы, /help кнопки и т.п.)
+            msg_text: str | None = event.text or event.caption or None
+            if msg_text and msg_text.startswith("/"):
+                msg_text = None
+            elif (
+                msg_text
+                and event.reply_to_message is not None
+                and event.reply_to_message.from_user is not None
+                and event.reply_to_message.from_user.id == self._bot_me.id
+            ):
+                msg_text = None
+
             await message_repo.save(
                 MessageInfo(
                     message_id=event.message_id,
                     chat_id=event.chat.id,
                     user_id=event.from_user.id,
                     sent_at=event.date or datetime.now(TZ_MSK),
+                    text=msg_text,
+                    is_reply=(
+                        event.reply_to_message is not None
+                        and event.reply_to_message.from_user is not None
+                        and not event.reply_to_message.from_user.is_bot
+                    ),
                 )
             )
 
-            await self._maybe_react(event, container)
+            # Авто-регистрация чата для /anon
+            if event.chat.type in ("group", "supergroup") and event.chat.title:
+                store = await container.get(RedisStore)
+                await store.anon_register_chat(event.chat.id, event.chat.title)
 
         return await handler(event, data)
-
-    async def _maybe_react(self, message: Message, container: AsyncContainer) -> None:
-        config = await container.get(AppConfig)
-        cfg = config.auto_react
-
-        if not cfg.enabled:
-            return
-        if message.bot is None or message.from_user is None:
-            return
-        # Не реагируем на сообщения самого бота
-        if message.from_user.id == message.bot.id:
-            return
-        # Бросаем кубик
-        if random.random() >= cfg.probability:
-            return
-
-        registry = await container.get(ReactionRegistry)
-        reactions = [(emoji, r) for emoji, r in registry._reactions.items() if not cfg.positive_only or r.weight > 0]
-        if not reactions:
-            return
-
-        emoji, _ = random.choice(reactions)
-
-        try:
-            await message.bot.set_message_reaction(
-                chat_id=message.chat.id,
-                message_id=message.message_id,
-                reaction=[ReactionTypeEmoji(type="emoji", emoji=emoji)],
-            )
-        except Exception as e:
-            logger.debug("auto_react: failed to set reaction: %s", e)
-            return
-
-        # Засчитываем реакцию вручную — бот не получает события о своих реакциях.
-        # Сначала upsert бота в users (иначе FK на score_events упадёт),
-        # затем применяем реакцию без лимитов (бот не ограничен).
-        user_repo = await container.get(IUserRepository)
-        bot_info = await message.bot.get_me()
-        await user_repo.upsert(
-            User(
-                id=message.bot.id,
-                username=bot_info.username,
-                full_name=bot_info.full_name,
-            )
-        )
-
-        score_service = await container.get(ScoreService)
-        result = await score_service.apply_reaction_no_limits(
-            actor_id=message.bot.id,
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            emoji=emoji,
-        )
-        logger.debug(
-            "auto_react: %s on msg %d — applied=%s",
-            emoji,
-            message.message_id,
-            result.applied,
-        )
