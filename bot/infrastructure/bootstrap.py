@@ -65,7 +65,6 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.lot import router as lot_router
     from bot.presentation.handlers.mute import router as mute_router
-    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.protect import router as protect_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
@@ -111,4 +110,3 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     dp.include_router(anon_router)
     dp.include_router(daily_router)
     dp.include_router(chatmode_router)
-    dp.include_router(news_router)
