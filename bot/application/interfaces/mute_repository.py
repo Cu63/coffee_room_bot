@@ -18,3 +18,8 @@ class IMuteRepository(ABC):
     async def get_expired(self, now: datetime) -> list[MuteEntry]:
         """Возвращает все муты с until_at <= now."""
         ...
+
+    @abstractmethod
+    async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
+        """Записывает факт мута в историю для статистики."""
+        ...

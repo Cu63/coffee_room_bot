@@ -24,6 +24,8 @@ class DailyLeaderboard:
     top_replies: DailyLeader | None = None
     top_ttt_wins: DailyLeader | None = None
     top_wordgame_wins: DailyLeader | None = None  # word + rword суммарно
+    top_mutes_given: DailyLeader | None = None     # больше всех выписал мутов
+    top_mutes_received: DailyLeader | None = None  # больше всех получил мутов
 
     def is_empty(self) -> bool:
         return all(
@@ -34,6 +36,8 @@ class DailyLeaderboard:
                 self.top_replies,
                 self.top_ttt_wins,
                 self.top_wordgame_wins,
+                self.top_mutes_given,
+                self.top_mutes_received,
             )
         )
 

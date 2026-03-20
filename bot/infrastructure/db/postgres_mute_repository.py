@@ -56,6 +56,14 @@ class PostgresMuteRepository(IMuteRepository):
         )
         return [self._to_entity(r) for r in rows]
 
+    async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
+        await self._conn.execute(
+            "INSERT INTO mute_history (chat_id, user_id, muted_by) VALUES ($1, $2, $3)",
+            chat_id,
+            user_id,
+            muted_by,
+        )
+
     @staticmethod
     def _to_entity(row: asyncpg.Record) -> MuteEntry:
         perms = row["admin_permissions"]

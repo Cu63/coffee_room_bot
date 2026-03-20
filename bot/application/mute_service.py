@@ -21,6 +21,9 @@ class MuteService:
     async def get_expired_mutes(self) -> list[MuteEntry]:
         return await self._repo.get_expired(datetime.now(TZ_MSK))
 
+    async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
+        await self._repo.log_mute(user_id, muted_by, chat_id)
+
     async def compute_stacked_until(
         self,
         user_id: int,

@@ -39,6 +39,8 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
         top_rep = await self._top_replies(chat_id, start, end)
         top_ttt = await self._top_ttt_wins(chat_id, for_date)
         top_wg = await self._top_wordgame_wins(chat_id, for_date)
+        top_mg = await self._top_mutes_given(chat_id, start, end)
+        top_mr = await self._top_mutes_received(chat_id, start, end)
 
         return DailyLeaderboard(
             date=for_date,
@@ -48,6 +50,8 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             top_replies=top_rep,
             top_ttt_wins=top_ttt,
             top_wordgame_wins=top_wg,
+            top_mutes_given=top_mg,
+            top_mutes_received=top_mr,
         )
 
     async def add_game_win(
@@ -74,7 +78,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
 
     async def get_active_chats(self) -> list[int]:
         rows = await self._conn.fetch(
-            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL"
+            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL AND chat_id < 0"
         )
         return [r["chat_id"] for r in rows]
 
@@ -212,6 +216,54 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             LIMIT 1
             """,
             chat_id, for_date,
+        )
+        return _row_to_leader(row)
+
+
+    async def _top_mutes_given(
+        self,
+        chat_id: int,
+        start: datetime,
+        end: datetime,
+    ) -> DailyLeader | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT mh.muted_by AS user_id, u.username, u.full_name, COUNT(*) AS cnt
+            FROM mute_history mh
+            JOIN users u ON u.id = mh.muted_by
+            WHERE mh.chat_id = $1
+              AND mh.created_at >= $2
+              AND mh.created_at < $3
+              AND mh.muted_by != mh.user_id
+              AND NOT u.is_bot
+            GROUP BY mh.muted_by, u.username, u.full_name
+            ORDER BY cnt DESC
+            LIMIT 1
+            """,
+            chat_id, start, end,
+        )
+        return _row_to_leader(row)
+
+    async def _top_mutes_received(
+        self,
+        chat_id: int,
+        start: datetime,
+        end: datetime,
+    ) -> DailyLeader | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT mh.user_id, u.username, u.full_name, COUNT(*) AS cnt
+            FROM mute_history mh
+            JOIN users u ON u.id = mh.user_id
+            WHERE mh.chat_id = $1
+              AND mh.created_at >= $2
+              AND mh.created_at < $3
+              AND NOT u.is_bot
+            GROUP BY mh.user_id, u.username, u.full_name
+            ORDER BY cnt DESC
+            LIMIT 1
+            """,
+            chat_id, start, end,
         )
         return _row_to_leader(row)
 

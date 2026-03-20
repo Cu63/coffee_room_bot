@@ -22,6 +22,8 @@ _CATEGORY_EMOJI = {
     "replies": "↩️",
     "ttt_wins": "❌",
     "wordgame_wins": "🔤",
+    "mutes_given": "🔇",
+    "mutes_received": "😶",
 }
 
 _CATEGORY_LABEL = {
@@ -31,6 +33,8 @@ _CATEGORY_LABEL = {
     "replies": "Больше всех реплаил",
     "ttt_wins": "Лучший в крестики-нолики",
     "wordgame_wins": "Лучший в угадайке",
+    "mutes_given": "Больше всех замутил",
+    "mutes_received": "Больше всех получил мутов",
 }
 
 _VALUE_LABEL = {
@@ -40,6 +44,8 @@ _VALUE_LABEL = {
     "replies": ("реплай", "реплая", "реплаев"),
     "ttt_wins": ("победа", "победы", "побед"),
     "wordgame_wins": ("победа", "победы", "побед"),
+    "mutes_given": ("мут", "мута", "мутов"),
+    "mutes_received": ("мут", "мута", "мутов"),
 }
 
 
@@ -94,6 +100,8 @@ class DailyLeaderboardService:
             ("replies", lb.top_replies),
             ("ttt_wins", lb.top_ttt_wins),
             ("wordgame_wins", lb.top_wordgame_wins),
+            ("mutes_given", lb.top_mutes_given),
+            ("mutes_received", lb.top_mutes_received),
         ]
 
         for key, leader in categories:
@@ -154,6 +162,8 @@ def _leaderboard_lines(lb: DailyLeaderboard, *, with_value: bool) -> list[str]:
         ("replies", lb.top_replies),
         ("ttt_wins", lb.top_ttt_wins),
         ("wordgame_wins", lb.top_wordgame_wins),
+        ("mutes_given", lb.top_mutes_given),
+        ("mutes_received", lb.top_mutes_received),
     ]
     lines = []
     for key, leader in categories:
