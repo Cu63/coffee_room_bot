@@ -21,6 +21,7 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.score_service import ScoreService
+from bot.application.xp_service import XpService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -128,6 +129,7 @@ async def cmd_stats(
     limits_repo: FromDishka[IDailyLimitsRepository],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
+    xp_service: FromDishka[XpService],
     config: FromDishka[AppConfig],
 ) -> None:
     """Подробная статистика пользователя: счёт, лимиты, реакции, игры."""
@@ -158,6 +160,7 @@ async def cmd_stats(
     rank = await score_repo.get_rank(user_id, chat_id)
     stats = await stats_repo.get(user_id, chat_id)
     daily = await limits_repo.get(user_id, chat_id, today)
+    xp_val = await xp_service.get_xp(user_id, chat_id) if config.xp.enabled else 0
 
     p = formatter._p
     lc = config.limits
@@ -204,9 +207,32 @@ async def cmd_stats(
         f"  <i>Итого: {total_wins} {_wins_plural(total_wins)}</i>"
     )
 
+    # ── XP / Уровень ────────────────────────────────────────────
+    xp_block = ""
+    if config.xp.enabled:
+        level = xp_service.compute_level(xp_val)
+        max_level = config.xp.levels.max_level
+        xp_per_level = config.xp.levels.xp_per_level
+        xp_in_level = xp_val % xp_per_level
+        bar_total = 10
+        bar_filled = round(xp_in_level / xp_per_level * bar_total) if xp_per_level > 0 else bar_total
+        bar = "█" * bar_filled + "░" * (bar_total - bar_filled)
+        to_next = xp_service.xp_for_next_level(xp_val)
+        if to_next is None:
+            next_str = "<i>максимальный уровень</i>"
+        else:
+            next_str = f"до уровня {level + 1}: {to_next} XP"
+        xp_block = (
+            f"\n\n<b>Уровень:</b> {level}"
+            + (f" / {max_level}" if level >= max_level else "")
+            + f"\n  <code>[{bar}]</code> {xp_in_level} / {xp_per_level} XP"
+            + f"\n  <i>Всего XP: {xp_val} · {next_str}</i>"
+        )
+
     text = (
         f"📊 <b>Статистика</b> {display_name}\n\n"
-        f"{score_line}\n\n"
+        f"{score_line}"
+        f"{xp_block}\n\n"
         f"{limits_block}\n\n"
         f"{reactions_block}\n\n"
         f"{games_block}"
@@ -487,3 +513,94 @@ async def cb_uhistory(
     except Exception:
         pass
     await safe_callback_answer(callback)
+
+@router.message(Command("level"))
+@inject
+async def cmd_level(
+    message: Message,
+    command: CommandObject,
+    xp_service: FromDishka[XpService],
+    user_repo: FromDishka[IUserRepository],
+    formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
+) -> None:
+    """Показывает уровень и XP вызвавшего или указанного пользователя."""
+    if not config.xp.enabled:
+        await reply_and_delete(message, "XP-система отключена.")
+        return
+
+    chat_id = message.chat.id
+    target_user = None
+    if command.args:
+        target_user = await user_repo.get_by_username(command.args.strip().lstrip("@"))
+        if target_user is None:
+            await reply_and_delete(message, formatter._t.get("error_user_not_found", "Пользователь не найден."))
+            return
+        display_name = user_link(target_user.username, target_user.full_name, target_user.id)
+        user_id = target_user.id
+    else:
+        if message.from_user is None:
+            return
+        user_id = message.from_user.id
+        display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
+
+    xp_val = await xp_service.get_xp(user_id, chat_id)
+    level = xp_service.compute_level(xp_val)
+    max_level = config.xp.levels.max_level
+    xp_per_level = config.xp.levels.xp_per_level
+    xp_in_level = xp_val % xp_per_level
+    bar_total = 10
+    bar_filled = round(xp_in_level / xp_per_level * bar_total) if xp_per_level > 0 else bar_total
+    bar = "█" * bar_filled + "░" * (bar_total - bar_filled)
+    to_next = xp_service.xp_for_next_level(xp_val)
+    if to_next is None:
+        next_str = "<i>максимальный уровень 🏆</i>"
+    else:
+        next_str = f"до уровня {level + 1}: {to_next} XP"
+
+    level_display = f"{level}" + (f" / {max_level}" if level >= max_level else f" / {max_level}")
+    text = (
+        f"⚡ <b>Уровень</b> {display_name}\n\n"
+        f"  Уровень: <b>{level_display}</b>\n"
+        f"  <code>[{bar}]</code> {xp_in_level} / {xp_per_level} XP\n"
+        f"  Всего XP: <b>{xp_val}</b>\n"
+        f"  <i>{next_str}</i>"
+    )
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+
+
+@router.message(Command("toplevel"))
+@inject
+async def cmd_toplevel(
+    message: Message,
+    xp_service: FromDishka[XpService],
+    user_repo: FromDishka[IUserRepository],
+    config: FromDishka[AppConfig],
+) -> None:
+    """Топ участников чата по уровню XP."""
+    if not config.xp.enabled:
+        await reply_and_delete(message, "XP-система отключена.")
+        return
+
+    chat_id = message.chat.id
+    entries = await xp_service.get_top(chat_id, limit=10)
+
+    if not entries:
+        await reply_and_delete(
+            message,
+            "⚡ <b>Топ по уровню</b>\n\n<i>Нет данных</i>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    users = await user_repo.get_by_ids([e.user_id for e in entries])
+    lines = ["⚡ <b>Топ по уровню</b>"]
+    for rank, entry in enumerate(entries, start=1):
+        user = users.get(entry.user_id)
+        name = user_link(user.username, user.full_name, user.id) if user else str(entry.user_id)
+        level = xp_service.compute_level(entry.xp)
+        lines.append(f"{rank}. {name} — Ур. <b>{level}</b> ({entry.xp} XP)")
+
+    await reply_and_delete(
+        message, "\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
+    )

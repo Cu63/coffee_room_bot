@@ -10,6 +10,7 @@ from aiogram.types import Message, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.score_service import ScoreService
+from bot.application.xp_service import XpService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 
@@ -63,3 +64,13 @@ class BurstBonusMiddleware(BaseMiddleware):
                 "burst: user %d in chat %d awarded %d, new score %d",
                 user_id, chat_id, cfg.reward, new_value,
             )
+
+            # Начисляем XP
+            xp_cfg = config.xp
+            if xp_cfg.enabled and xp_cfg.rewards.burst > 0:
+                xp_service = await container.get(XpService)
+                result = await xp_service.add_xp(user_id, chat_id, xp_cfg.rewards.burst)
+                logger.debug(
+                    "burst xp: user %d in chat %d +%d xp (total %d, level %d)",
+                    user_id, chat_id, xp_cfg.rewards.burst, result.new_xp, result.new_level,
+                )

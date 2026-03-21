@@ -87,6 +87,23 @@ class AdminConfig(_BaseConfig):
         return [u.lstrip("@").lower() for u in (v or [])]
 
 
+class XpLevelsConfig(_BaseConfig):
+    xp_per_level: int = 500
+    max_level: int = 100
+
+
+class XpRewardsConfig(_BaseConfig):
+    burst: int = 30
+    spark: int = 20
+    chain: int = 15
+
+
+class XpConfig(_BaseConfig):
+    enabled: bool = True
+    rewards: XpRewardsConfig = XpRewardsConfig()
+    levels: XpLevelsConfig = XpLevelsConfig()
+
+
 class AutoReactConfig(_BaseConfig):
     enabled: bool = False
     probability: float = 0.05
@@ -370,6 +387,7 @@ class AppConfig(_BaseConfig):
     history: HistoryConfig = HistoryConfig()
     admin: AdminConfig = AdminConfig()
     mute: MuteConfig = MuteConfig()
+    xp: XpConfig = XpConfig()
     auto_react: AutoReactConfig = AutoReactConfig()
     tag: TagConfig = TagConfig()
     blackjack: BlackjackConfig = BlackjackConfig()

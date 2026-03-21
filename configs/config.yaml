@@ -100,6 +100,16 @@ reply_chain:
   reward: 8                     # награда каждому из двоих
   cooldown_hours: 4             # кулдаун на пару
 
+xp:
+  enabled: true
+  rewards:
+    burst: 30             # XP за burst-активность
+    spark: 20             # XP за разжигание дискуссии (spark)
+    chain: 15             # XP за чередующийся диалог (reply chain)
+  levels:
+    xp_per_level: 500     # XP на каждый уровень (линейная шкала)
+    max_level: 100        # максимальный уровень
+
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем

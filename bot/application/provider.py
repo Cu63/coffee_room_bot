@@ -23,10 +23,12 @@ from bot.application.interfaces.mute_repository import IMuteRepository
 from bot.application.interfaces.per_target_limits_repository import IPerTargetLimitsRepository
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.interfaces.xp_repository import IXpRepository
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
+from bot.application.xp_service import XpService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.infrastructure.aitunnel_client import AiTunnelClient
@@ -128,3 +130,9 @@ class AppServiceProvider(Provider):
             search_max_results=config.llm.search_max_results,
             admin_users=config.admin.users,
         )
+
+    @provide(scope=Scope.REQUEST)
+    def get_xp_service(
+        self, xp_repo: IXpRepository, config: AppConfig,
+    ) -> XpService:
+        return XpService(xp_repo=xp_repo, config=config.xp)

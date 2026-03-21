@@ -23,6 +23,7 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.interfaces.xp_repository import IXpRepository
 from bot.infrastructure.config_loader import DatabaseConfig
 from bot.infrastructure.db.postgres_chatmode_repository import PostgresChatmodeRepository
 from bot.infrastructure.db.postgres_daily_leaderboard_repository import PostgresDailyLeaderboardRepository
@@ -39,6 +40,7 @@ from bot.infrastructure.db.postgres_saved_permissions_repository import Postgres
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
 from bot.infrastructure.db.postgres_user_repository import PostgresUserRepository
 from bot.infrastructure.db.postgres_user_stats_repository import PostgresUserStatsRepository
+from bot.infrastructure.db.postgres_xp_repository import PostgresXpRepository
 from bot.infrastructure.db.transaction_manager import PostgresTransactionManager
 
 
@@ -122,3 +124,7 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_llm_repo(self, tm: ITransactionManager) -> ILlmRepository:
         return PostgresLlmRepository(tm.get_connection())
+
+    @provide(scope=Scope.REQUEST)
+    def get_xp_repo(self, tm: ITransactionManager) -> IXpRepository:
+        return PostgresXpRepository(tm.get_connection())

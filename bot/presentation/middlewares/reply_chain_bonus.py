@@ -10,6 +10,7 @@ from aiogram.types import Message, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.score_service import ScoreService
+from bot.application.xp_service import XpService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 
@@ -67,3 +68,14 @@ class ReplyChainMiddleware(BaseMiddleware):
                     "chain: user %d in chat %d awarded %d, new score %d",
                     uid, chat_id, cfg.reward, new_value,
                 )
+
+            # Начисляем XP обоим участникам цепочки
+            xp_cfg = config.xp
+            if xp_cfg.enabled and xp_cfg.rewards.chain > 0:
+                xp_service = await container.get(XpService)
+                for uid in (replier_id, author_id):
+                    result = await xp_service.add_xp(uid, chat_id, xp_cfg.rewards.chain)
+                    logger.debug(
+                        "chain xp: user %d in chat %d +%d xp (total %d, level %d)",
+                        uid, chat_id, xp_cfg.rewards.chain, result.new_xp, result.new_level,
+                    )
