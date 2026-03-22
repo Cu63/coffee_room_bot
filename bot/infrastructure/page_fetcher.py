@@ -3,24 +3,33 @@ from __future__ import annotations
 import asyncio
 import logging
 
-import trafilatura
-from trafilatura.settings import use_config
-
 logger = logging.getLogger(__name__)
 
 MAX_PAGE_CHARS = 5000
 _FETCH_TIMEOUT = 5  # общий таймаут на одну страницу (секунды)
 
-# Настраиваем trafilatura: короткие таймауты, без ретраев
-_TRAF_CONFIG = use_config()
-_TRAF_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", "5")
-_TRAF_CONFIG.set("DEFAULT", "MAX_REDIRECTS", "2")
+# Конфиг trafilatura инициализируется лениво при первом вызове,
+# чтобы не тянуть lxml/htmldate/courlan при старте процесса.
+_TRAF_CONFIG = None
+
+
+def _get_traf_config():
+    """Возвращает конфиг trafilatura, создавая его при первом обращении."""
+    global _TRAF_CONFIG
+    if _TRAF_CONFIG is None:
+        from trafilatura.settings import use_config  # lazy import
+        _TRAF_CONFIG = use_config()
+        _TRAF_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", "5")
+        _TRAF_CONFIG.set("DEFAULT", "MAX_REDIRECTS", "2")
+    return _TRAF_CONFIG
 
 
 def _fetch_sync(url: str) -> str:
     """Скачивает и извлекает основной текст страницы через trafilatura."""
+    import trafilatura  # lazy import — не грузить при старте бота
     try:
-        downloaded = trafilatura.fetch_url(url, config=_TRAF_CONFIG)
+        cfg = _get_traf_config()
+        downloaded = trafilatura.fetch_url(url, config=cfg)
         if not downloaded:
             logger.warning("Failed to fetch %s", url)
             return ""
