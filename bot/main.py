@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import logging
 import os
 
@@ -19,6 +20,11 @@ from bot.infrastructure.di import (
 from bot.infrastructure.logger import setup_logger
 
 logger = logging.getLogger(__name__)
+
+# Все модули загружены — переводим их объекты в постоянное поколение.
+# GC больше не будет сканировать ~50k+ объектов от aiogram/asyncio/pydantic
+# при каждом цикле сборки мусора.
+gc.freeze()
 
 
 async def main() -> None:
