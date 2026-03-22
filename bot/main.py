@@ -40,6 +40,7 @@ async def main() -> None:
         RedisProvider(),
         LlmProvider(),
         AppServiceProvider(),
+        context={aioredis.Redis: redis},
     )
 
     proxy = os.getenv("TELEGRAM_PROXY") or None
