@@ -50,7 +50,7 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.APP)
     async def get_pool(self, db: DatabaseConfig) -> AsyncIterable[asyncpg.Pool]:
         dsn = db.dsn.replace("postgresql+asyncpg://", "postgresql://")
-        pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
+        pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=5)
         yield pool
         await pool.close()
 
