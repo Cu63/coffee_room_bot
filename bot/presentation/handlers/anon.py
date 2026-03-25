@@ -256,4 +256,4 @@ async def on_private_text(
         )
     finally:
         if message_sent:
-            await score_service.add_score_quiet(user_id, chat_id, ANON_MESSAGE_PAYMENT)
+            await score_service.add_score_quiet(user_id, chat_id, -ANON_MESSAGE_PAYMENT)
