@@ -25,7 +25,10 @@ from aiogram.types import (
 from dishka import AsyncContainer
 from dishka.integrations.aiogram import FromDishka, inject
 
+from bot.application.score_service import ScoreService
 from bot.infrastructure.redis_store import RedisStore
+
+ANON_MESSAGE_PAYMENT = 100
 
 
 class HasAnonState(BaseFilter):
@@ -210,6 +213,7 @@ async def on_private_text(
     message: Message,
     bot: Bot,
     store: FromDishka[RedisStore],
+    score_service: FromDishka[ScoreService],
 ) -> None:
     """Ловит текст в личке когда пользователь в шаге write_message."""
     if message.from_user is None or not message.text:
@@ -221,19 +225,27 @@ async def on_private_text(
     if state is None or state.get("step") != "write_message":
         # Не в режиме ввода — игнорируем
         return
+    
 
     chat_id: int = state["chat_id"]
     chat_title: str = state.get("chat_title", str(chat_id))
 
+    if (await score_service.get_score(user_id, chat_id)).value < ANON_MESSAGE_PAYMENT:
+        await message.answer(f"❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
+        return
+
+
     await store.anon_clear_state(user_id)
 
     # Отправляем анонимное сообщение в групповой чат
+    message_sent = False
     try:
         await bot.send_message(
             chat_id=chat_id,
             text=f"😶 <b>{_ANON_LABEL}</b>\n\n{message.text}",
             parse_mode=ParseMode.HTML,
         )
+        message_sent = True
         await message.answer(f"✅ Сообщение анонимно отправлено в <b>{chat_title}</b>.", parse_mode=ParseMode.HTML)
         logger.info("anon: user %d sent anonymous message to chat %d", user_id, chat_id)
     except Exception:
@@ -242,3 +254,6 @@ async def on_private_text(
             "❌ Не удалось отправить сообщение. Возможно, бот был удалён из чата.\n"
             "Попробуй снова: /anon"
         )
+    finally:
+        if message_sent:
+            await score_service.add_score_quiet(user_id, chat_id, ANON_MESSAGE_PAYMENT)

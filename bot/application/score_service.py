@@ -292,6 +292,16 @@ class ScoreService:
         emoji = SPECIAL_EMOJI["add"] if delta >= 0 else SPECIAL_EMOJI["sub"]
         await self._save_special_event(admin_id, user_id, chat_id, delta, emoji)
         return new_value
+    
+    async def add_score_quiet(
+        self,
+        user_id: int,
+        chat_id: int,
+        delta: int,
+    ) -> int:
+        """Админское тихое изменение счёта на delta. Используется чтобы без истории списать или добавить баллы."""
+        new_value = await self._score_repo.add_delta(user_id, chat_id, delta)
+        return new_value
 
     async def spend_score(
         self,
