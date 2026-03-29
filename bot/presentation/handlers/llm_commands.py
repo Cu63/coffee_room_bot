@@ -8,6 +8,7 @@ from aiogram import Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
+from aiogram import F
 from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
@@ -101,7 +102,7 @@ async def _send_llm_response(msg: Message, result: LlmResult) -> None:
         )
 
 
-@router.message(Command("llm"))
+@router.message(Command("llm"), F.chat.type != "private")
 @inject
 async def cmd_llm(
     message: Message,
@@ -141,7 +142,7 @@ async def cmd_llm(
         await thinking.edit_text(formatter._t["llm_error"])
 
 
-@router.message(Command("search"))
+@router.message(Command("search"), F.chat.type != "private")
 @inject
 async def cmd_search(
     message: Message,
@@ -181,7 +182,7 @@ async def cmd_search(
         await thinking.edit_text(formatter._t["llm_error"])
 
 
-@router.message(Command("searchd"))
+@router.message(Command("searchd"), F.chat.type != "private")
 @inject
 async def cmd_search_debug(
     message: Message,
