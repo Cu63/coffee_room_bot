@@ -63,12 +63,12 @@ async def cmd_mute(
     mute_cfg = config.mute
     p = formatter._p
 
-    # Обработка @random — выбрать случайного участника чата
+    # Обработка random — выбрать случайного участника чата
     args_str = (command.args or "").strip()
     is_random = False
-    if args_str.lower().startswith("@random ") or args_str.lower().startswith("random "):
+    if args_str.lower().startswith("random "):
         is_random = True
-        # Извлекаем время из аргументов после @random
+        # Извлекаем время из аргументов после random
         time_part = args_str.split(None, 1)[1] if " " in args_str else None
         if time_part is None:
             await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
