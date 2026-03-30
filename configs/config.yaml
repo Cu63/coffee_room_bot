@@ -257,7 +257,7 @@ chatmode:
   default_minutes: 5             # минуты по умолчанию если не указаны
   silence:
     cost_per_minute: 10          # стоимость 1 минуты режима тишины
-    max_minutes: 30              # максимальная длительность
+    max_minutes: 1440            # максимум 24 часа
   gif:
     cost_per_minute: 5           # стоимость 1 минуты режима гифок
-    max_minutes: 20              # максимальная длительность
+    max_minutes: 1440            # максимум 24 часа

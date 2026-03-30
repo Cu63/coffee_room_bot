@@ -109,7 +109,8 @@ async def cb_protect(
     hours = mute_cfg.protection_duration_hours
     user_id = owner_id
     result = await score_service.spend_score(
-        actor_id=user_id, target_id=user_id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["protect"]
+        actor_id=user_id, target_id=user_id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["protect"],
+        bot_id=callback.bot.id,
     )
     if not result.success:
         try:

@@ -78,6 +78,18 @@ class PostgresScoreRepository(IScoreRepository):
         )
         return [Score(user_id=r["user_id"], chat_id=r["chat_id"], value=r["value"]) for r in rows]
 
+    async def get_all_user_ids(self, chat_id: int) -> list[int]:
+        rows = await self._conn.fetch(
+            """
+            SELECT s.user_id
+            FROM scores s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.chat_id = $1 AND s.value != 0 AND NOT u.is_bot
+            """,
+            chat_id,
+        )
+        return [r["user_id"] for r in rows]
+
     async def get_rank(self, user_id: int, chat_id: int) -> int | None:
         row = await self._conn.fetchrow(
             """

@@ -105,6 +105,8 @@ class ChatmodeService:
         mode: str,
         minutes: int,
         cost_per_minute: int,
+        *,
+        bot_id: int | None = None,
     ) -> ActivateResult:
         """Активировать режим: снять баллы, сохранить права, выставить ограничения."""
         if mode not in _MODE_PERMS:
@@ -125,6 +127,7 @@ class ChatmodeService:
             chat_id=chat_id,
             cost=total_cost,
             emoji=SPECIAL_EMOJI.get("chatmode", "🔒"),
+            bot_id=bot_id,
         )
         if not spend.success:
             return ActivateResult(
