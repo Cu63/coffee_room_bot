@@ -79,18 +79,14 @@ async def cmd_mute(
             return
         minutes = max(1, seconds // 60)
 
-        # Получаем всех активных пользователей чата
-        all_user_ids = await score_repo.get_all_user_ids(message.chat.id)
-        # Исключаем самого инициатора и ботов (боты уже исключены в запросе)
-        candidates = [uid for uid in all_user_ids if uid != message.from_user.id]
-        if not candidates:
+        # Получаем случайного пользователя из чата одним запросом
+        row = await score_repo.get_random_user(message.chat.id, message.from_user.id)
+        if row is None:
             await reply_and_delete(message, "❌ Нет доступных участников для случайного мута.")
             return
-        random_uid = random.choice(candidates)
-        target = await user_repo.get_by_id(random_uid)
-        if target is None:
-            await reply_and_delete(message, formatter._t["error_user_not_found"])
-            return
+        uid, uname, fname = row
+        from bot.domain.entities import User as DomainUser
+        target = DomainUser(id=uid, username=uname, full_name=fname)
     else:
         parsed = await _resolve_mute_args(command.args, message, user_repo)
         if parsed is None:

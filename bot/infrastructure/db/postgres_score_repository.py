@@ -90,6 +90,23 @@ class PostgresScoreRepository(IScoreRepository):
         )
         return [r["user_id"] for r in rows]
 
+    async def get_random_user(self, chat_id: int, exclude_id: int) -> tuple[int, str | None, str] | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT u.id, u.username, u.full_name
+            FROM scores s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.chat_id = $1 AND s.value != 0 AND NOT u.is_bot AND s.user_id != $2
+            ORDER BY random()
+            LIMIT 1
+            """,
+            chat_id,
+            exclude_id,
+        )
+        if row is None:
+            return None
+        return (row["id"], row["username"], row["full_name"])
+
     async def get_rank(self, user_id: int, chat_id: int) -> int | None:
         row = await self._conn.fetchrow(
             """

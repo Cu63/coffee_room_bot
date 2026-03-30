@@ -34,3 +34,11 @@ class IScoreRepository(ABC):
     async def get_all_user_ids(self, chat_id: int) -> list[int]:
         """Все user_id с ненулевым счётом в чате (без ботов)."""
         ...
+
+    @abstractmethod
+    async def get_random_user(self, chat_id: int, exclude_id: int) -> tuple[int, str | None, str] | None:
+        """Случайный пользователь из чата (без ботов, исключая exclude_id).
+
+        Возвращает (user_id, username, full_name) или None.
+        """
+        ...
