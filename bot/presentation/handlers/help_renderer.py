@@ -159,6 +159,7 @@ class HelpRenderer:
                 "",
                 _fmt(s["cost_row"]),
                 _fmt(s["range_row"]),
+                _fmt(s.get("random_row", "")),
                 s["no_debt"],
                 "",
                 s["selfmute_header"],

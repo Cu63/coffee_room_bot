@@ -92,6 +92,7 @@ async def cmd_buyop(
         chat_id=chat_id,
         cost=cost,
         emoji=SPECIAL_EMOJI.get("buyop", "🎖"),
+        bot_id=message.bot.id,
     )
 
     if not result.success:

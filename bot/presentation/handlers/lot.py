@@ -313,6 +313,7 @@ async def cb_lot_bid(
             target_id=user_id,
             chat_id=chat_id,
             cost=new_price,
+            bot_id=callback.bot.id,
         )
         if not result.success:
             sw = p.pluralize(new_price)
@@ -323,11 +324,14 @@ async def cb_lot_bid(
             return
 
         # Только после успешного списания возвращаем деньги предыдущему лидеру
+        # Бот отдаёт обратно — списываем у бота
         if prev_leader_id and prev_leader_id != user_id:
             await score_repo.add_delta(prev_leader_id, chat_id, prev_price)
+            await score_repo.add_delta(callback.bot.id, chat_id, -prev_price)
         elif prev_leader_id == user_id:
             # Пользователь повышает свою же ставку — возвращаем старую
             await score_repo.add_delta(user_id, chat_id, prev_price)
+            await score_repo.add_delta(callback.bot.id, chat_id, -prev_price)
 
         display = user_link(
             cb.from_user.username,

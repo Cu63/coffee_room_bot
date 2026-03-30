@@ -87,6 +87,7 @@ async def _cmd_mode(
         mode=mode,
         minutes=minutes,
         cost_per_minute=mode_cfg.cost_per_minute,
+        bot_id=message.bot.id,
     )
 
     if not result.success:

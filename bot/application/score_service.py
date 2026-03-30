@@ -310,10 +310,13 @@ class ScoreService:
         chat_id: int,
         cost: int,
         emoji: str = "",
+        *,
+        bot_id: int | None = None,
     ) -> SpendResult:
         """Списать баллы у actor за действие над target.
 
         Возвращает SpendResult. В долг не даётся — если баланс < cost, отказ.
+        Если передан bot_id — списанные баллы начисляются боту.
         """
         score = await self._score_repo.get(actor_id, chat_id)
         balance = score.value if score else 0
@@ -322,6 +325,10 @@ class ScoreService:
             return SpendResult(success=False, cost=cost, current_balance=balance)
 
         new_balance = await self._score_repo.add_delta(actor_id, chat_id, -cost)
+
+        # Начислить списанные баллы боту
+        if bot_id is not None:
+            await self._score_repo.add_delta(bot_id, chat_id, cost)
 
         await self._save_special_event(
             actor_id,

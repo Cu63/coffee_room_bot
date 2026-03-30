@@ -29,3 +29,8 @@ class IScoreRepository(ABC):
     async def get_rank(self, user_id: int, chat_id: int) -> int | None:
         """Место пользователя в рейтинге чата (1 = первое). None если нет счёта."""
         ...
+
+    @abstractmethod
+    async def get_all_user_ids(self, chat_id: int) -> list[int]:
+        """Все user_id с ненулевым счётом в чате (без ботов)."""
+        ...

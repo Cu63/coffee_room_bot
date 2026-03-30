@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import random
 from datetime import datetime, timedelta
 
 from aiogram import Router
@@ -19,6 +20,7 @@ from aiogram.types import (
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
+from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
@@ -51,6 +53,7 @@ async def cmd_mute(
     mute_service: FromDishka[MuteService],
     protection_repo: FromDishka[IMuteProtectionRepository],
     user_repo: FromDishka[IUserRepository],
+    score_repo: FromDishka[IScoreRepository],
     store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
@@ -59,14 +62,44 @@ async def cmd_mute(
         return
     mute_cfg = config.mute
     p = formatter._p
-    parsed = await _resolve_mute_args(command.args, message, user_repo)
-    if parsed is None:
-        await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
-        return
-    target, minutes = parsed
-    if target is None:
-        await reply_and_delete(message, formatter._t["error_user_not_found"])
-        return
+
+    # Обработка @random — выбрать случайного участника чата
+    args_str = (command.args or "").strip()
+    is_random = False
+    if args_str.lower().startswith("@random ") or args_str.lower().startswith("random "):
+        is_random = True
+        # Извлекаем время из аргументов после @random
+        time_part = args_str.split(None, 1)[1] if " " in args_str else None
+        if time_part is None:
+            await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
+            return
+        seconds = parse_duration(time_part)
+        if seconds is None or seconds <= 0:
+            await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
+            return
+        minutes = max(1, seconds // 60)
+
+        # Получаем всех активных пользователей чата
+        all_user_ids = await score_repo.get_all_user_ids(message.chat.id)
+        # Исключаем самого инициатора и ботов (боты уже исключены в запросе)
+        candidates = [uid for uid in all_user_ids if uid != message.from_user.id]
+        if not candidates:
+            await reply_and_delete(message, "❌ Нет доступных участников для случайного мута.")
+            return
+        random_uid = random.choice(candidates)
+        target = await user_repo.get_by_id(random_uid)
+        if target is None:
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
+            return
+    else:
+        parsed = await _resolve_mute_args(command.args, message, user_repo)
+        if parsed is None:
+            await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
+            return
+        target, minutes = parsed
+        if target is None:
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
+            return
     if target.id == message.from_user.id:
         await reply_and_delete(message, formatter._t["mute_self"])
         return
@@ -138,7 +171,8 @@ async def cmd_mute(
     if isinstance(member, ChatMemberOwner):
         # ── Owner soft-mute: удаляем сообщения через middleware ──
         result = await score_service.spend_score(
-            actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost
+            actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost,
+            bot_id=bot.id,
         )
         if not result.success:
             await reply_and_delete(
@@ -214,7 +248,8 @@ async def cmd_mute(
         )
     )
     result = await score_service.spend_score(
-        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost
+        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost,
+        bot_id=bot.id,
     )
     if not result.success:
         await _unmute_user(
@@ -605,8 +640,9 @@ async def cmd_unmute(
     if entry is not None:
         await _unmute_user(message.bot, mute_service, entry)
 
-    # Списываем баллы с актора
+    # Списываем баллы с актора, начисляем боту
     await score_service.add_score(actor_id, chat_id, -cost, admin_id=actor_id)
+    await score_service.add_score_quiet(message.bot.id, chat_id, cost)
     new_balance = score.value - cost
 
     await reply_and_delete(

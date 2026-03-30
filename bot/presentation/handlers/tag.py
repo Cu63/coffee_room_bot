@@ -109,7 +109,8 @@ async def cmd_tag(
         await reply_and_delete(message,text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         return
     result = await score_service.spend_score(
-        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["tag"]
+        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["tag"],
+        bot_id=message.bot.id,
     )
     if not result.success:
         await reply_and_delete(message,
