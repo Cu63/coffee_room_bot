@@ -33,22 +33,31 @@ async def wordgame_loop(bot: Bot, container) -> None:
 
                     logger.info("wordgame: game %s expired in chat %d", finished["game_id"], chat_id)
 
-                    # Возвращаем ставку создателю — никто не угадал
+                    # Возвращаем ставку: /rword → боту, /word → создателю
+                    is_random = finished.get("is_random", False)
                     if bet > 0 and creator_id:
                         try:
                             from bot.application.score_service import ScoreService
                             score_service: ScoreService = await scope.get(ScoreService)
-                            await score_service.add_score(creator_id, chat_id, bet, admin_id=creator_id)
+                            refund_target = bot.id if is_random else creator_id
+                            await score_service.add_score(refund_target, chat_id, bet, admin_id=refund_target)
                             logger.info(
-                                "wordgame: refunded %d to creator %d in chat %d",
-                                bet, creator_id, chat_id,
+                                "wordgame: refunded %d to %s (%d) in chat %d",
+                                bet, "bot" if is_random else "creator", refund_target, chat_id,
                             )
                         except Exception:
                             logger.exception("wordgame_loop: failed to refund bet")
 
                     # Редактируем игровое сообщение — показываем слово
                     if message_id:
-                        refund_line = f"\n💰 Ставка <b>{bet}</b> возвращена автору." if bet > 0 else ""
+                        if bet > 0:
+                            refund_line = (
+                                f"\n💰 Ставка <b>{bet}</b> возвращена боту."
+                                if is_random
+                                else f"\n💰 Ставка <b>{bet}</b> возвращена автору."
+                            )
+                        else:
+                            refund_line = ""
                         try:
                             await bot.edit_message_text(
                                 chat_id=chat_id,
