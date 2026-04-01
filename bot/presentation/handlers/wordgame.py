@@ -633,7 +633,12 @@ async def msg_reply_guess(
         await store.wg_game_finish(game.game_id)
         await store.wg_chat_remove(chat_id, game.game_id)
 
-        await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
+        if game.is_random and game.bet > 0:
+            # /rword: ставку держал бот — списать у бота и начислить победителю
+            await score_service.add_score_quiet(bot.id, chat_id, -game.bet)
+            await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
+        else:
+            await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
 
         # Записываем победу в дневной лидерборд
         game_type = "rword" if game.is_random else "word"
