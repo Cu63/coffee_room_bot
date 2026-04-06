@@ -153,6 +153,15 @@ rwordgame:
   game_window_hours: 1        # окно лимита в часах
   cooldown_minutes: 20        # задержка между играми /rword (в минутах)
 
+poker:
+  enabled: true
+  cost: 50                      # стоимость вызова /poker
+  steal_percent: 5              # % от баланса атакующего — макс. кража
+  mute_minutes: 5               # длительность мута-дебаффа
+  gameban_minutes: 30           # длительность запрета игр
+  score_percent: 5              # % баланса — потеря кирчиков
+  backfire_chance: 10           # шанс % удара по себе при атаке другого
+
 tictactoe:
   enabled: true
   min_bet: 1

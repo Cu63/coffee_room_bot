@@ -126,6 +126,12 @@ class HelpRenderer:
             gif_cost=f"{cmc.gif.cost_per_minute} {p.pluralize(cmc.gif.cost_per_minute)}",
             gif_max=cmc.gif.max_minutes,
             llm_daily_limit=config.llm.daily_limit_per_user,
+            poker_cost=f"{config.poker.cost} {p.pluralize(config.poker.cost)}",
+            poker_mute_min=config.poker.mute_minutes,
+            poker_gameban_min=config.poker.gameban_minutes,
+            poker_score_pct=config.poker.score_percent,
+            poker_steal_pct=config.poker.steal_percent,
+            poker_backfire=config.poker.backfire_chance,
         )
 
         def _fmt(tmpl: str) -> str:
@@ -193,6 +199,10 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "dice":
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
+
+        if section == "poker":
             rows = [_fmt(r) for r in s.get("rows", [])]
             return s["header"] + "\n\n" + "\n".join(rows)
 

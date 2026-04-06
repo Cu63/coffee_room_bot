@@ -287,6 +287,17 @@ class IdeaConfig(_BaseConfig):
     vote_ttl_hours: int = 72    # сколько часов принимать голоса
 
 
+class PokerConfig(_BaseConfig):
+    """Настройки /poker — рулетка дебаффов."""
+    enabled: bool = True
+    cost: int = 50                    # стоимость вызова /poker
+    steal_percent: int = 5            # % от баланса атакующего — макс. кража
+    mute_minutes: int = 5             # длительность мута-дебаффа
+    gameban_minutes: int = 30         # длительность запрета игр
+    score_percent: int = 5            # % баланса — потеря кирчиков
+    backfire_chance: int = 10         # шанс % удара по себе при атаке другого
+
+
 class SelfbanConfig(_BaseConfig):
     """Настройки /selfban — самозапрет на игры."""
     min_minutes: int = 30             # минимальная длительность
@@ -406,6 +417,7 @@ class AppConfig(_BaseConfig):
     anagram: AnagramConfig = AnagramConfig()
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
+    poker: PokerConfig = PokerConfig()
     selfban: SelfbanConfig = SelfbanConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()
