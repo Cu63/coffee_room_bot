@@ -37,6 +37,7 @@ SPECIAL_EMOJI = {
     "daily_leader": "🏆",
     "chatmode": "🔒",
     "bj": "🃏",
+    "poker": "🎰",
 }
 
 

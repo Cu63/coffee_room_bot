@@ -66,6 +66,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.lot import router as lot_router
     from bot.presentation.handlers.mute import router as mute_router
+    from bot.presentation.handlers.poker import router as poker_router
     from bot.presentation.handlers.protect import router as protect_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
@@ -106,6 +107,8 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
         dp.include_router(lot_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
+    if config.poker.enabled:
+        dp.include_router(poker_router)
     dp.include_router(selfban_router)
     dp.include_router(tracker_router)
     dp.include_router(anon_router)
