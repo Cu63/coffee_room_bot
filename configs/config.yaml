@@ -156,6 +156,7 @@ rwordgame:
 poker:
   enabled: true
   cost: 50                      # стоимость вызова /poker
+  cooldown_hours: 6             # кулдаун между использованиями (часы)
   steal_percent: 5              # % от баланса атакующего — макс. кража
   mute_minutes: 5               # длительность мута-дебаффа
   gameban_minutes: 30           # длительность запрета игр

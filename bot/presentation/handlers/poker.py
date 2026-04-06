@@ -127,6 +127,23 @@ async def cmd_poker(
     bot = message.bot
     p = formatter._p
 
+    # Кулдаун
+    cd_key = f"poker:cd:{user_id}:{chat_id}"
+    ttl = await store._r.ttl(cd_key)
+    if ttl and ttl > 0:
+        hours = ttl // 3600
+        mins = (ttl % 3600) // 60
+        if hours > 0:
+            cd_str = f"{hours} ч {mins} мин" if mins else f"{hours} ч"
+        else:
+            cd_str = f"{mins} мин"
+        await reply_and_delete(
+            message,
+            f"⏳ /poker доступен через <b>{cd_str}</b>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
     # Определяем цель: reply = другой игрок, без reply = на себя
     target_self = True
     target_id = user_id
@@ -254,6 +271,9 @@ async def cmd_poker(
                 text = formatter._t["poker_score_zero"].format(
                     actor=actor_link, target=actual_target_link,
                 )
+
+    # Устанавливаем кулдаун
+    await store._r.set(cd_key, "1", ex=cfg.cooldown_hours * 3600)
 
     final_text = f"{backfire_text}\n{text}" if backfire else text
 
