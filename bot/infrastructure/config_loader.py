@@ -291,6 +291,7 @@ class PokerConfig(_BaseConfig):
     """Настройки /poker — рулетка дебаффов."""
     enabled: bool = True
     cost: int = 50                    # стоимость вызова /poker
+    cooldown_hours: int = 6           # кулдаун между использованиями
     steal_percent: int = 5            # % от баланса атакующего — макс. кража
     mute_minutes: int = 5             # длительность мута-дебаффа
     gameban_minutes: int = 30         # длительность запрета игр
