@@ -23,7 +23,7 @@ menu_buttons:
     - key: dice
       label: "🎲 Кубики и слоты"
   - - key: poker
-      label: "🎰 Покер"
+      label: "🎰 Кочерга"
     - key: chatmode
       label: "🔒 Режимы чата"
   - - key: ai
@@ -189,7 +189,7 @@ sections:
       - "  🍊🍊🍊 → ×15  |  💎💎💎 → ×30 (джекпот)"
 
   poker:
-    header: "🎰 <b>Покер дебаффов</b>"
+    header: "🎰 <b>Долгожданный удар кочергой</b>"
     rows:
       - "Рулетка случайных дебаффов!"
       - ""
@@ -264,7 +264,7 @@ sections:
       - "  /slots &lt;ставка&gt; — слоты ({slots_min}–{slots_max})"
       - "  /word &lt;ставка&gt; &lt;время&gt; — угадайка (ты загадываешь)"
       - "  /rword &lt;ставка&gt; &lt;время&gt; — угадайка (бот загадывает)"
-      - "  /poker — рулетка дебаффов ({poker_cost})"
+      - "  /poker — удар кочергой ({poker_cost})"
       - "  /renew — сбросить лимиты за {renew_cost}"
       - "  /selfban &lt;время&gt; — запретить себе играть"
       - ""
