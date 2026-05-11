@@ -3,15 +3,6 @@ revision = 2
 requires-python = ">=3.12"
 
 [[package]]
-name = "adaptix"
-version = "3.0.0b11"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/ea/f55d4de521cb237b1dd9c4a21c6ae3885d21b4f90130d15fd88020d6d1ca/adaptix-3.0.0b11.tar.gz", hash = "sha256:3d3d660d97d9e1a85d133b181fdac8a200ff3185422fdf686601bc9ed0017162", size = 134021, upload-time = "2025-05-09T14:51:09.977Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/70/b087e09db584c2718cfff4a354c98dfac1844e7e7d0c75dc38685823eec1/adaptix-3.0.0b11-py3-none-any.whl", hash = "sha256:5afa7197d1a084fc93da852bf58194de4a1c506caa3f5889c9953a27ce515bda", size = 179291, upload-time = "2025-05-09T14:51:08.288Z" },
-]
-
-[[package]]
 name = "aiofiles"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -373,15 +364,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dynaconf"
-version = "3.2.12"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/cd/bd/7a6f84b68268fe1d12e709faec7d293e0c37c9c03bacaf363de41e7e7568/dynaconf-3.2.12.tar.gz", hash = "sha256:29cea583b007d890e6031fa89c0ac489b631c73dbee83bcd5e6f97602c26354e", size = 313801, upload-time = "2025-10-10T19:54:06.164Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/68/51adede38ab2ee9ecfddb8b60a80a42b618a72f1018fcf60974e5d852831/dynaconf-3.2.12-py2.py3-none-any.whl", hash = "sha256:eb2a11865917dff8810c6098cd736b8f4d2f4e39ad914500e2dfbe064b82c499", size = 237788, upload-time = "2025-10-10T19:54:03.731Z" },
-]
-
-[[package]]
 name = "frozenlist"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -486,6 +468,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -1537,14 +1520,12 @@ name = "score-bot"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "adaptix" },
     { name = "aiogram" },
     { name = "aiohttp" },
     { name = "aiohttp-socks" },
     { name = "asyncpg" },
     { name = "cachetools" },
     { name = "dishka" },
-    { name = "dynaconf" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
@@ -1568,14 +1549,12 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "adaptix", specifier = ">=3.0.0b11" },
     { name = "aiogram", specifier = ">=3.26.0" },
     { name = "aiohttp", specifier = ">=3.13.3" },
     { name = "aiohttp-socks", specifier = ">=0.11.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "cachetools", specifier = ">=7.0.5" },
     { name = "dishka", specifier = ">=1.9.1" },
-    { name = "dynaconf", specifier = ">=3.2.12" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },

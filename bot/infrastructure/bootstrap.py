@@ -71,6 +71,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
     from bot.presentation.handlers.selfban import router as selfban_router
+    from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.slots import router as slots_router
     from bot.presentation.handlers.tag import router as tag_router
     from bot.presentation.handlers.tictactoe import router as ttt_router
@@ -110,6 +111,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     if config.poker.enabled:
         dp.include_router(poker_router)
     dp.include_router(selfban_router)
+    dp.include_router(summary_admin_router)
     dp.include_router(tracker_router)
     dp.include_router(anon_router)
     dp.include_router(daily_router)
