@@ -20,6 +20,7 @@ from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.blackjack.helpers import (
     _BJ_LOBBY_TTL,
+    _BJ_REDIS_BUFFER,
     _bj_key,
     _lobby_kb,
     _make_game_id,
@@ -151,7 +152,7 @@ async def cmd_blackjack(
     }
 
     key = _bj_key(chat_id, game_id)
-    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL)
+    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL + _BJ_REDIS_BUFFER)
 
     lobby_text = formatter._t["bj_lobby"].format(
         user=display,
@@ -167,4 +168,4 @@ async def cmd_blackjack(
 
     # Сохраняем message_id
     data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL)
+    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL + _BJ_REDIS_BUFFER)

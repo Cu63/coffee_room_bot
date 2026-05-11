@@ -26,6 +26,7 @@ from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.blackjack.helpers import (
     _BJ_GAME_TTL,
+    _BJ_REDIS_BUFFER,
     _bj_key,
     _hand_score_from_dicts,
     _is_natural,
@@ -196,7 +197,7 @@ async def cb_bj_accept(
         return
 
     # Сохраняем и показываем
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL)
+    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
     text = _turn_text(data, p)
     try:
@@ -298,7 +299,7 @@ async def cb_bj_hit(
 
         # Переход хода к сопернику
         data["turn"] = "p2" if turn == "p1" else "p1"
-        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL)
+        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         text = _turn_text(data, p)
         try:
@@ -339,7 +340,7 @@ async def cb_bj_hit(
 
         # Переход хода
         data["turn"] = other
-        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL)
+        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         text = _turn_text(data, p)
         try:
@@ -355,7 +356,7 @@ async def cb_bj_hit(
         return
 
     # Продолжаем — тот же игрок ходит
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL)
+    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
     text = _turn_text(data, p)
     try:
@@ -442,7 +443,7 @@ async def cb_bj_stand(
 
     # Переход хода к сопернику
     data["turn"] = other
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL)
+    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
     text = _turn_text(data, p)
     try:

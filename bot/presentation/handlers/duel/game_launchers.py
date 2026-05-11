@@ -25,6 +25,7 @@ from bot.presentation.handlers.tictactoe import (
 )
 from bot.presentation.handlers.blackjack import (
     _BJ_GAME_TTL,
+    _BJ_REDIS_BUFFER,
     _bj_key,
     _is_natural as _bj_is_natural,
     _hand_score_from_dicts as _bj_hand_score,
@@ -178,7 +179,7 @@ async def _start_bj_from_duel(
         # Мгновенное завершение — resolve_game сам удалит ключ
         data["p1_done"] = True
         data["p2_done"] = True
-        await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL)
+        await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         from bot.presentation.handlers.blackjack import _resolve_game
         # Получаем stats_repo из dishka через cb (нет прямого доступа, используем заглушку)
@@ -210,7 +211,7 @@ async def _start_bj_from_duel(
         data["p1_done"] = True
         data["turn"] = "p2"
 
-    await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL)
+    await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
     text = _bj_turn_text(data, p)
     try:

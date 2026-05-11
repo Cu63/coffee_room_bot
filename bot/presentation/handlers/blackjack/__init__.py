@@ -19,6 +19,7 @@ from bot.presentation.handlers.blackjack.callbacks import router as callbacks_ro
 from bot.presentation.handlers.blackjack.helpers import (
     _BJ_GAME_TTL,
     _BJ_LOBBY_TTL,
+    _BJ_REDIS_BUFFER,
     _bj_key,
     _hand_score_from_dicts,
     _is_natural,
@@ -36,6 +37,7 @@ __all__ = [
     "router",
     "_BJ_GAME_TTL",
     "_BJ_LOBBY_TTL",
+    "_BJ_REDIS_BUFFER",
     "_bj_key",
     "_hand_score_from_dicts",
     "_is_natural",
