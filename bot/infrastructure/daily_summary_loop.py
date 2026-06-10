@@ -61,8 +61,8 @@ async def _send_summary(bot: Bot, chat_id: int, text: str) -> None:
 
 async def _run_once(bot: Bot, container) -> None:
     """Один прогон: генерируем и отправляем сводку во все активные чаты."""
-    from bot.application.analyze_service import _format_messages
     from bot.application.interfaces.message_repository import IMessageRepository
+    from bot.application.summary_service import generate_daily_summary
     from bot.infrastructure.config_loader import AppConfig
     from bot.infrastructure.message_formatter import MessageFormatter
     from bot.infrastructure.openai_client import OpenAiClient
@@ -98,22 +98,11 @@ async def _run_once(bot: Bot, container) -> None:
                 logger.debug("daily_summary: chat %d has no messages, skipping", chat_id)
                 continue
 
-            user_prompt = formatter._t["daily_summary_user_prompt"].format(
-                actual=len(messages),
-                messages=_format_messages(messages),
-                date=today_str,
+            text = await generate_daily_summary(
+                client, formatter, cfg, messages, today_str,
+                admin_prefix=config.admin.prefix,
             )
-
-            resp = await client.chat([
-                {"role": "system", "content": formatter._t["daily_summary_system_prompt"]},
-                {"role": "user", "content": user_prompt},
-            ])
-
-            text = resp.text or "Нет ответа от модели."
-            logger.info(
-                "daily_summary: chat=%d messages=%d in=%d out=%d",
-                chat_id, len(messages), resp.input_tokens, resp.output_tokens,
-            )
+            logger.info("daily_summary: chat=%d messages=%d done", chat_id, len(messages))
 
             await _send_summary(bot, chat_id, text)
 

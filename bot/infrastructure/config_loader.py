@@ -332,6 +332,10 @@ class DailySummaryConfig(_BaseConfig):
     enabled: bool = False
     time: str = "22:00"           # HH:MM, часовой пояс MSK
     max_messages: int = 2000      # потолок на случай очень активного чата
+    # ── map-reduce: слабая модель видит за раз только маленькую порцию ──
+    chunk_size: int = 200         # сообщений в одной пачке на этапе map
+    map_max_tokens: int = 1000    # лимит токенов на тезисы одной пачки
+    temperature: float = 0.3      # ниже = меньше отсебятины/галлюцинаций
 
 
 class DailyLeaderboardConfig(_BaseConfig):

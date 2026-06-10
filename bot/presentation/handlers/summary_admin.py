@@ -17,8 +17,8 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.analyze_service import _format_messages
 from bot.application.interfaces.message_repository import IMessageRepository
+from bot.application.summary_service import generate_daily_summary
 from bot.domain.bot_utils import is_admin
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
@@ -105,25 +105,15 @@ async def cmd_summary_admin(
             schedule_delete(bot, thinking, delay=_AUTO_DELETE_SEC)
             return
 
-        user_prompt = formatter._t["daily_summary_user_prompt"].format(
-            actual=len(messages),
-            messages=_format_messages(messages),
-            date=date_str,
+        text = await generate_daily_summary(
+            client, formatter, cfg, messages, date_str,
+            admin_prefix=config.admin.prefix,
         )
-
-        resp = await client.chat([
-            {"role": "system", "content": formatter._t["daily_summary_system_prompt"]},
-            {"role": "user", "content": user_prompt},
-        ])
-
-        text = resp.text or "Нет ответа от модели."
         logger.info(
-            "summary_admin: chat=%d user=%d messages=%d in=%d out=%d",
+            "summary_admin: chat=%d user=%d messages=%d done",
             message.chat.id,
             message.from_user.id,
             len(messages),
-            resp.input_tokens,
-            resp.output_tokens,
         )
     except Exception:
         logger.exception("summary_admin: failed")

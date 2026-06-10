@@ -53,13 +53,17 @@ class AiTunnelClient:
         *,
         json_mode: bool = False,
         tools: list[dict] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> LlmResponse:
         session = await self._get_session()
         payload: dict = {
             "model": self._model,
             "messages": messages,
-            "max_tokens": self._max_output_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self._max_output_tokens,
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         if tools:
