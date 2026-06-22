@@ -293,10 +293,19 @@ class PokerConfig(_BaseConfig):
     cost: int = 50                    # стоимость вызова /poker
     cooldown_hours: int = 6           # кулдаун между использованиями
     steal_percent: int = 5            # % от баланса атакующего — макс. кража
+    steal_cap: int = 500              # жёсткий потолок кражи за один /poker (кирчиков)
     mute_minutes: int = 5             # длительность мута-дебаффа
     gameban_minutes: int = 30         # длительность запрета игр
     score_percent: int = 5            # % баланса — потеря кирчиков
     backfire_chance: int = 10         # шанс % удара по себе при атаке другого
+
+
+class DonotbuyConfig(_BaseConfig):
+    """Настройки /donotbuy — «кнопка наёбка»."""
+    enabled: bool = True
+    max_price: int = 5000             # верхняя граница случайной цены за нажатие
+    daily_limit: int = 2              # нажатий в сутки на пользователя (в т.ч. неудачных)
+    grid_size: int = 9               # сколько ячеек в сетке (кнопка стоит в случайной)
 
 
 class SelfbanConfig(_BaseConfig):
@@ -423,6 +432,7 @@ class AppConfig(_BaseConfig):
     buyop: BuyopConfig = BuyopConfig()
     idea: IdeaConfig = IdeaConfig()
     poker: PokerConfig = PokerConfig()
+    donotbuy: DonotbuyConfig = DonotbuyConfig()
     selfban: SelfbanConfig = SelfbanConfig()
     bug: BugConfig = BugConfig()
     logging: LoggingConfig = LoggingConfig()

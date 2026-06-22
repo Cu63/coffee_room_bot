@@ -16,6 +16,23 @@ class ModerationStoreMixin:
     _MUTE_DAILY = "mute:daily:"
     _MUTE_TARGET = "mute:target:"
     _RENEW_DAILY = "renew:daily:"
+    _DONOTBUY_DAILY = "donotbuy:daily:"
+
+    # ── /donotbuy («кнопка наёбка») ─────────────────────────
+
+    async def donotbuy_daily_count(self, user_id: int, chat_id: int) -> int:
+        key = f"{self._DONOTBUY_DAILY}{user_id}:{chat_id}"
+        raw = await self._r.get(key)
+        return int(raw or 0)
+
+    async def donotbuy_daily_increment(self, user_id: int, chat_id: int) -> int:
+        """Увеличивает счётчик нажатий. TTL = 86400 сек. Возвращает новое значение."""
+        key = f"{self._DONOTBUY_DAILY}{user_id}:{chat_id}"
+        pipe = self._r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 86400)
+        result = await pipe.execute()
+        return int(result[0])
 
     async def mute_daily_count(self, actor_id: int, chat_id: int) -> int:
         key = f"{self._MUTE_DAILY}{actor_id}:{chat_id}"

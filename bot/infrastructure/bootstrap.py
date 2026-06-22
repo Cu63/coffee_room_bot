@@ -58,6 +58,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.commands import router as commands_router
     from bot.presentation.handlers.daily import router as daily_router
     from bot.presentation.handlers.dice import router as dice_router
+    from bot.presentation.handlers.donotbuy import router as donotbuy_router
     from bot.presentation.handlers.duel import router as duel_router
     from bot.presentation.handlers.giveaway import router as giveaway_router
     from bot.presentation.handlers.help import router as help_router
@@ -110,6 +111,8 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     dp.include_router(idea_router)
     if config.poker.enabled:
         dp.include_router(poker_router)
+    if config.donotbuy.enabled:
+        dp.include_router(donotbuy_router)
     dp.include_router(selfban_router)
     dp.include_router(summary_admin_router)
     dp.include_router(tracker_router)

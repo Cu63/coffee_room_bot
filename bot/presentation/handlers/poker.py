@@ -248,6 +248,8 @@ async def cmd_poker(
             # На другого (или backfire): крадём деньги (макс 5% от баланса атакующего)
             attacker_score = await score_service.get_score(user_id, chat_id)
             max_steal = max(1, math.ceil(attacker_score.value * cfg.steal_percent / 100))
+            # Жёсткий потолок: за один /poker нельзя украсть больше steal_cap
+            max_steal = min(max_steal, cfg.steal_cap)
             victim_score = await score_service.get_score(actual_target_id, chat_id)
 
             if victim_score.value > 0:
