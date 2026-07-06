@@ -104,6 +104,21 @@ class XpConfig(_BaseConfig):
     levels: XpLevelsConfig = XpLevelsConfig()
 
 
+class IqConfig(_BaseConfig):
+    """Настройки IQ-системы."""
+    enabled: bool = True
+    default: int = 89              # стартовый IQ у всех
+    win_reward: int = 1           # +IQ за победу в /ttt и /rword
+    daily_win_cap: int = 5        # максимум IQ за победы в сутки
+    substr_trigger: str = "67"    # подстрока в сообщении, снимающая IQ
+    substr_penalty: int = 1       # сколько IQ снимать за сообщение с подстрокой
+    buy_amount: int = 5           # сколько IQ даёт один пакет /buyiq
+    buy_cost: int = 1000          # стоимость одного пакета (в кирчиках)
+    max_buy_packs: int = 100      # максимум пакетов за один /buyiq
+    top_default: int = 30         # N по умолчанию для /topiq
+    top_max: int = 100            # максимум N для /topiq
+
+
 class AutoReactConfig(_BaseConfig):
     enabled: bool = False
     probability: float = 0.05
@@ -423,6 +438,7 @@ class AppConfig(_BaseConfig):
     admin: AdminConfig = AdminConfig()
     mute: MuteConfig = MuteConfig()
     xp: XpConfig = XpConfig()
+    iq: IqConfig = IqConfig()
     auto_react: AutoReactConfig = AutoReactConfig()
     tag: TagConfig = TagConfig()
     blackjack: BlackjackConfig = BlackjackConfig()

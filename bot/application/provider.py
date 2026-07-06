@@ -17,6 +17,7 @@ from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepos
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
+from bot.application.interfaces.iq_repository import IIqRepository
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.application.interfaces.mute_repository import IMuteRepository
@@ -26,6 +27,7 @@ from bot.application.interfaces.user_stats_repository import IUserStatsRepositor
 from bot.application.interfaces.xp_repository import IXpRepository
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
+from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.application.xp_service import XpService
@@ -136,3 +138,9 @@ class AppServiceProvider(Provider):
         self, xp_repo: IXpRepository, config: AppConfig,
     ) -> XpService:
         return XpService(xp_repo=xp_repo, config=config.xp)
+
+    @provide(scope=Scope.REQUEST)
+    def get_iq_service(
+        self, iq_repo: IIqRepository, config: AppConfig,
+    ) -> IqService:
+        return IqService(iq_repo=iq_repo, config=config.iq)

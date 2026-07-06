@@ -119,6 +119,8 @@ class HelpRenderer:
             ttt_min=config.tictactoe.min_bet,
             ttt_max=config.tictactoe.max_bet,
             buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
+            iq_buy_amount=config.iq.buy_amount,
+            iq_buy_cost=f"{config.iq.buy_cost} {p.pluralize(config.iq.buy_cost)}",
             selfban_min=config.selfban.min_minutes,
             selfban_max=config.selfban.max_minutes,
             silence_cost=f"{cmc.silence.cost_per_minute} {p.pluralize(cmc.silence.cost_per_minute)}",

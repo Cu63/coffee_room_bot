@@ -110,6 +110,19 @@ xp:
     xp_per_level: 500     # XP на каждый уровень (линейная шкала)
     max_level: 100        # максимальный уровень
 
+iq:
+  enabled: true
+  default: 89                 # стартовый IQ у всех
+  win_reward: 1               # +IQ за победу в /ttt и /rword
+  daily_win_cap: 5            # максимум IQ за победы в сутки
+  substr_trigger: "67"        # подстрока в сообщении, снимающая IQ
+  substr_penalty: 1           # сколько IQ снимать за сообщение с подстрокой «67»
+  buy_amount: 5               # сколько IQ даёт один пакет /buyiq
+  buy_cost: 1000              # стоимость одного пакета (в кирчиках)
+  max_buy_packs: 100          # максимум пакетов за один /buyiq
+  top_default: 30             # N по умолчанию для /topiq
+  top_max: 100                # максимум N для /topiq
+
 auto_react:
   enabled: true
   probability: 0.05   # 5% — каждое 20-е сообщение в среднем

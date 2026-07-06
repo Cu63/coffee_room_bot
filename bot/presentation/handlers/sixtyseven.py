@@ -22,6 +22,7 @@ from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import apply_mute
+from bot.presentation.utils import schedule_delete
 
 router = Router(name="sixtyseven")
 
@@ -63,9 +64,9 @@ async def on_sixtyseven(
             )
         return
 
-    # Второй и последующий «67» за день → тихий мут, без сообщений
+    # Второй и последующий «67» за день → мут на cfg.mute_minutes минут.
     until = now + timedelta(minutes=cfg.mute_minutes)
-    await apply_mute(
+    muted = await apply_mute(
         bot,
         mute_service,
         target_id=user_id,
@@ -73,3 +74,22 @@ async def on_sixtyseven(
         muted_by=bot.id,
         until=until,
     )
+    if not muted:
+        # Не удалось замутить (нет прав / владелец) — молча выходим.
+        return
+
+    # Раз мут выдан за «67» — удаляем это сообщение и сообщаем о муте.
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    link = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
+    try:
+        notify = await message.answer(
+            formatter._t["sixtyseven_muted"].format(user=link, minutes=cfg.mute_minutes),
+            parse_mode=ParseMode.HTML,
+        )
+        schedule_delete(bot, notify, delay=60)
+    except Exception:
+        pass

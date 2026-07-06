@@ -18,6 +18,20 @@ class ModerationStoreMixin:
     _RENEW_DAILY = "renew:daily:"
     _DONOTBUY_DAILY = "donotbuy:daily:"
     _SIXTYSEVEN_DAILY = "six7:daily:"
+    _IQ_WIN_DAILY = "iq:win:daily:"
+
+    # ── Дневной лимит IQ за победы в играх ──────────────────
+
+    async def iq_win_incrby(self, user_id: int, chat_id: int, day: str, amount: int) -> int:
+        """Атомарно прибавляет `amount` к счётчику IQ, полученного за победы
+        сегодня (МСК). `day` — строка YYYYMMDD. TTL 2 суток.
+        Возвращает новое суммарное значение счётчика."""
+        key = f"{self._IQ_WIN_DAILY}{user_id}:{chat_id}:{day}"
+        pipe = self._r.pipeline()
+        pipe.incrby(key, amount)
+        pipe.expire(key, 172800)
+        result = await pipe.execute()
+        return int(result[0])
 
     # ── Пасхалка «67» ───────────────────────────────────────
 

@@ -10,6 +10,7 @@ from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.auto_react import AutoReactMiddleware
 from bot.presentation.middlewares.burst_bonus import BurstBonusMiddleware
 from bot.presentation.middlewares.chat_context import ChatContextMiddleware
+from bot.presentation.middlewares.iq_penalty import IqPenaltyMiddleware
 from bot.presentation.middlewares.mute_mention_notify import MuteMentionNotifyMiddleware
 from bot.presentation.middlewares.owner_mute import OwnerMuteDeleteMiddleware
 from bot.presentation.middlewares.reply_chain_bonus import ReplyChainMiddleware
@@ -41,6 +42,7 @@ def register_post_dishka_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     dp.message.outer_middleware(BurstBonusMiddleware())
     dp.message.outer_middleware(SparkBonusMiddleware())
     dp.message.outer_middleware(ReplyChainMiddleware())
+    dp.message.outer_middleware(IqPenaltyMiddleware())
     dp.message.outer_middleware(MuteMentionNotifyMiddleware())
     dp.message.outer_middleware(OwnerMuteDeleteMiddleware())
 
@@ -63,6 +65,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.giveaway import router as giveaway_router
     from bot.presentation.handlers.help import router as help_router
     from bot.presentation.handlers.idea import router as idea_router
+    from bot.presentation.handlers.iq import router as iq_router
     from bot.presentation.handlers.llm_commands import router as llm_router
     from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.lot import router as lot_router
@@ -111,6 +114,8 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
         dp.include_router(lot_router)
     dp.include_router(buyop_router)
     dp.include_router(idea_router)
+    if config.iq.enabled:
+        dp.include_router(iq_router)
     if config.poker.enabled:
         dp.include_router(poker_router)
     if config.donotbuy.enabled:

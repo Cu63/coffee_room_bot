@@ -15,12 +15,15 @@ from bot.application.interfaces.daily_leaderboard_repository import IDailyLeader
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.iq_service import IqService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import now_msk
+from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers._iq_utils import award_game_iq
 from bot.presentation.handlers.tictactoe.game_logic import (
     _CELL_O,
     _CELL_X,
@@ -183,8 +186,10 @@ async def cb_ttt_move(
     score_repo: FromDishka[IScoreRepository],
     stats_repo: FromDishka[IUserStatsRepository],
     lb_repo: FromDishka[IDailyLeaderboardRepository],
+    iq_service: FromDishka[IqService],
     pluralizer: FromDishka[ScorePluralizer],
     formatter: FromDishka[MessageFormatter],
+    config: FromDishka[AppConfig],
 ) -> None:
     parts = cb.data.split(":")
     if len(parts) < 4:
@@ -322,6 +327,8 @@ async def cb_ttt_move(
                 # Записываем победу
                 await stats_repo.add_win(winner_id, chat_id, "ttt")
                 await lb_repo.add_game_win(winner_id, chat_id, "ttt", now_msk().date())
+                # +IQ за победу (с учётом дневного лимита)
+                await award_game_iq(store, iq_service, config.iq, winner_id, chat_id)
 
                 sw_pot = p.pluralize(total_pot)
                 text = formatter._t["ttt_win"].format(

@@ -13,6 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
@@ -27,6 +28,7 @@ from bot.domain.wordgame_entities import (
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import apply_mute
+from bot.presentation.handlers._iq_utils import award_game_iq
 from bot.presentation.handlers.wordgame.helpers import game_text, game_to_raw, raw_to_game
 from bot.presentation.utils import schedule_delete, schedule_delete_id
 
@@ -53,6 +55,7 @@ async def msg_reply_guess(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
     mute_service: FromDishka[MuteService],
+    iq_service: FromDishka[IqService],
 ) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -166,6 +169,13 @@ async def msg_reply_guess(
             await lb_repo.add_game_win(user_id, chat_id, game_type, now_msk().date())
         except Exception:
             pass  # не прерываем победу из-за ошибки статистики
+
+        # +IQ за победу в /rword (обычный /word IQ не даёт)
+        if game.is_random:
+            try:
+                await award_game_iq(store, iq_service, config.iq, user_id, chat_id)
+            except Exception:
+                pass  # IQ — не критично, не срываем победу
 
         bet_str = pluralizer.pluralize(game.bet)
         win_text = (
