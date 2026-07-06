@@ -28,6 +28,7 @@ mute_target_protected: "🛡 {target} защищён от мута до {until}.
 amute_usage: "Использование: /amute @username <время> или ответьте: /amute <время> (от {min} до {max} мин)"
 amute_success: "🔇 {actor} мутит {target} на {minutes} мин."
 amute_not_allowed: "Эта команда только для администраторов."
+sixtyseven_reward: "🎉 {user}, тебе начислено {amount} кирчиков!"
 selfmute_usage: "Использование: /selfmute <время> (от {min} до {max} мин)\nФорматы: 30, 30m, 2h, 1d, 1h30m, 1d2h30m"
 selfmute_success: "🔇 {user} замутил себя на {duration}."
 selfmute_failed: "Не удалось выполнить самомут."

@@ -72,6 +72,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
     from bot.presentation.handlers.selfban import router as selfban_router
+    from bot.presentation.handlers.sixtyseven import router as sixtyseven_router
     from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.slots import router as slots_router
     from bot.presentation.handlers.tag import router as tag_router
@@ -81,6 +82,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.wordgame import router as wordgame_router
 
     dp.include_router(commands_router)
+    dp.include_router(sixtyseven_router)
     if config.blackjack.enabled:
         dp.include_router(blackjack_router)
     if config.dice.enabled:

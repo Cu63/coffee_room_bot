@@ -145,13 +145,21 @@ wordgame:
   game_window_hours: 4        # окно лимита в часах
 
 rwordgame:
-  max_bet: 15                 # лимит ставки для /rword (0–N)
+  max_bet: 25                 # лимит ставки для /rword (0–N)
   min_word_length: 2          # минимальная длина случайного слова
   max_word_length: 21         # максимальная длина случайного слова
   words_file: "configs/words_ru.txt"  # путь к файлу словаря
-  max_games_per_window: 3     # макс. игр за окно
+  max_games_per_window: 1     # макс. игр за окно (не более 1 игры в час на пользователя)
   game_window_hours: 1        # окно лимита в часах
   cooldown_minutes: 20        # задержка между играми /rword (в минутах)
+  loss_username: "WaterCat73" # при победе получает мут на сутки вместо приза (без @)
+  loss_mute_minutes: 1440     # длительность мута для loss_username (сутки)
+
+sixtyseven:
+  enabled: true
+  reward: 67                  # кирчиков за первый «67» в день награды
+  reward_day: 6               # число месяца (МСК), когда даётся награда
+  mute_minutes: 67            # мут за 2-й и последующий «67» за день
 
 poker:
   enabled: true

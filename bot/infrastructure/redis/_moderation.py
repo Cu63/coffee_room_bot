@@ -17,6 +17,22 @@ class ModerationStoreMixin:
     _MUTE_TARGET = "mute:target:"
     _RENEW_DAILY = "renew:daily:"
     _DONOTBUY_DAILY = "donotbuy:daily:"
+    _SIXTYSEVEN_DAILY = "six7:daily:"
+
+    # ── Пасхалка «67» ───────────────────────────────────────
+
+    async def sixtyseven_incr(self, user_id: int, chat_id: int, day: str) -> int:
+        """Считает, какой по счёту «67» отправил user за календарный день (МСК).
+
+        `day` — строка вида YYYYMMDD. Атомарный INCR, TTL 2 суток.
+        Возвращает новое значение счётчика (1 — первый раз за день).
+        """
+        key = f"{self._SIXTYSEVEN_DAILY}{user_id}:{chat_id}:{day}"
+        pipe = self._r.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, 172800)
+        result = await pipe.execute()
+        return int(result[0])
 
     # ── /donotbuy («кнопка наёбка») ─────────────────────────
 

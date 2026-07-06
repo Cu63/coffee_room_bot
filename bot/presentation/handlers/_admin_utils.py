@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from aiogram import Bot
 from aiogram.types import ChatMemberAdministrator, ChatPermissions, Message
@@ -133,6 +134,64 @@ def _admin_reply(formatter: MessageFormatter, target, new_value: int) -> str:
         total=new_value,
         score_word=formatter._p.pluralize(abs(new_value)),
     )
+
+
+async def apply_mute(
+    bot: Bot,
+    mute_service: MuteService,
+    *,
+    target_id: int,
+    chat_id: int,
+    muted_by: int,
+    until: datetime,
+) -> bool:
+    """Тихо мутит участника до `until` через Telegram restrict.
+
+    Снимает админку у цели (и восстанавливает её при откате), сохраняет
+    MuteEntry и пишет лог. НЕ списывает баллы и НЕ шлёт сообщений в чат.
+    Возвращает True при успехе, False если замутить не удалось (нет прав,
+    цель — владелец, и т.п.).
+    """
+    try:
+        member = await bot.get_chat_member(chat_id, target_id)
+    except Exception:
+        return False
+    was_admin = isinstance(member, ChatMemberAdministrator)
+    admin_perms: dict | None = None
+    if was_admin:
+        admin_perms = _extract_admin_permissions(member)
+        try:
+            await bot.promote_chat_member(
+                chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS}
+            )
+        except Exception:
+            return False
+    try:
+        await bot.restrict_chat_member(
+            chat_id=chat_id,
+            user_id=target_id,
+            permissions=ChatPermissions(can_send_messages=False),
+            until_date=until,
+        )
+    except Exception:
+        if was_admin and admin_perms:
+            try:
+                await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **_promote_kwargs(admin_perms))
+            except Exception:
+                logger.exception("Failed to restore admin rights after silent mute failure")
+        return False
+    await mute_service.save_mute(
+        MuteEntry(
+            user_id=target_id,
+            chat_id=chat_id,
+            muted_by=muted_by,
+            until_at=until,
+            was_admin=was_admin,
+            admin_permissions=admin_perms,
+        )
+    )
+    await mute_service.log_mute(target_id, muted_by, chat_id)
+    return True
 
 
 async def _unmute_user(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> None:

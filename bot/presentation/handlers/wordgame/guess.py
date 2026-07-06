@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.enums import ParseMode
@@ -11,6 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
@@ -23,6 +26,7 @@ from bot.domain.wordgame_entities import (
 )
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers._admin_utils import apply_mute
 from bot.presentation.handlers.wordgame.helpers import game_text, game_to_raw, raw_to_game
 from bot.presentation.utils import schedule_delete, schedule_delete_id
 
@@ -48,6 +52,7 @@ async def msg_reply_guess(
     lb_repo: FromDishka[IDailyLeaderboardRepository],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
+    mute_service: FromDishka[MuteService],
 ) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -131,7 +136,29 @@ async def msg_reply_guess(
         await store.wg_game_finish(game.game_id)
         await store.wg_chat_remove(chat_id, game.game_id)
 
-        await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
+        # Спец-правило для loss_username в /rword: победа без приза + тихий мут на сутки.
+        rwg = config.rwordgame
+        winner_username = (message.from_user.username or "").lower()
+        is_penalty_winner = (
+            game.is_random
+            and bool(rwg.loss_username)
+            and winner_username == rwg.loss_username.lower()
+        )
+        if is_penalty_winner:
+            # Приз не начисляем; возвращаем ставку боту (её списали при создании игры)
+            if game.bet > 0:
+                await score_service.add_score_quiet(bot.id, chat_id, game.bet)
+            until = now_msk() + timedelta(minutes=rwg.loss_mute_minutes)
+            await apply_mute(
+                bot,
+                mute_service,
+                target_id=user_id,
+                chat_id=chat_id,
+                muted_by=bot.id,
+                until=until,
+            )
+        else:
+            await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
 
         # Записываем победу в дневной лидерборд
         game_type = "rword" if game.is_random else "word"

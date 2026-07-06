@@ -241,6 +241,16 @@ class RwordgameConfig(_BaseConfig):
     max_games_per_window: int = 5      # макс. игр за окно
     game_window_hours: int = 2         # окно лимита в часах
     cooldown_minutes: int = 15         # задержка между играми /rword
+    loss_username: str = ""            # username, который при победе получает мут вместо приза (без @)
+    loss_mute_minutes: int = 1440      # длительность мута для loss_username (сутки)
+
+
+class SixtySevenConfig(_BaseConfig):
+    """Пасхалка «67»: награда 6-го числа месяца и мут за спам."""
+    enabled: bool = True
+    reward: int = 67                   # кирчиков за первый «67» в день награды
+    reward_day: int = 6                # число месяца (МСК), когда даётся награда
+    mute_minutes: int = 67             # мут за 2-й и последующий «67» за день
 
 class LotConfig(_BaseConfig):
     """Настройки /lot — аукцион."""
@@ -441,6 +451,7 @@ class AppConfig(_BaseConfig):
     daily_leaderboard: DailyLeaderboardConfig = DailyLeaderboardConfig()
     chatmode: ChatmodeConfig = ChatmodeConfig()
     news: NewsConfig = NewsConfig()
+    sixtyseven: SixtySevenConfig = SixtySevenConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
