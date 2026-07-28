@@ -323,7 +323,7 @@ class PokerConfig(_BaseConfig):
     mute_minutes: int = 5             # длительность мута-дебаффа
     gameban_minutes: int = 30         # длительность запрета игр
     score_percent: int = 5            # % баланса — потеря кирчиков
-    iq_loss: int = 10                 # сколько IQ теряет жертва удара
+    iq_loss: int = 3                  # сколько IQ теряет жертва удара
     backfire_chance: int = 10         # шанс % удара по себе при атаке другого
 
 

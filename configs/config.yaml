@@ -183,7 +183,7 @@ poker:
   mute_minutes: 5               # длительность мута-дебаффа
   gameban_minutes: 30           # длительность запрета игр
   score_percent: 5              # % баланса — потеря кирчиков
-  iq_loss: 10                   # потеря IQ при ударе
+  iq_loss: 3                    # потеря IQ при ударе
   backfire_chance: 10           # шанс % удара по себе при атаке другого
 
 donotbuy:
