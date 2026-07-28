@@ -15,10 +15,14 @@ from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.bot_utils import is_admin
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
+from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="tag")
+
+
+_TAG_CD_PREFIX = "tag:cd:"
 
 
 @router.message(Command("tag"))
@@ -30,6 +34,7 @@ async def cmd_tag(
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
+    store: FromDishka[RedisStore],
 ) -> None:
     if message.from_user is None or message.bot is None:
         return
@@ -65,6 +70,19 @@ async def cmd_tag(
         is_self = True
     clearing = new_tag == "--clear"
     is_free = is_admin(message.from_user.username, config.admin.users)
+
+    if not is_free and tc.cooldown_hours > 0:
+        cd_key = f"{_TAG_CD_PREFIX}{chat_id}:{target.id}"
+        ttl = await store._r.ttl(cd_key)
+        if ttl > 0:
+            hours = ttl // 3600
+            minutes = (ttl % 3600) // 60
+            if hours > 0:
+                await reply_and_delete(message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {hours}ч {minutes}мин.")
+            else:
+                await reply_and_delete(message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {minutes}мин.")
+            return
+
     if not clearing and len(new_tag) > tc.max_length:
         await reply_and_delete(message,formatter._t["tag_too_long"].format(max=tc.max_length))
         return
@@ -99,6 +117,11 @@ async def cmd_tag(
     except Exception:
         await reply_and_delete(message,formatter._t["tag_failed"])
         return
+
+    if not is_free and tc.cooldown_hours > 0:
+        cd_key = f"{_TAG_CD_PREFIX}{chat_id}:{target.id}"
+        await store._r.set(cd_key, "1", ex=tc.cooldown_hours * 3600)
+
     target_link = user_link(target.username, target.full_name, target.id)
     if is_free:
         text = (

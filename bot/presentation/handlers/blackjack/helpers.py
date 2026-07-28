@@ -105,8 +105,13 @@ def _player_display(data: dict, prefix: str) -> str:
 
 
 def _render_hand_line(
-    name: str, hand: list[dict], *, done: bool = False, busted: bool = False
+    name: str, hand: list[dict], *, done: bool = False, busted: bool = False,
+    hidden: bool = False,
 ) -> str:
+    if hidden:
+        backs = "  ".join("\ud83c\udca0" for _ in hand)
+        suffix = " \u270b" if done else ""
+        return f"\U0001f3b4 <b>{name}</b> [?{suffix}]:  {backs}"
     score = _hand_score_from_dicts(hand)
     cards = _format_hand_from_dicts(hand)
     suffix = ""
@@ -118,10 +123,12 @@ def _render_hand_line(
 
 
 def _render_table(
-    data: dict, *, result_line: str = ""
+    data: dict, *, result_line: str = "", reveal: bool = False,
 ) -> str:
     p1_display = _player_display(data, "p1")
     p2_display = _player_display(data, "p2")
+
+    turn = data.get("turn", "")
 
     lines = [
         _render_hand_line(
@@ -129,12 +136,14 @@ def _render_table(
             data["p1_hand"],
             done=data.get("p1_done", False),
             busted=data.get("p1_busted", False),
+            hidden=not reveal and turn != "p1",
         ),
         _render_hand_line(
             p2_display,
             data["p2_hand"],
             done=data.get("p2_done", False),
             busted=data.get("p2_busted", False),
+            hidden=not reveal and turn != "p2",
         ),
     ]
     if result_line:
@@ -144,7 +153,10 @@ def _render_table(
 
 
 def _turn_text(data: dict, p: ScorePluralizer) -> str:
-    """Полный текст сообщения во время хода."""
+    """Полный текст сообщения во время хода.
+
+    Рука соперника скрыта — виден только текущий игрок.
+    """
     bet = data["bet"]
     sw = p.pluralize(bet)
     turn = data["turn"]
@@ -194,7 +206,7 @@ async def _resolve_game(
     p1_display = _player_display(data, "p1")
     p2_display = _player_display(data, "p2")
 
-    table = _render_table(data)
+    table = _render_table(data, reveal=True)
 
     # Определяем победителя
     winner_id = None

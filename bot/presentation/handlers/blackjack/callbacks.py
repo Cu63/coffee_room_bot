@@ -274,12 +274,13 @@ async def cb_bj_hit(
     data["expires_at"] = time.time() + _BJ_GAME_TTL
 
     if score > 21:
-        # Перебор
+        # Перебор — помечаем, но не раскрываем сопернику
         data[f"{turn}_busted"] = True
         data[f"{turn}_done"] = True
 
-        if data[f"{'p2' if turn == 'p1' else 'p1'}_done"]:
-            # Оба закончили — результат
+        other = "p2" if turn == "p1" else "p1"
+        if data[f"{other}_done"]:
+            # Оба закончили — вскрытие и результат
             text = await _resolve_game(
                 data, store, score_repo, stats_repo, p, chat_id
             )
@@ -297,8 +298,8 @@ async def cb_bj_hit(
             await safe_callback_answer(cb, "\U0001f4a5 Перебор!")
             return
 
-        # Переход хода к сопернику
-        data["turn"] = "p2" if turn == "p1" else "p1"
+        # Тихий переход хода — соперник не знает о переборе
+        data["turn"] = other
         await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         text = _turn_text(data, p)
@@ -311,7 +312,8 @@ async def cb_bj_hit(
             )
         except Exception:
             pass
-        await safe_callback_answer(cb, "\U0001f4a5 Перебор!")
+        # Сообщаем о переборе только перебравшему (alert видит только он)
+        await safe_callback_answer(cb, "\U0001f4a5 Перебор! Соперник не знает.", show_alert=True)
         return
 
     if score == 21:

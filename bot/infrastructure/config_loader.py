@@ -144,6 +144,7 @@ class TagConfig(_BaseConfig):
     cost_admin: int = 200
     cost_owner: int = 500
     max_length: int = 32
+    cooldown_hours: int = 24
 
 
 class BlackjackConfig(_BaseConfig):
