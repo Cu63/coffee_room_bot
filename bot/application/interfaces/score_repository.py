@@ -36,6 +36,11 @@ class IScoreRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_rich_users(self, chat_id: int, min_balance: int) -> list[Score]:
+        """Все пользователи чата с балансом >= min_balance (без ботов)."""
+        ...
+
+    @abstractmethod
     async def get_random_user(self, chat_id: int, exclude_id: int) -> tuple[int, str | None, str] | None:
         """Случайный пользователь из чата (без ботов, исключая exclude_id).
 

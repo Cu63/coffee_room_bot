@@ -297,6 +297,17 @@ daily_leaderboard:
   bonus_ttt_wins: 50             # бонус за наибольшее кол-во побед в TTT
   bonus_wordgame_wins: 50        # бонус за наибольшее кол-во побед в word/rword
 
+tax:
+  enabled: true
+  time: "03:00"                    # HH:MM MSK — когда списывать налог
+  brackets:
+    - threshold: 10000             # баланс выше — платишь 3% от суммы сверх
+      percent: 3
+    - threshold: 20000             # баланс выше — платишь 5% от суммы сверх
+      percent: 5
+    - threshold: 50000             # баланс выше — платишь 10% от суммы сверх
+      percent: 10
+
 chatmode:
   enabled: true
   default_minutes: 5             # минуты по умолчанию если не указаны

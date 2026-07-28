@@ -114,6 +114,7 @@ async def main() -> None:
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
     from bot.infrastructure.unmute_loop import unmute_loop
+    from bot.infrastructure.tax_loop import tax_loop
     from bot.infrastructure.wordgame_loop import wordgame_loop
     from bot.presentation.utils import delete_loop
 
@@ -135,6 +136,7 @@ async def main() -> None:
         asyncio.create_task(daily_summary_loop(bot, container)),
         asyncio.create_task(daily_leaderboard_loop(bot, container)),
         asyncio.create_task(chatmode_loop(bot, container)),
+        asyncio.create_task(tax_loop(bot, container)),
     ]
 
     logger.info("Bot starting…")

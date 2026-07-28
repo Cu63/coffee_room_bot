@@ -90,6 +90,20 @@ class PostgresScoreRepository(IScoreRepository):
         )
         return [r["user_id"] for r in rows]
 
+    async def get_rich_users(self, chat_id: int, min_balance: int) -> list[Score]:
+        rows = await self._conn.fetch(
+            """
+            SELECT s.user_id, s.chat_id, s.value
+            FROM scores s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.chat_id = $1 AND s.value >= $2 AND NOT u.is_bot
+            ORDER BY s.value DESC
+            """,
+            chat_id,
+            min_balance,
+        )
+        return [Score(user_id=r["user_id"], chat_id=r["chat_id"], value=r["value"]) for r in rows]
+
     async def get_random_user(self, chat_id: int, exclude_id: int) -> tuple[int, str | None, str] | None:
         row = await self._conn.fetchrow(
             """

@@ -431,6 +431,23 @@ class AnalyzeConfig(_BaseConfig):
     max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
+class TaxBracket(_BaseConfig):
+    """Одна ступень прогрессивной шкалы налога."""
+    threshold: int = 10000
+    percent: int = 3
+
+
+class TaxConfig(_BaseConfig):
+    """Настройки ежедневного налога на крупные балансы."""
+    enabled: bool = True
+    time: str = "03:00"                    # HH:MM MSK — когда списывать
+    brackets: list[TaxBracket] = [
+        TaxBracket(threshold=10000, percent=3),
+        TaxBracket(threshold=20000, percent=5),
+        TaxBracket(threshold=50000, percent=10),
+    ]
+
+
 class AppConfig(_BaseConfig):
     score: ScoreConfig = ScoreConfig()
     reactions: dict[str, int] = {}
@@ -470,6 +487,7 @@ class AppConfig(_BaseConfig):
     chatmode: ChatmodeConfig = ChatmodeConfig()
     news: NewsConfig = NewsConfig()
     sixtyseven: SixtySevenConfig = SixtySevenConfig()
+    tax: TaxConfig = TaxConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:
