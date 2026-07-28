@@ -1,4 +1,4 @@
-"""Хендлер /poker — рулетка дебаффов."""
+"""Хендлер /poker (кочерга) — удар кочергой с рулеткой дебаффов."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from aiogram.types import ChatMemberAdministrator, ChatMemberOwner, ChatPermissi
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
+from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import MuteEntry
@@ -35,6 +36,7 @@ router = Router(name="poker")
 DEBUFF_MUTE = "mute"
 DEBUFF_GAMEBAN = "gameban"
 DEBUFF_SCORE = "score"
+DEBUFF_IQ = "iq"
 
 
 async def _apply_mute_debuff(
@@ -112,6 +114,7 @@ async def cmd_poker(
     score_service: FromDishka[ScoreService],
     score_repo: FromDishka[IScoreRepository],
     mute_service: FromDishka[MuteService],
+    iq_service: FromDishka[IqService],
     store: FromDishka[RedisStore],
 ) -> None:
     if message.from_user is None:
@@ -202,7 +205,7 @@ async def cmd_poker(
         actual_target_link = actor_link
 
     # Выбираем случайный дебафф
-    debuff = random.choice([DEBUFF_MUTE, DEBUFF_GAMEBAN, DEBUFF_SCORE])
+    debuff = random.choice([DEBUFF_MUTE, DEBUFF_GAMEBAN, DEBUFF_SCORE, DEBUFF_IQ])
 
     if backfire:
         backfire_text = formatter._t["poker_backfire"].format(
@@ -273,6 +276,14 @@ async def cmd_poker(
                 text = formatter._t["poker_score_zero"].format(
                     actor=actor_link, target=actual_target_link,
                 )
+
+    if debuff == DEBUFF_IQ:
+        iq_loss = cfg.iq_loss
+        new_iq = await iq_service.add_iq(actual_target_id, chat_id, -iq_loss)
+        text = formatter._t["poker_iq"].format(
+            actor=actor_link, target=actual_target_link,
+            amount=iq_loss, new_iq=new_iq,
+        )
 
     # Устанавливаем кулдаун
     await store._r.set(cd_key, "1", ex=cfg.cooldown_hours * 3600)

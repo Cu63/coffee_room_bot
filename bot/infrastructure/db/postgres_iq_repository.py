@@ -31,6 +31,19 @@ class PostgresIqRepository(IIqRepository):
         )
         return int(row["iq"])  # type: ignore[index]
 
+    async def set_iq(self, user_id: int, chat_id: int, value: int) -> None:
+        await self._conn.execute(
+            """
+            INSERT INTO user_iq (user_id, chat_id, iq)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, chat_id) DO UPDATE
+                SET iq = $3
+            """,
+            user_id,
+            chat_id,
+            value,
+        )
+
     async def top(self, chat_id: int, limit: int) -> list[UserIq]:
         rows = await self._conn.fetch(
             """

@@ -31,21 +31,16 @@ router = Router(name="slots")
 #   22 = GRAPE GRAPE GRAPE
 #   43 = LEMON LEMON LEMON
 #   64 = SEVEN SEVEN SEVEN (джекпот)
-# Значения 2–32 (кроме 22) считаются «частичным совпадением».
-# Значения 33–63 (кроме 43) — проигрыш.
-#
-# RTP ≈ 122% (намеренно завышен для веселья).
 
 _JACKPOT_VALUE = 64
-_THREE_OF_KIND = {1, 22, 43}
-_NEAR_MISS_MIN = 2
-_NEAR_MISS_MAX = 32
 
-# Множители: сколько ставок возвращается игроку
+# Множители для обычных ставок
 _MULT_JACKPOT = 30     # net: +29×bet
 _MULT_WIN = 8          # net: +7×bet
-_MULT_NEAR_MISS = 0.8  # net: -0.2×bet (возврат 80%)
-_MULT_LOSS = 0.0       # net: -1×bet
+
+# Множители для ставки all (сниженные, чтобы не ломать экономику)
+_ALL_MULT_JACKPOT = 5    # net: +4×bet
+_ALL_MULT_WIN = 3        # net: +2×bet
 
 
 def _get_slots(value: int) -> tuple[int, int, int]:
@@ -53,15 +48,13 @@ def _get_slots(value: int) -> tuple[int, int, int]:
     return v % 4, (v // 4) % 4, (v // 16) % 4
 
 
-def _get_outcome(value: int) -> tuple[str, float]:
+def _get_outcome(value: int, *, is_all: bool = False) -> tuple[str, float]:
     if value == _JACKPOT_VALUE:  # 64 = 7 7 7
-        return "jackpot", _MULT_JACKPOT
+        return "jackpot", _ALL_MULT_JACKPOT if is_all else _MULT_JACKPOT
     s1, s2, s3 = _get_slots(value)
     if s1 == s2 == s3:  # три одинаковых: 1, 22, 43
-        return "win", _MULT_WIN
-    if s1 == s2 or s2 == s3 or s1 == s3:  # два одинаковых — любая пара
-        return "near_miss", _MULT_NEAR_MISS
-    return "loss", _MULT_LOSS
+        return "win", _ALL_MULT_WIN if is_all else _MULT_WIN
+    return "loss", 0.0
 
 
 @router.message(Command("slots"))
@@ -103,13 +96,16 @@ async def cmd_slots(
             f"🎰 <b>Слоты</b>\n\n"
             f"Использование: /slots &lt;ставка&gt;\n"
             f"Ставка: от {sc.min_bet} до {sc.max_bet} {p.pluralize(sc.max_bet)}\n"
-            f"Ставка <b>all</b> — весь баланс (1 раз в сутки)"
+            f"Ставка <b>all</b> — весь баланс (1 раз в сутки, сниженные множители)"
             f"{cooldown_str}\n\n"
             f"<b>Выплаты:</b>\n"
             f"  🎰 Джекпот (777) — ×{_MULT_JACKPOT}\n"
             f"  🏆 Три одинаковых — ×{_MULT_WIN}\n"
-            f"  😬 Частичное совпадение — возврат {int(_MULT_NEAR_MISS * 100)}%\n"
-            f"  💸 Проигрыш — ставка сгорает\n\n"
+            f"  💸 Всё остальное — ставка сгорает\n\n"
+            f"<b>Выплаты (all):</b>\n"
+            f"  🎰 Джекпот — ×{_ALL_MULT_JACKPOT}\n"
+            f"  🏆 Три одинаковых — ×{_ALL_MULT_WIN}\n"
+            f"  💸 Всё остальное — ставка сгорает\n\n"
             f"💰 Баланс бота: <b>{bot_balance}</b> {p.pluralize(bot_balance)}",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -199,22 +195,10 @@ async def cmd_slots(
 
     await asyncio.sleep(3)
 
-    outcome, multiplier = _get_outcome(value)
-    raw_payout = int(bet * multiplier)  # что выплатилось бы без ограничений
+    outcome, multiplier = _get_outcome(value, is_all=is_all_bet)
+    raw_payout = int(bet * multiplier)
 
     # ── Рассчитываем выплату с учётом баланса бота ────────────────
-    #
-    # При выигрыше (win/jackpot):
-    #   Возврат ставки — всегда (деньги уже списаны с игрока)
-    #   Чистый выигрыш (raw_payout - bet) — ограничен балансом бота
-    #
-    # При near_miss:
-    #   Возврат части ставки (0.8*bet) начисляется игроку
-    #   Разница (0.2*bet) идёт боту
-    #
-    # При loss:
-    #   Вся ставка идёт боту
-
     actual_payout = raw_payout
     payout_capped = False
 
@@ -222,25 +206,15 @@ async def cmd_slots(
         net_gain = raw_payout - bet
         bot_balance = await score_service.get_bot_balance(bot_id, chat_id)
         actual_gain = min(net_gain, max(bot_balance, 0))
-        actual_payout = bet + actual_gain  # возврат ставки + то, что бот реально платит
+        actual_payout = bet + actual_gain
         payout_capped = actual_gain < net_gain
 
-        # Игрок получает возврат ставки + фактический выигрыш
         await score_service.add_score(user_id, chat_id, actual_payout, admin_id=user_id)
-        # Бот платит actual_gain
         if actual_gain > 0:
             await score_service.add_score(bot_id, chat_id, -actual_gain, admin_id=bot_id)
 
-    elif outcome == "near_miss":
-        actual_payout = raw_payout  # 0.8 * bet
-        await score_service.add_score(user_id, chat_id, actual_payout, admin_id=user_id)
-        bot_gain = bet - actual_payout  # 0.2 * bet -> боту
-        if bot_gain > 0:
-            await score_service.add_score(bot_id, chat_id, bot_gain, admin_id=bot_id)
-
     else:  # loss
         actual_payout = 0
-        # Вся ставка -> боту
         await score_service.add_score(bot_id, chat_id, bet, admin_id=bot_id)
 
     # ── Статистика ────────────────────────────────────────────────
@@ -257,8 +231,9 @@ async def cmd_slots(
 
     if outcome == "jackpot":
         win_net = actual_payout - bet
+        mult = _ALL_MULT_JACKPOT if is_all_bet else _MULT_JACKPOT
         if payout_capped:
-            max_possible = int(bet * _MULT_JACKPOT) - bet
+            max_possible = int(bet * mult) - bet
             result_line = (
                 f"{all_prefix}🎰 <b>ДЖЕКПОТ!</b> Но у бота не хватает баллов...\n"
                 f"Мог выиграть <b>{max_possible}</b>, получил <b>{win_net}</b> {p.pluralize(win_net)} 🤑"
@@ -268,20 +243,15 @@ async def cmd_slots(
 
     elif outcome == "win":
         win_net = actual_payout - bet
+        mult = _ALL_MULT_WIN if is_all_bet else _MULT_WIN
         if payout_capped:
-            max_possible = int(bet * _MULT_WIN) - bet
+            max_possible = int(bet * mult) - bet
             result_line = (
                 f"{all_prefix}🏆 Три одинаковых! Но у бота не хватает баллов...\n"
                 f"Мог выиграть <b>{max_possible}</b>, получил <b>{win_net}</b> {p.pluralize(win_net)}."
             )
         else:
             result_line = f"{all_prefix}🏆 Три одинаковых! Ты выиграл <b>{win_net}</b> {p.pluralize(win_net)}!"
-
-    elif outcome == "near_miss":
-        result_line = (
-            f"{all_prefix}😬 Почти... Возвращаю {actual_payout} {p.pluralize(actual_payout)} "
-            f"({int(_MULT_NEAR_MISS * 100)}% ставки)."
-        )
 
     else:  # loss
         result_line = (

@@ -21,8 +21,16 @@ class IqService:
         return value if value is not None else self._cfg.default
 
     async def add_iq(self, user_id: int, chat_id: int, delta: int) -> int:
-        """Изменяет IQ на delta (может быть отрицательным). Возвращает новый IQ."""
-        return await self._repo.add_iq(user_id, chat_id, delta, self._cfg.default)
+        """Изменяет IQ на delta (может быть отрицательным). Возвращает новый IQ.
+
+        Пасхалка: IQ ведёт себя как uint8 — при уходе ниже 0 переполняется
+        до 255, а при превышении 255 обнуляется.
+        """
+        raw = await self._repo.add_iq(user_id, chat_id, delta, self._cfg.default)
+        wrapped = raw % 256
+        if wrapped != raw:
+            await self._repo.set_iq(user_id, chat_id, wrapped)
+        return wrapped
 
     async def get_top(self, chat_id: int, limit: int) -> list[UserIq]:
         """Топ пользователей чата по IQ."""

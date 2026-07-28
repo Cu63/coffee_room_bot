@@ -19,6 +19,25 @@ logger = logging.getLogger(__name__)
 router = Router(name="buyop")
 
 
+async def _count_bot_admins(bot, chat_id: int) -> int:
+    """Считает количество админов, назначенных ботом (can_manage_chat=True и минимальные права)."""
+    try:
+        admins = await bot.get_chat_administrators(chat_id)
+    except Exception:
+        return 0
+    count = 0
+    for m in admins:
+        if isinstance(m, ChatMemberOwner):
+            continue
+        if not isinstance(m, ChatMemberAdministrator):
+            continue
+        if m.user.is_bot:
+            continue
+        if m.can_manage_chat and not m.can_restrict_members and not m.can_delete_messages:
+            count += 1
+    return count
+
+
 @router.message(Command("buyop"))
 @inject
 async def cmd_buyop(
@@ -33,7 +52,6 @@ async def cmd_buyop(
     bot = message.bot
     chat_id = message.chat.id
     user_id = message.from_user.id
-    cost = config.buyop.cost
     p = formatter._p
     display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
 
@@ -52,6 +70,10 @@ async def cmd_buyop(
             link_preview_options=NO_PREVIEW,
         )
         return
+
+    # Динамическая цена: base + step * кол-во купленных админов
+    bought_admins = await _count_bot_admins(bot, chat_id)
+    cost = config.buyop.cost + config.buyop.cost_step * bought_admins
 
     # Проверяем баланс
     score = await score_service.get_score(user_id, chat_id)

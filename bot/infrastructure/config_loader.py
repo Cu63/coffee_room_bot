@@ -302,6 +302,7 @@ class TicTacToeConfig(_BaseConfig):
 class BuyopConfig(_BaseConfig):
     """Настройки /buyop — покупка титула админа без прав."""
     cost: int = 500
+    cost_step: int = 500       # прибавка к цене за каждого купленного админа
     tag: str = ""  # пустая строка = без тега
 
 
@@ -313,7 +314,7 @@ class IdeaConfig(_BaseConfig):
 
 
 class PokerConfig(_BaseConfig):
-    """Настройки /poker — рулетка дебаффов."""
+    """Настройки /poker (кочерга) — удар кочергой с рулеткой дебаффов."""
     enabled: bool = True
     cost: int = 50                    # стоимость вызова /poker
     cooldown_hours: int = 6           # кулдаун между использованиями
@@ -322,6 +323,7 @@ class PokerConfig(_BaseConfig):
     mute_minutes: int = 5             # длительность мута-дебаффа
     gameban_minutes: int = 30         # длительность запрета игр
     score_percent: int = 5            # % баланса — потеря кирчиков
+    iq_loss: int = 10                 # сколько IQ теряет жертва удара
     backfire_chance: int = 10         # шанс % удара по себе при атаке другого
 
 

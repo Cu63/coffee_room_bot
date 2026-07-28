@@ -118,7 +118,7 @@ class HelpRenderer:
             rwg_window=rwgc.game_window_hours,
             ttt_min=config.tictactoe.min_bet,
             ttt_max=config.tictactoe.max_bet,
-            buyop_cost=f"{config.buyop.cost} {p.pluralize(config.buyop.cost)}",
+            buyop_cost=f"{config.buyop.cost}+ {p.pluralize(config.buyop.cost)}",
             iq_buy_amount=config.iq.buy_amount,
             iq_buy_cost=f"{config.iq.buy_cost} {p.pluralize(config.iq.buy_cost)}",
             selfban_min=config.selfban.min_minutes,
@@ -133,6 +133,7 @@ class HelpRenderer:
             poker_gameban_min=config.poker.gameban_minutes,
             poker_score_pct=config.poker.score_percent,
             poker_steal_pct=config.poker.steal_percent,
+            poker_iq_loss=config.poker.iq_loss,
             poker_backfire=config.poker.backfire_chance,
         )
 

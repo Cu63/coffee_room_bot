@@ -22,6 +22,11 @@ class IIqRepository(ABC):
         ...
 
     @abstractmethod
+    async def set_iq(self, user_id: int, chat_id: int, value: int) -> None:
+        """Устанавливает IQ в конкретное значение."""
+        ...
+
+    @abstractmethod
     async def top(self, chat_id: int, limit: int) -> list[UserIq]:
         """Топ пользователей чата по IQ (по убыванию)."""
         ...
