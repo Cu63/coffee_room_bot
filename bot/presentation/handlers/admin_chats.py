@@ -44,14 +44,23 @@ async def cmd_chats(
         try:
             chat: Chat = await bot.get_chat(cid)
             title = chat.title or "—"
-            members = chat.active_usernames
+
+            invite_link = chat.invite_link
+            if not invite_link:
+                try:
+                    invite_link = (await bot.create_chat_invite_link(cid)).invite_link
+                except Exception:
+                    invite_link = None
+
+            title_display = f'<a href="{invite_link}">{title}</a>' if invite_link else f"<b>{title}</b>"
+
             count_str = ""
             try:
                 count = await bot.get_chat_member_count(cid)
                 count_str = f" · {count} уч."
             except Exception:
                 pass
-            lines.append(f"  • <b>{title}</b>\n    ID: <code>{cid}</code>{count_str}")
+            lines.append(f"  • {title_display}\n    ID: <code>{cid}</code>{count_str}")
         except Exception:
             lines.append(f"  • <i>недоступен</i>\n    ID: <code>{cid}</code>")
 
