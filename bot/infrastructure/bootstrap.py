@@ -49,6 +49,7 @@ def register_post_dishka_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
 
 def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     """Регистрирует все роутеры хендлеров."""
+    from bot.presentation.handlers.admin_chats import router as admin_chats_router
     from bot.presentation.handlers.admin_score import router as admin_score_router
     from bot.presentation.handlers.admin_user import router as admin_user_router
     from bot.presentation.handlers.anagram import router as anagram_router
@@ -102,6 +103,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     dp.include_router(renew_router)
     dp.include_router(wordgame_router)
     dp.include_router(protect_router)
+    dp.include_router(admin_chats_router)
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)
     dp.include_router(help_router)
