@@ -81,7 +81,7 @@ async def main() -> None:
     )
 
     register_middlewares(dp, bot_me)
-    register_routers(dp, config)
+    register_routers(dp, config, settings)
     setup_dishka(container, dp)
     register_post_dishka_middlewares(dp, bot_me)
 

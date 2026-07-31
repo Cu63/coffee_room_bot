@@ -128,6 +128,7 @@ class HelpRenderer:
             gif_cost=f"{cmc.gif.cost_per_minute} {p.pluralize(cmc.gif.cost_per_minute)}",
             gif_max=cmc.gif.max_minutes,
             llm_daily_limit=config.llm.daily_limit_per_user,
+            genai_cost=f"{config.genai.cost} {p.pluralize(config.genai.cost)}",
             poker_cost=f"{config.poker.cost} {p.pluralize(config.poker.cost)}",
             poker_mute_min=config.poker.mute_minutes,
             poker_gameban_min=config.poker.gameban_minutes,

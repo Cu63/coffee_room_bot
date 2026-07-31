@@ -39,6 +39,8 @@ SPECIAL_EMOJI = {
     "chatmode": "🔒",
     "bj": "🃏",
     "poker": "🎰",
+    "genai": "🎨",
+    "unsound": "🔕",
 }
 
 

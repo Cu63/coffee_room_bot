@@ -309,6 +309,17 @@ tax:
     - threshold: 50000             # баланс выше — платишь 10% от суммы сверх
       percent: 10
 
+genai:
+  enabled: true                    # false — полностью отключить /genai
+  cost: 100                        # стоимость одной генерации (кирчиков)
+  model: "GigaChat"                # самая дешёвая модель (GigaChat Lite)
+  base_url: "https://api.giga.chat/v1"
+  oauth_url: "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+  scope: "GIGACHAT_API_PERS"       # PERS — физлица, GIGACHAT_API_B2B / _CORP — юрлица
+  verify_ssl: true                 # false — если в системе нет сертификата Минцифры
+  timeout: 120                     # таймаут запроса к API (секунды)
+  max_prompt_length: 500           # максимальная длина описания
+
 chatmode:
   enabled: true
   default_minutes: 5             # минуты по умолчанию если не указаны

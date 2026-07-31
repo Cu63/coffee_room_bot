@@ -36,6 +36,7 @@ class BotSettings(BaseSettings):
     bot_token: str = ""
     aitunnel_api_key: str = ""
     openai_api_key: str = ""      # API-ключ для /analyze и /wir (proxyapi.ru)
+    gigachat_api_key: str = ""    # ключ авторизации GigaChat для /genai (пусто = команда отключена)
     openserp_url: str = "http://openserp:7000"
     redis_url: str = "redis://redis:6379/0"
     log_chat_id: int = 0   # Telegram chat ID для отправки логов (0 = отключено)
@@ -432,6 +433,23 @@ class AnalyzeConfig(_BaseConfig):
     max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
+class GenaiConfig(_BaseConfig):
+    """Настройки /genai — генерация картинок через GigaChat API.
+
+    Ключ авторизации живёт в .env (GIGACHAT_API_KEY). Без ключа команда
+    не регистрируется, остальной бот работает как обычно.
+    """
+    enabled: bool = True
+    cost: int = 100                # стоимость одной генерации (в кирчиках)
+    model: str = "GigaChat"        # самая дешёвая модель (GigaChat Lite)
+    base_url: str = "https://api.giga.chat/v1"
+    oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    scope: str = "GIGACHAT_API_PERS"  # PERS — физлица, B2B/CORP — юрлица
+    verify_ssl: bool = True        # False — если в системе нет сертификата Минцифры
+    timeout: int = 120             # таймаут HTTP-запроса к API (секунды)
+    max_prompt_length: int = 500   # максимальная длина описания картинки
+
+
 class TaxBracket(_BaseConfig):
     """Одна ступень прогрессивной шкалы налога."""
     threshold: int = 10000
@@ -489,6 +507,7 @@ class AppConfig(_BaseConfig):
     news: NewsConfig = NewsConfig()
     sixtyseven: SixtySevenConfig = SixtySevenConfig()
     tax: TaxConfig = TaxConfig()
+    genai: GenaiConfig = GenaiConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

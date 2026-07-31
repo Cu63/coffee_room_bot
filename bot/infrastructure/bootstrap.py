@@ -5,7 +5,7 @@ from __future__ import annotations
 from aiogram import Dispatcher
 from aiogram.types import User as TgUser
 
-from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.auto_react import AutoReactMiddleware
 from bot.presentation.middlewares.burst_bonus import BurstBonusMiddleware
@@ -47,8 +47,13 @@ def register_post_dishka_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     dp.message.outer_middleware(OwnerMuteDeleteMiddleware())
 
 
-def register_routers(dp: Dispatcher, config: AppConfig) -> None:
-    """Регистрирует все роутеры хендлеров."""
+def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | None = None) -> None:
+    """Регистрирует все роутеры хендлеров.
+
+    ``settings`` нужен для команд, которые зависят от ключей в .env:
+    без ключа роутер просто не регистрируется (команда «отсутствует»).
+    """
+    settings = settings or BotSettings()
     from bot.presentation.handlers.admin_chats import router as admin_chats_router
     from bot.presentation.handlers.admin_score import router as admin_score_router
     from bot.presentation.handlers.admin_user import router as admin_user_router
@@ -63,6 +68,7 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     from bot.presentation.handlers.dice import router as dice_router
     from bot.presentation.handlers.donotbuy import router as donotbuy_router
     from bot.presentation.handlers.duel import router as duel_router
+    from bot.presentation.handlers.genai import router as genai_router
     from bot.presentation.handlers.giveaway import router as giveaway_router
     from bot.presentation.handlers.help import router as help_router
     from bot.presentation.handlers.idea import router as idea_router
@@ -129,3 +135,6 @@ def register_routers(dp: Dispatcher, config: AppConfig) -> None:
     dp.include_router(daily_router)
     dp.include_router(chatmode_router)
     dp.include_router(news_router)
+    # /genai работает только при заданном GIGACHAT_API_KEY
+    if config.genai.enabled and settings.gigachat_api_key:
+        dp.include_router(genai_router)

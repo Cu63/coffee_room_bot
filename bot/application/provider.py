@@ -9,6 +9,7 @@ from bot.application.chatmode_service import ChatmodeService
 from bot.application.cleanup_service import CleanupService
 from bot.application.daily_leaderboard_service import DailyLeaderboardService
 from bot.application.dice_service import DiceService
+from bot.application.genai_service import GenAiService
 from bot.application.giveaway_service import GiveawayService
 from bot.application.history_service import HistoryService
 from bot.application.interfaces.chatmode_repository import IChatmodeRepository
@@ -35,6 +36,7 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.config_loader import AppConfig, BotSettings
+from bot.infrastructure.gigachat_client import GigaChatClient
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.openai_client import OpenAiClient
 from bot.infrastructure.search_engine import SearchEngine
@@ -115,6 +117,18 @@ class AppServiceProvider(Provider):
         return AnalyzeService(
             client=client, message_repo=message_repo, llm_repo=llm_repo,
             config=config.analyze, formatter=formatter, admin_users=config.admin.users,
+        )
+
+    @provide(scope=Scope.REQUEST)
+    def get_genai_service(
+        self, client: GigaChatClient, score_service: ScoreService,
+        config: AppConfig, formatter: MessageFormatter,
+    ) -> GenAiService:
+        return GenAiService(
+            client=client,
+            score_service=score_service,
+            config=config.genai,
+            system_prompt=formatter._t["genai_system_prompt"],
         )
 
     @provide(scope=Scope.REQUEST)
