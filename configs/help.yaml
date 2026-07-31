@@ -284,6 +284,7 @@ sections:
       - "  /protect — защита от /mute ({protection_hours} ч. за {protection_cost} б.)"
       - "  /unprotect — снять свою защиту"
       - "  /tag [тег] — сменить свой / чужой тег"
+      - "  /unsound &lt;время&gt; — запрет тегать тебя ({unsound_cost} / мин)"
       - ""
       - "<b>💰 Экономика:</b>"
       - "  /transfer @user N — перевести баллы"

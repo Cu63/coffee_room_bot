@@ -6,6 +6,9 @@ import time
 
 _OWNER_MUTE = "owner_mute:"
 _GAMEBAN = "gameban:"
+_UNSOUND = "unsound:"
+_UNSOUND_NAME = "unsound:name:"
+_UNSOUND_NOTICE = "unsound:notice:"
 _SLOTS_DAILY = "slots:daily:"
 _SLOTS_LAST = "slots:last:"
 _SLOTS_ALL_DAILY = "slots:all:"
@@ -169,3 +172,42 @@ class ModerationStoreMixin:
 
     async def owner_mute_delete(self, chat_id: int, user_id: int) -> None:
         await self._r.delete(f"{_OWNER_MUTE}{chat_id}:{user_id}")
+
+    # ── /unsound — запрет тегать пользователя ──────────────
+    # Пишем два ключа: по user_id (для text_mention, где id известен)
+    # и по username (для обычных @упоминаний — чтобы не ходить в базу
+    # на каждое сообщение с собачкой).
+
+    async def unsound_set(
+        self, chat_id: int, user_id: int, username: str | None, until_ts: float
+    ) -> None:
+        ttl = max(int(until_ts - time.time()) + 10, 60)
+        pipe = self._r.pipeline()
+        pipe.set(f"{_UNSOUND}{chat_id}:{user_id}", str(until_ts), ex=ttl)
+        if username:
+            pipe.set(f"{_UNSOUND_NAME}{chat_id}:{username.lower()}", str(user_id), ex=ttl)
+        await pipe.execute()
+
+    async def unsound_until(self, chat_id: int, user_id: int) -> float | None:
+        """Timestamp окончания запрета или None, если запрета нет."""
+        raw = await self._r.get(f"{_UNSOUND}{chat_id}:{user_id}")
+        if raw is None:
+            return None
+        ts = float(raw)
+        return ts if ts > time.time() else None
+
+    async def unsound_id_by_username(self, chat_id: int, username: str) -> int | None:
+        """user_id, если этого @username сейчас нельзя тегать."""
+        raw = await self._r.get(f"{_UNSOUND_NAME}{chat_id}:{username.lower()}")
+        return int(raw) if raw is not None else None
+
+    async def unsound_notice_allowed(self, chat_id: int, user_id: int, cooldown: int) -> bool:
+        """True, если сейчас можно написать «юзер недоступен».
+
+        Защищает чат от потока уведомлений, если кто-то спамит упоминаниями:
+        сообщения удаляются всегда, а предупреждение выводится раз в cooldown.
+        """
+        if cooldown <= 0:
+            return True
+        key = f"{_UNSOUND_NOTICE}{chat_id}:{user_id}"
+        return bool(await self._r.set(key, "1", ex=cooldown, nx=True))

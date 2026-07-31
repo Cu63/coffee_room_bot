@@ -309,6 +309,14 @@ tax:
     - threshold: 50000             # баланс выше — платишь 10% от суммы сверх
       percent: 10
 
+unsound:
+  enabled: true                    # false — полностью отключить /unsound
+  cost_per_minute: 1               # стоимость 1 минуты запрета (кирчиков)
+  min_minutes: 1
+  max_minutes: 10080               # максимум 7 дней
+  notice_delete_seconds: 150       # через сколько секунд убирать «юзер недоступен»
+  notice_cooldown_seconds: 30      # не чаще одного предупреждения в N секунд (0 = всегда)
+
 fanfic:
   enabled: true                    # false — полностью отключить /ff
   model: "gpt-4.1-nano"            # провайдер тот же, что у /analyze и /wir

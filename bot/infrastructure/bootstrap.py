@@ -17,6 +17,7 @@ from bot.presentation.middlewares.reply_chain_bonus import ReplyChainMiddleware
 from bot.presentation.middlewares.retry_network import RetryNetworkMiddleware
 from bot.presentation.middlewares.spark_bonus import SparkBonusMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
+from bot.presentation.middlewares.unsound_guard import UnsoundGuardMiddleware
 
 
 def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
@@ -37,6 +38,9 @@ def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
 
 def register_post_dishka_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     """Middleware, которые должны быть зарегистрированы после setup_dishka."""
+    # Первым: если сообщение тегает участника с активным /unsound, оно
+    # удаляется и дальше по цепочке (трекинг, бонусы, хендлеры) не идёт.
+    dp.message.outer_middleware(UnsoundGuardMiddleware(bot_me=bot_me))
     dp.message.outer_middleware(TrackMessageMiddleware(bot_me=bot_me))
     dp.message.outer_middleware(AutoReactMiddleware(bot_me=bot_me))
     dp.message.outer_middleware(BurstBonusMiddleware())
@@ -90,6 +94,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.tictactoe import router as ttt_router
     from bot.presentation.handlers.tracker import router as tracker_router
     from bot.presentation.handlers.transfer import router as transfer_router
+    from bot.presentation.handlers.unsound import router as unsound_router
     from bot.presentation.handlers.wordgame import router as wordgame_router
 
     dp.include_router(commands_router)
@@ -141,3 +146,5 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         dp.include_router(genai_router)
     if config.fanfic.enabled:
         dp.include_router(fanfic_router)
+    if config.unsound.enabled:
+        dp.include_router(unsound_router)

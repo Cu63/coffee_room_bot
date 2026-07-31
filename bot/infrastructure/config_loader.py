@@ -433,6 +433,20 @@ class AnalyzeConfig(_BaseConfig):
     max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
+class UnsoundConfig(_BaseConfig):
+    """Настройки /unsound — временный запрет тегать пользователя.
+
+    Пока запрет активен, сообщения с @упоминанием этого участника
+    удаляются, а в чат уходит короткое предупреждение.
+    """
+    enabled: bool = True
+    cost_per_minute: int = 1        # стоимость одной минуты (в кирчиках)
+    min_minutes: int = 1
+    max_minutes: int = 10080        # максимум 7 дней
+    notice_delete_seconds: int = 150   # через сколько убирать «юзер недоступен»
+    notice_cooldown_seconds: int = 30  # как часто повторять предупреждение (0 = всегда)
+
+
 class FanficConfig(_BaseConfig):
     """Настройки /ff — фанфики про участников чата.
 
@@ -524,6 +538,7 @@ class AppConfig(_BaseConfig):
     tax: TaxConfig = TaxConfig()
     genai: GenaiConfig = GenaiConfig()
     fanfic: FanficConfig = FanficConfig()
+    unsound: UnsoundConfig = UnsoundConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

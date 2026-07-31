@@ -266,6 +266,16 @@ daily_summary_reduce_user_prompt: |
 news_item: "📰 <b>{title}</b>\n\n{description}\n\n<a href=\"{url}\">Читать полностью</a> · <i>{source}</i>"
 news_error: "😔 Не удалось загрузить новости. Попробуйте позже."
 
+# ── /unsound (запрет на теги) ────────────────────────────────────────────────
+unsound_usage: "🔕 <b>Запрет на теги</b>\n\nИспользование: <code>/unsound 1d2h30m</code>\nПока запрет активен, сообщения с твоим упоминанием удаляются (боту тегать можно).\n\nЦена: <b>{cost} {score_word}</b> за минуту. Точность — до минуты."
+unsound_invalid: "❌ Не понял время. Примеры: <code>/unsound 1d1h30m</code>, <code>/unsound 90</code> (минуты)."
+unsound_seconds: "❌ Точность — до минуты, секунды не принимаются."
+unsound_range: "❌ Длительность: от {min} до {max} минут."
+unsound_active: "🔕 Запрет на теги уже действует — осталось {remaining}."
+unsound_not_enough: "Недостаточно баллов. Нужно: {cost} {score_word}, у вас: {balance} {score_word_balance}."
+unsound_success: "🔕 {user} недоступен для тегов: <b>{duration}</b>.\nСписано: <b>{cost} {score_word}</b> · Баланс: <b>{balance} {score_word_balance}</b>"
+unsound_notice: "🔕 <code>{user}</code> сейчас недоступен — упоминания удаляются. Осталось: {remaining}"
+
 # ── /ff (фанфики) ────────────────────────────────────────────────────────────
 ff_usage: "📖 <b>Фанфик</b>\n\nИспользование: <code>/ff @user1 @user2 ... [сюжет]</code>\nБот учитывает последние {messages} сообщений каждого героя.\n\nПример: <code>/ff @vasya @petya они чинят прод в 3 часа ночи</code>"
 ff_thinking: "📖 Сочиняю..."
