@@ -129,6 +129,7 @@ class HelpRenderer:
             gif_max=cmc.gif.max_minutes,
             llm_daily_limit=config.llm.daily_limit_per_user,
             genai_cost=f"{config.genai.cost} {p.pluralize(config.genai.cost)}",
+            ff_messages=config.fanfic.messages_per_user,
             poker_cost=f"{config.poker.cost} {p.pluralize(config.poker.cost)}",
             poker_mute_min=config.poker.mute_minutes,
             poker_gameban_min=config.poker.gameban_minutes,

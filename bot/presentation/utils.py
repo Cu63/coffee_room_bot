@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any
 
 import redis.asyncio as aioredis
 from aiogram import Bot
+from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
 
@@ -145,6 +147,47 @@ async def safe_callback_answer(
         await callback.answer(text, show_alert=show_alert)
     except Exception:
         pass
+
+
+TG_MESSAGE_LIMIT = 4096
+
+
+def split_text(text: str, limit: int = TG_MESSAGE_LIMIT) -> list[str]:
+    """Режет длинный текст на куски по границе слова (лимит Telegram — 4096)."""
+    if len(text) <= limit:
+        return [text]
+    parts: list[str] = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind(" ", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip()
+    return parts
+
+
+async def send_html_parts(message: Message, thinking: Message, text: str) -> None:
+    """Отправляет длинный HTML-ответ: первый кусок правкой ``thinking``, остальные — новыми
+    сообщениями. При невалидном HTML откатывается на текст без тегов."""
+    first = True
+    for part in split_text(text):
+        try:
+            if first:
+                await thinking.edit_text(part, parse_mode=ParseMode.HTML)
+                first = False
+            else:
+                await message.answer(part, parse_mode=ParseMode.HTML)
+        except TelegramBadRequest:
+            logger.warning("HTML parse failed, falling back to plain text")
+            stripped = re.sub(r"<[^>]+>", "", part)
+            if first:
+                await thinking.edit_text(stripped)
+                first = False
+            else:
+                await message.answer(stripped)
 
 
 async def reply_and_delete(

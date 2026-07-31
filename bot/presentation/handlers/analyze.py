@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 from aiogram import Router
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
@@ -16,11 +15,10 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.bot_utils import parse_duration
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
+from bot.presentation.utils import send_html_parts
 
 logger = logging.getLogger(__name__)
 router = Router(name="analyze")
-
-_TG_LIMIT = 4096
 
 _USERNAME_RE = re.compile(r"@([\w]+)")
 _INT_RE = re.compile(r"^\d+$")
@@ -47,42 +45,6 @@ def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
                 limit = int(token)
 
     return limit, since, usernames
-
-
-def _split_text(text: str, limit: int = _TG_LIMIT) -> list[str]:
-    if len(text) <= limit:
-        return [text]
-    parts: list[str] = []
-    while text:
-        if len(text) <= limit:
-            parts.append(text)
-            break
-        cut = text.rfind(" ", 0, limit)
-        if cut <= 0:
-            cut = limit
-        parts.append(text[:cut])
-        text = text[cut:].lstrip()
-    return parts
-
-
-async def _send_parts(message: Message, thinking: Message, text: str) -> None:
-    parts = _split_text(text)
-    first = True
-    for part in parts:
-        try:
-            if first:
-                await thinking.edit_text(part, parse_mode=ParseMode.HTML)
-                first = False
-            else:
-                await message.answer(part, parse_mode=ParseMode.HTML)
-        except TelegramBadRequest:
-            logger.warning("HTML parse failed, falling back to plain text")
-            stripped = re.sub(r"<[^>]+>", "", part)
-            if first:
-                await thinking.edit_text(stripped)
-                first = False
-            else:
-                await message.answer(stripped)
 
 
 def _rate_limit_text(used: int, limit: int) -> str:
@@ -180,7 +142,7 @@ async def cmd_analyze(
         await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")
         return
 
-    await _send_parts(message, thinking, result.text)
+    await send_html_parts(message, thinking, result.text)
 
 
 @router.message(Command("wir"))
@@ -239,4 +201,4 @@ async def cmd_wir(
         await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")
         return
 
-    await _send_parts(message, thinking, result.text)
+    await send_html_parts(message, thinking, result.text)

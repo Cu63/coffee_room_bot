@@ -55,10 +55,16 @@ class AiTunnelClient:
         tools: list[dict] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        model: str | None = None,
     ) -> LlmResponse:
+        """Запрос к chat/completions.
+
+        ``model`` переопределяет модель клиента на один вызов — нужно командам,
+        которые ходят к тому же провайдеру, но другой (например, более дешёвой) моделью.
+        """
         session = await self._get_session()
         payload: dict = {
-            "model": self._model,
+            "model": model or self._model,
             "messages": messages,
             "max_tokens": max_tokens if max_tokens is not None else self._max_output_tokens,
         }

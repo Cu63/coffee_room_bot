@@ -433,6 +433,21 @@ class AnalyzeConfig(_BaseConfig):
     max_history_hours: int = 32            # максимальная глубина истории в часах
 
 
+class FanficConfig(_BaseConfig):
+    """Настройки /ff — фанфики про участников чата.
+
+    Ходит к тому же провайдеру, что /analyze и /wir (OPENAI_API_KEY),
+    но своей — самой дешёвой — моделью.
+    """
+    enabled: bool = True
+    model: str = "gpt-4.1-nano"
+    max_output_tokens: int = 2048
+    temperature: float = 1.0       # выше = больше фантазии
+    messages_per_user: int = 10    # сколько последних сообщений героя брать в контекст
+    max_users: int = 6             # максимум героев за один фанфик
+    max_prompt_length: int = 500   # максимальная длина сюжета
+
+
 class GenaiConfig(_BaseConfig):
     """Настройки /genai — генерация картинок через GigaChat API.
 
@@ -508,6 +523,7 @@ class AppConfig(_BaseConfig):
     sixtyseven: SixtySevenConfig = SixtySevenConfig()
     tax: TaxConfig = TaxConfig()
     genai: GenaiConfig = GenaiConfig()
+    fanfic: FanficConfig = FanficConfig()
 
 
 def load_config(path: str | Path | None = None) -> AppConfig:

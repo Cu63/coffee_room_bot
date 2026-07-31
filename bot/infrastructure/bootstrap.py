@@ -68,6 +68,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.dice import router as dice_router
     from bot.presentation.handlers.donotbuy import router as donotbuy_router
     from bot.presentation.handlers.duel import router as duel_router
+    from bot.presentation.handlers.fanfic import router as fanfic_router
     from bot.presentation.handlers.genai import router as genai_router
     from bot.presentation.handlers.giveaway import router as giveaway_router
     from bot.presentation.handlers.help import router as help_router
@@ -138,3 +139,5 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     # /genai работает только при заданном GIGACHAT_API_KEY
     if config.genai.enabled and settings.gigachat_api_key:
         dp.include_router(genai_router)
+    if config.fanfic.enabled:
+        dp.include_router(fanfic_router)

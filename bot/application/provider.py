@@ -9,6 +9,7 @@ from bot.application.chatmode_service import ChatmodeService
 from bot.application.cleanup_service import CleanupService
 from bot.application.daily_leaderboard_service import DailyLeaderboardService
 from bot.application.dice_service import DiceService
+from bot.application.fanfic_service import FanficService
 from bot.application.genai_service import GenAiService
 from bot.application.giveaway_service import GiveawayService
 from bot.application.history_service import HistoryService
@@ -117,6 +118,16 @@ class AppServiceProvider(Provider):
         return AnalyzeService(
             client=client, message_repo=message_repo, llm_repo=llm_repo,
             config=config.analyze, formatter=formatter, admin_users=config.admin.users,
+        )
+
+    @provide(scope=Scope.REQUEST)
+    def get_fanfic_service(
+        self, client: OpenAiClient, message_repo: IMessageRepository,
+        llm_repo: ILlmRepository, config: AppConfig, formatter: MessageFormatter,
+    ) -> FanficService:
+        return FanficService(
+            client=client, message_repo=message_repo, llm_repo=llm_repo,
+            config=config.fanfic, formatter=formatter,
         )
 
     @provide(scope=Scope.REQUEST)
