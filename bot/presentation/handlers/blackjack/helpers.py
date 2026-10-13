@@ -109,7 +109,7 @@ def _render_hand_line(
     hidden: bool = False,
 ) -> str:
     if hidden:
-        backs = "  ".join("\ud83c\udca0" for _ in hand)
+        backs = "  ".join("\U0001f0a0" for _ in hand)
         suffix = " \u270b" if done else ""
         return f"\U0001f3b4 <b>{name}</b> [?{suffix}]:  {backs}"
     score = _hand_score_from_dicts(hand)
