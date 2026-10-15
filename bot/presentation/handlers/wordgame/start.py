@@ -294,10 +294,6 @@ async def cmd_random_wordgame(
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
     bet_str = pluralizer.pluralize(bet)
-    dur_str = (
-        f"{duration_secs // 60} мин" if duration_secs < 3600
-        else f"{duration_secs // 3600} ч"
-    )
 
     # Заголовок: указываем, что слово загадал бот, а не человек
     game_header = (

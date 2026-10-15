@@ -95,7 +95,6 @@ async def _cmd_mode(
         if result.error == "already_active":
             existing = await service.get_active(chat_id)
             if existing:
-                who = user_link(None, "", existing.activated_by)
                 remaining = _format_remaining(existing)
                 label = _MODE_LABEL.get(existing.mode, existing.mode)
                 await reply_and_delete(

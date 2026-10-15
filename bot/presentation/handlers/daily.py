@@ -44,7 +44,7 @@ async def cmd_daily(
         yesterday=yesterday_lb if not yesterday_lb.is_empty() else None,
     )
 
-    sent = await message.answer(text, parse_mode=ParseMode.HTML)
+    await message.answer(text, parse_mode=ParseMode.HTML)
     # Удаляем исходную команду
     try:
         await message.delete()
