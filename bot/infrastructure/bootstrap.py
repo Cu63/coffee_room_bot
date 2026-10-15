@@ -14,18 +14,21 @@ from bot.presentation.middlewares.iq_penalty import IqPenaltyMiddleware
 from bot.presentation.middlewares.mute_mention_notify import MuteMentionNotifyMiddleware
 from bot.presentation.middlewares.owner_mute import OwnerMuteDeleteMiddleware
 from bot.presentation.middlewares.reply_chain_bonus import ReplyChainMiddleware
-from bot.presentation.middlewares.retry_network import RetryNetworkMiddleware
 from bot.presentation.middlewares.spark_bonus import SparkBonusMiddleware
+from bot.presentation.middlewares.telegram_errors import TelegramErrorsMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation.middlewares.unsound_guard import UnsoundGuardMiddleware
 
 
 def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     """Регистрирует все middleware в правильном порядке."""
-    retry_mw = RetryNetworkMiddleware()
-    dp.message.outer_middleware(retry_mw)
-    dp.callback_query.outer_middleware(retry_mw)
-    dp.message_reaction.outer_middleware(retry_mw)
+    # Самый внешний: гасит ожидаемые ошибки Telegram и AbortUpdate.
+    # Должен стоять снаружи dishka — к нему исключение приходит уже
+    # после закрытия транзакции запроса.
+    errors_mw = TelegramErrorsMiddleware()
+    dp.message.outer_middleware(errors_mw)
+    dp.callback_query.outer_middleware(errors_mw)
+    dp.message_reaction.outer_middleware(errors_mw)
 
     dp.message.outer_middleware(ChatContextMiddleware())
     dp.message_reaction.outer_middleware(ChatContextMiddleware())

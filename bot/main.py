@@ -18,6 +18,7 @@ from bot.infrastructure.di import (
     RedisProvider,
 )
 from bot.infrastructure.logger import setup_logger
+from bot.infrastructure.telegram_retry import RetryIdempotentRequestsMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,8 @@ async def main() -> None:
         logger.info("Using Telegram proxy: %s", proxy)
 
     session = AiohttpSession(timeout=15, proxy=proxy)
+    # Сетевые сбои повторяются точечно — только для идемпотентных запросов
+    session.middleware(RetryIdempotentRequestsMiddleware())
     bot = Bot(token=settings.bot_token, session=session)
 
     bot_me = await bot.get_me()
