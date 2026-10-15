@@ -15,10 +15,12 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.bot_utils import parse_duration
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
+from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 from bot.presentation.utils import send_html_parts
 
 logger = logging.getLogger(__name__)
 router = Router(name="analyze")
+router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 _USERNAME_RE = re.compile(r"@([\w]+)")
 _INT_RE = re.compile(r"^\d+$")

@@ -18,6 +18,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.message_repository import IMessageRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.summary_service import generate_daily_summary
 from bot.domain.bot_utils import is_admin
 from bot.domain.tz import TZ_MSK
@@ -71,6 +72,7 @@ async def cmd_summary_admin(
     client: FromDishka[OpenAiClient],
     message_repo: FromDishka[IMessageRepository],
     formatter: FromDishka[MessageFormatter],
+    tx: FromDishka[ITransactionManager],
 ) -> None:
     """Тест-прогон ежедневной сводки за последние 24 часа.
 
@@ -103,6 +105,7 @@ async def cmd_summary_admin(
             schedule_delete(bot, thinking, delay=_AUTO_DELETE_SEC)
             return
 
+        await tx.checkpoint()  # map-reduce идёт минутами — соединение из пула не держим
         text = await generate_daily_summary(
             client,
             formatter,

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import ChatMessage, IMessageRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.domain.entities import User
 from bot.infrastructure.config_loader import FanficConfig
 from bot.infrastructure.message_formatter import MessageFormatter
@@ -36,6 +37,13 @@ def _format_hero_block(user: User, messages: list[ChatMessage]) -> str:
     return header + "\n" + "\n".join(lines)
 
 
+class FanficRateLimitExceeded(Exception):
+    def __init__(self, used: int, limit: int) -> None:
+        super().__init__(f"ff: {used}/{limit} за сегодня")
+        self.used = used
+        self.limit = limit
+
+
 @dataclass(slots=True)
 class FanficResult:
     text: str
@@ -51,12 +59,16 @@ class FanficService:
         llm_repo: ILlmRepository,
         config: FanficConfig,
         formatter: MessageFormatter,
+        tx: ITransactionManager,
+        admin_users: list[str],
     ) -> None:
         self._client = client
         self._repo = message_repo
         self._llm_repo = llm_repo
         self._config = config
         self._fmt = formatter
+        self._tx = tx
+        self._admin_users = {u.lower() for u in admin_users}
 
     async def write(
         self,
@@ -64,8 +76,19 @@ class FanficService:
         user_id: int,
         heroes: list[User],
         prompt: str,
+        username: str | None = None,
     ) -> FanficResult:
-        """Пишет фанфик про ``heroes`` с учётом их последних сообщений."""
+        """Пишет фанфик про ``heroes`` с учётом их последних сообщений.
+
+        Raises FanficRateLimitExceeded, если дневной лимит исчерпан (админов не касается).
+        """
+        limit = self._config.daily_limit_per_user
+        is_admin = username is not None and username.lower() in self._admin_users
+        if limit > 0 and not is_admin:
+            used = await self._llm_repo.count_today(user_id, ("ff",))
+            if used >= limit:
+                raise FanficRateLimitExceeded(used, limit)
+
         blocks: list[str] = []
         for hero in heroes:
             messages = await self._repo.get_recent_with_text(chat_id, self._config.messages_per_user, [hero.id])
@@ -77,6 +100,7 @@ class FanficService:
             prompt=_escape(prompt) if prompt else self._fmt._t["ff_no_plot"],
         )
 
+        await self._tx.checkpoint()  # не держим соединение из пула, пока ждём LLM
         resp = await self._client.chat(
             [
                 {"role": "system", "content": self._fmt._t["ff_system_prompt"]},

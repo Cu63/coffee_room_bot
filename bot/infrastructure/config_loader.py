@@ -483,6 +483,7 @@ class FanficConfig(_BaseConfig):
     messages_per_user: int = 10  # сколько последних сообщений героя брать в контекст
     max_users: int = 6  # максимум героев за один фанфик
     max_prompt_length: int = 500  # максимальная длина сюжета
+    daily_limit_per_user: int = 5  # фанфиков на пользователя в сутки (0 = без лимита, админам не считается)
 
 
 class GenaiConfig(_BaseConfig):

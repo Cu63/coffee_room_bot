@@ -13,14 +13,18 @@ from bot.infrastructure.openai_client import OpenAiClient
 
 
 class LlmProvider(Provider):
-    @provide(scope=Scope.REQUEST)
-    def get_aitunnel_client(self, settings: BotSettings, config: AppConfig) -> AiTunnelClient:
-        return AiTunnelClient(
+    # Клиенты держат aiohttp-сессию: один клиент на процесс, сессия закрывается
+    # при остановке. Раньше клиент создавался на каждый запрос, и сессии не закрывались.
+    @provide(scope=Scope.APP)
+    async def get_aitunnel_client(self, settings: BotSettings, config: AppConfig) -> AsyncIterable[AiTunnelClient]:
+        client = AiTunnelClient(
             api_key=settings.aitunnel_api_key,
             base_url=config.llm.base_url,
             model=config.llm.model,
             max_output_tokens=config.llm.max_output_tokens,
         )
+        yield client
+        await client.close()
 
     # GigaChat живёт в APP-скоупе: один access_token и одна HTTP-сессия
     # на весь процесс (токен действует 30 минут, переспрашивать его на
@@ -39,11 +43,13 @@ class LlmProvider(Provider):
         yield client
         await client.close()
 
-    @provide(scope=Scope.REQUEST)
-    def get_openai_client(self, settings: BotSettings, config: AppConfig) -> OpenAiClient:
-        return OpenAiClient(
+    @provide(scope=Scope.APP)
+    async def get_openai_client(self, settings: BotSettings, config: AppConfig) -> AsyncIterable[OpenAiClient]:
+        client = OpenAiClient(
             api_key=settings.openai_api_key,
             base_url=config.analyze.base_url,
             model=config.analyze.model,
             max_output_tokens=config.analyze.max_output_tokens,
         )
+        yield client
+        await client.close()

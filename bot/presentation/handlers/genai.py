@@ -18,10 +18,12 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.genai_service import GenAiService
 from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 from bot.presentation.utils import reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="genai")
+router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 
 @router.message(Command("genai"), F.chat.type != "private")

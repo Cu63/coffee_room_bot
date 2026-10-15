@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import datetime
 
+import asyncpg
 import pytest
 from aiogram import Bot, Dispatcher, Router
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
@@ -14,6 +15,7 @@ from dishka import Provider, Scope, make_async_container, provide
 from dishka.integrations.aiogram import FromDishka, inject, setup_dishka
 
 from bot.application.interfaces.score_repository import IScoreRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.infrastructure.config_loader import DatabaseConfig
 from bot.infrastructure.db.provider import DatabaseProvider
 from bot.presentation.errors import AbortUpdate
@@ -94,3 +96,31 @@ async def test_handler_runs_once_and_errors_are_absorbed(container, conn, text, 
 
     assert calls == [text]  # раньше при сетевой ошибке хендлер запускался до трёх раз
     assert await balance(conn, A) == expected_balance
+
+
+def in_use(db_pool: asyncpg.Pool) -> int:
+    return db_pool.get_size() - db_pool.get_idle_size()
+
+
+async def test_connection_is_taken_on_first_query(container):
+    db_pool = await container.get(asyncpg.Pool)
+    async with container() as request:
+        repo = await request.get(IScoreRepository)
+        assert in_use(db_pool) == 0  # репозиторий есть, запросов ещё не было
+        await repo.get(A, CHAT)
+        assert in_use(db_pool) == 1
+    assert in_use(db_pool) == 0
+
+
+async def test_checkpoint_commits_and_lets_the_connection_go(container, conn):
+    await seed_users(conn, A, balance=100)
+    db_pool = await container.get(asyncpg.Pool)
+    with pytest.raises(ValueError):
+        async with container() as request:
+            repo = await request.get(IScoreRepository)
+            await repo.add_delta(A, CHAT, -10)
+            await (await request.get(ITransactionManager)).checkpoint()
+            assert in_use(db_pool) == 0  # пока ждём LLM, соединение в пуле
+            await repo.add_delta(A, CHAT, -1)  # тот же репозиторий открывает новую транзакцию
+            raise ValueError
+    assert await balance(conn, A) == 90  # до checkpoint — зафиксировано, после — откачено

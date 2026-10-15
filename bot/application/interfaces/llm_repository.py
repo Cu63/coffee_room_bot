@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 
 class ILlmRepository(ABC):
     @abstractmethod
-    async def count_today(self, user_id: int) -> int:
-        """Количество запросов пользователя за сегодня."""
+    async def count_today(self, user_id: int, commands: tuple[str, ...]) -> int:
+        """Количество запросов пользователя за сегодня по указанным командам."""
         ...
 
     @abstractmethod

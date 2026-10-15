@@ -14,9 +14,11 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.llm_service import LlmResult, LlmService, RateLimitExceeded
 from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 
 logger = logging.getLogger(__name__)
 router = Router(name="llm_commands")
+router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 

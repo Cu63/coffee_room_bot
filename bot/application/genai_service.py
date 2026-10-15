@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.infrastructure.config_loader import GenaiConfig
 from bot.infrastructure.gigachat_client import GigaChatClient, GigaChatError, GigaChatNoImage
@@ -37,11 +38,13 @@ class GenAiService:
         score_service: ScoreService,
         config: GenaiConfig,
         system_prompt: str,
+        tx: ITransactionManager,
     ) -> None:
         self._client = client
         self._score = score_service
         self._config = config
         self._system_prompt = system_prompt
+        self._tx = tx
 
     async def generate(
         self,
@@ -68,6 +71,9 @@ class GenAiService:
                 reason="not_enough",
             )
 
+        # Генерация идёт до двух минут: фиксируем списание и отпускаем соединение.
+        # Поэтому при сбое возврат — отдельная зафиксированная операция (refund).
+        await self._tx.checkpoint()
         try:
             image = await self._client.generate_image(prompt, self._system_prompt)
         except GigaChatNoImage as e:
@@ -99,3 +105,6 @@ class GenAiService:
         """
         await self._score.add_score_quiet(user_id, chat_id, cost or self._config.cost)
         await self._score.add_score_quiet(bot_id, chat_id, -(cost or self._config.cost))
+        # Списание уже зафиксировано — возврат тоже фиксируем сразу, чтобы его
+        # не откатила ошибка дальше по хендлеру
+        await self._tx.checkpoint()
