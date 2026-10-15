@@ -48,7 +48,7 @@ class BotSettings(BaseSettings):
 class _BaseConfig(BaseModel):
     """Базовая модель с общими настройками для всех конфигов."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
 
 class ScoreConfig(_BaseConfig):
