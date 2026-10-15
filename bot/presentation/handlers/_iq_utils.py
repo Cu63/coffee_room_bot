@@ -46,6 +46,11 @@ async def award_game_iq(
     new_iq = await iq_service.add_iq(user_id, chat_id, granted)
     logger.debug(
         "iq: user %d in chat %d +%d IQ за победу (итого IQ %d, за день %d/%d)",
-        user_id, chat_id, granted, new_iq, min(new_total, cfg.daily_win_cap), cfg.daily_win_cap,
+        user_id,
+        chat_id,
+        granted,
+        new_iq,
+        min(new_total, cfg.daily_win_cap),
+        cfg.daily_win_cap,
     )
     return new_iq

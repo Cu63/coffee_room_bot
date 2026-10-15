@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 
 from aiogram import Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
@@ -19,9 +19,8 @@ from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
+from bot.presentation.handlers.anagram.helpers import _game_text, _make_game_id, _shuffle_word
 from bot.presentation.utils import check_gameban, reply_and_delete, schedule_delete
-
-from bot.presentation.handlers.anagram.helpers import _make_game_id, _shuffle_word, _game_text
 
 router = Router(name="anagram_start")
 
@@ -124,11 +123,13 @@ async def cmd_anagram(
     user_id = message.from_user.id
 
     # Upsert пользователя
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     # Проверяем баланс бота и списываем ставку с него
     bot_balance = await score_service.get_bot_balance(message.bot.id, chat_id)

@@ -17,19 +17,18 @@ from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import (
-    NO_PREVIEW,
-    check_gameban,
-    safe_callback_answer,
+from bot.presentation.handlers.duel.game_launchers import (
+    _start_bj_from_duel,
+    _start_ttt_from_duel,
 )
-
 from bot.presentation.handlers.duel.helpers import (
     _duel_key,
     _make_invite_id,
 )
-from bot.presentation.handlers.duel.game_launchers import (
-    _start_bj_from_duel,
-    _start_ttt_from_duel,
+from bot.presentation.utils import (
+    NO_PREVIEW,
+    check_gameban,
+    safe_callback_answer,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +36,7 @@ router = Router(name="duel_callbacks")
 
 
 # ── Callback: Принять дуэль ──────────────────────────────────────────────
+
 
 @router.callback_query(F.data.startswith("duel:accept:"))
 @inject
@@ -131,6 +131,7 @@ async def cb_duel_accept(
 
 # ── Callback: Отказаться от дуэли ───────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("duel:decline:"))
 @inject
 async def cb_duel_decline(
@@ -189,14 +190,14 @@ async def cb_duel_decline(
 
     try:
         await cb.message.edit_text(
-            f"❌ {decliner_display} отказался от дуэли с {challenger_display}.\n\n"
-            f"Ставка возвращена.",
+            f"❌ {decliner_display} отказался от дуэли с {challenger_display}.\n\nСтавка возвращена.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
             reply_markup=None,
         )
         if cb.message.bot:
             from bot.presentation.utils import schedule_delete
+
             schedule_delete(cb.message.bot, cb.message, delay=30)
     except Exception:
         pass

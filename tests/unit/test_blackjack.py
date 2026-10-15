@@ -1,10 +1,12 @@
 from bot.application.blackjack_service import (
-    BlackjackRound,
     Card,
-    GameResult,
+    build_deck,
+    cards_to_dicts,
+    dicts_to_cards,
     format_hand,
     hand_score,
 )
+from bot.presentation.handlers.blackjack.helpers import _is_natural, _render_table
 
 
 def test_hand_score_simple():
@@ -27,6 +29,16 @@ def test_hand_score_two_aces():
     assert hand_score(hand) == 12  # 11+1
 
 
+def test_hand_score_two_aces_and_nine():
+    hand = [Card("A", "♠️"), Card("A", "♥️"), Card("9", "♣️")]
+    assert hand_score(hand) == 21  # 11+1+9
+
+
+def test_hand_score_three_aces_and_nine():
+    hand = [Card("A", "♠️"), Card("A", "♥️"), Card("A", "♦️"), Card("9", "♣️")]
+    assert hand_score(hand) == 12  # 11+1+1+9=22 — перебор, все тузы по 1
+
+
 def test_hand_score_blackjack():
     hand = [Card("A", "♠️"), Card("K", "♥️")]
     assert hand_score(hand) == 21
@@ -46,43 +58,35 @@ def test_format_hand_hidden():
     assert "K♥️" not in result
 
 
-def test_payout_blackjack():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=100)
-    rnd.result = GameResult.PLAYER_BLACKJACK
-    assert rnd.payout_delta() == 150
+def test_deck_has_52_unique_cards():
+    deck = build_deck()
+    assert len(deck) == 52
+    assert len({(c.rank, c.suit) for c in deck}) == 52
 
 
-def test_payout_win():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=100)
-    rnd.result = GameResult.PLAYER_WIN
-    assert rnd.payout_delta() == 100
+def test_cards_dicts_roundtrip():
+    cards = build_deck()[:5]
+    assert dicts_to_cards(cards_to_dicts(cards)) == cards
 
 
-def test_payout_loss():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=100)
-    rnd.result = GameResult.DEALER_WIN
-    assert rnd.payout_delta() == -100
+def test_is_natural():
+    assert _is_natural(cards_to_dicts([Card("A", "♠️"), Card("K", "♥️")]))
+    assert not _is_natural(cards_to_dicts([Card("A", "♠️"), Card("5", "♥️"), Card("5", "♦️")]))
 
 
-def test_payout_push():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=100)
-    rnd.result = GameResult.PUSH
-    assert rnd.payout_delta() == 0
-
-
-def test_deal_creates_hands():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=10)
-    rnd.deal()
-    assert len(rnd.player_hand) == 2
-    assert len(rnd.dealer_hand) == 2
-    assert len(rnd.deck) == 48
-
-
-def test_hit_adds_card():
-    rnd = BlackjackRound(player_id=1, chat_id=1, bet=10)
-    rnd.deal()
-    rnd.finished = False  # ensure not a natural blackjack
-    initial = len(rnd.player_hand)
-    if not rnd.finished:
-        rnd.hit()
-        assert len(rnd.player_hand) == initial + 1
+def test_table_with_hidden_hand_is_encodable():
+    # Регрессия: рубашка карты была записана суррогатной парой, и edit_text падал
+    data = {
+        "p1_id": 1,
+        "p1_name": "A",
+        "p1_username": "",
+        "p1_hand": cards_to_dicts([Card("A", "♠️"), Card("6", "♥️")]),
+        "p2_id": 2,
+        "p2_name": "B",
+        "p2_username": "",
+        "p2_hand": cards_to_dicts([Card("K", "♦️"), Card("Q", "♣️")]),
+        "turn": "p1",
+    }
+    table = _render_table(data)
+    assert "🂠" in table
+    table.encode("utf-8")

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import html
 import random
 import time
 from datetime import datetime
 
 from aiogram import Bot, Router
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
@@ -24,13 +25,14 @@ from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
-from bot.presentation.handlers.wordgame.helpers import game_text, open_dm_kb
+from bot.presentation.handlers.wordgame.helpers import open_dm_kb
 from bot.presentation.utils import check_gameban, reply_and_delete, schedule_delete
 
 router = Router(name="wordgame_start")
 
 
 # ── /word <ставка> <время> ───────────────────────────────────────────────
+
 
 @router.message(Command("word"))
 @inject
@@ -85,8 +87,7 @@ async def cmd_wordgame(
     if not (wg.min_duration_seconds <= duration_secs <= wg.max_duration_seconds):
         await reply_and_delete(
             message,
-            f"❌ Время: от {wg.min_duration_seconds // 60}m "
-            f"до {wg.max_duration_seconds // 60}m.",
+            f"❌ Время: от {wg.min_duration_seconds // 60}m до {wg.max_duration_seconds // 60}m.",
         )
         return
 
@@ -110,11 +111,13 @@ async def cmd_wordgame(
         )
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     bot_me = await bot.get_me()
     game_id = await store.wg_pending_create(
@@ -126,28 +129,24 @@ async def cmd_wordgame(
     await store.wg_awaiting_set(user_id, game_id)
     await store.wg_rate_record(user_id, window_secs)
 
-    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
+    user_mention = f'<a href="tg://user?id={user_id}">{html.escape(message.from_user.full_name)}</a>'
     bet_str = pluralizer.pluralize(bet)
-    dur_str = (
-        f"{duration_secs // 60} мин" if duration_secs < 3600
-        else f"{duration_secs // 3600} ч"
-    )
+    dur_str = f"{duration_secs // 60} мин" if duration_secs < 3600 else f"{duration_secs // 3600} ч"
 
     dm_sent = False
     try:
         await bot.send_message(
             user_id,
             f"✏️ Ты создал Угадайку!\n"
-            f"Ставка: <b>{bet} {bet_str}</b>  |  Время: <b>{dur_str}</b>\n\n"
+            f"Ставка: <b>{bet} {bet_str}</b>  |  Время: <b>{dur_str}</b>\n"
+            f"<i>Ставка спишется, когда пришлёшь слово.</i>\n\n"
             f"Отправь мне загадываемое слово:",
             parse_mode=ParseMode.HTML,
         )
         dm_sent = True
-    except TelegramBadRequest:
+    except TelegramAPIError:
+        # Например, Forbidden: автор ещё не запускал бота — покажем кнопку «Написать в ЛС»
         pass
-
-    if dm_sent:
-        await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
     lobby_text = (
         f"🔤 <b>Угадайка!</b>\n\n"
@@ -163,6 +162,7 @@ async def cmd_wordgame(
 
 
 # ── /rword <ставка> <время> — угадайка с рандомным словом ───────────────────
+
 
 @router.message(Command("rword"))
 @inject
@@ -236,8 +236,7 @@ async def cmd_random_wordgame(
     if not (wg.min_duration_seconds <= duration_secs <= wg.max_duration_seconds):
         await reply_and_delete(
             message,
-            f"❌ Время: от {wg.min_duration_seconds // 60}m "
-            f"до {wg.max_duration_seconds // 60}m.",
+            f"❌ Время: от {wg.min_duration_seconds // 60}m до {wg.max_duration_seconds // 60}m.",
         )
         return
 
@@ -263,23 +262,21 @@ async def cmd_random_wordgame(
         )
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
+
+    # Приз платит бот — не больше, чем у него есть
+    if bet > 0 and await score_service.get_bot_balance(bot.id, chat_id) < bet:
+        await reply_and_delete(message, "❌ У бота не хватает баллов на такой приз. Уменьши ставку.")
+        return
 
     ends_at = time.time() + duration_secs
     game_id = str(random.randint(10000, 99999))
-
-    # Ставка списывается сразу — создатель сам задаёт её «в банк»
-    if bet > 0:
-        await score_service.add_score(bot.id, chat_id, -bet, admin_id=user_id)
-
-    await store.wg_rate_record_rword(user_id, window_secs)
-
-    # Устанавливаем кулдаун между играми /rword
-    await store.wg_rword_cooldown_set(chat_id, rwg.cooldown_minutes * 60)
 
     # Создаём объект игры с временным message_id=0, потом обновим
     game = WordGame(
@@ -292,12 +289,8 @@ async def cmd_random_wordgame(
         is_random=True,
     )
 
-    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
+    user_mention = f'<a href="tg://user?id={user_id}">{html.escape(message.from_user.full_name)}</a>'
     bet_str = pluralizer.pluralize(bet)
-    dur_str = (
-        f"{duration_secs // 60} мин" if duration_secs < 3600
-        else f"{duration_secs // 3600} ч"
-    )
 
     # Заголовок: указываем, что слово загадал бот, а не человек
     game_header = (
@@ -314,6 +307,12 @@ async def cmd_random_wordgame(
 
     game_msg = await message.answer(game_text, parse_mode=ParseMode.HTML)
     game.message_id = game_msg.message_id
+
+    # Ставка в банк, лимит и кулдаун — только когда игра действительно опубликована
+    if bet > 0:
+        await score_service.add_score(bot.id, chat_id, -bet, admin_id=user_id)
+    await store.wg_rate_record_rword(user_id, window_secs)
+    await store.wg_rword_cooldown_set(chat_id, rwg.cooldown_minutes * 60)
 
     await store.wg_game_create(game)
     await store.wg_chat_add(chat_id, game_id)

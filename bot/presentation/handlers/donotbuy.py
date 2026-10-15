@@ -14,7 +14,6 @@ import logging
 import random
 
 from aiogram import F, Router
-from dishka.integrations.aiogram import FromDishka, inject
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -22,6 +21,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
+from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.score_service import ScoreService
@@ -43,9 +43,7 @@ _CB_HIT = "donotbuy:hit"
 def _build_kb(label: str, style: str | None) -> InlineKeyboardMarkup:
     """Одна кнопка «кнопка наёбка» заданного цвета (style)."""
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=label, callback_data=_CB_HIT, style=style)]
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=_CB_HIT, style=style)]]
     )
 
 
@@ -106,13 +104,11 @@ async def cb_donotbuy_hit(
     # Любое нажатие — успешное или нет — расходует лимит
     await store.donotbuy_daily_increment(user_id, chat_id)
 
-    # Случайная цена и списание без ухода в минус
+    # Случайная цена и списание без ухода в минус (атомарно)
     price = random.randint(0, cfg.max_price)
-    balance = (await score_service.get_score(user_id, chat_id)).value
-    charged = min(price, balance) if balance > 0 else 0
+    charged = await score_repo.debit_up_to(user_id, chat_id, price)
 
     if charged > 0:
-        await score_repo.add_delta(user_id, chat_id, -charged)
         await score_repo.add_delta(callback.bot.id, chat_id, charged)
 
     # Кнопка меняет цвет — обновляем только клавиатуру (текст сообщения не трогаем)
@@ -126,7 +122,8 @@ async def cb_donotbuy_hit(
     # Сколько списалось — видит только нажавший
     if charged > 0:
         alert = formatter._t["donotbuy_alert_charged"].format(
-            amount=charged, score_word=p.pluralize(charged),
+            amount=charged,
+            score_word=p.pluralize(charged),
         )
     else:
         alert = formatter._t["donotbuy_alert_zero"]

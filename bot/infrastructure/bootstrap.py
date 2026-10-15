@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from aiogram import Dispatcher
 from aiogram.types import User as TgUser
+from dishka import AsyncContainer
 
+from bot.application.interfaces.user_repository import IUserRepository
+from bot.domain.entities import User
 from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.auto_react import AutoReactMiddleware
@@ -14,18 +17,33 @@ from bot.presentation.middlewares.iq_penalty import IqPenaltyMiddleware
 from bot.presentation.middlewares.mute_mention_notify import MuteMentionNotifyMiddleware
 from bot.presentation.middlewares.owner_mute import OwnerMuteDeleteMiddleware
 from bot.presentation.middlewares.reply_chain_bonus import ReplyChainMiddleware
-from bot.presentation.middlewares.retry_network import RetryNetworkMiddleware
 from bot.presentation.middlewares.spark_bonus import SparkBonusMiddleware
+from bot.presentation.middlewares.telegram_errors import TelegramErrorsMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation.middlewares.unsound_guard import UnsoundGuardMiddleware
 
 
+async def register_bot_user(container: AsyncContainer, bot_me: TgUser) -> None:
+    """Заводит бота в users.
+
+    Баланс бота в каждом чате — касса (покупки, комиссии, призы), а scores.user_id
+    ссылается на users. Раньше бот попадал в users только после первой автореакции,
+    и в новой БД первая же покупка падала на внешнем ключе.
+    """
+    async with container() as scope:
+        user_repo = await scope.get(IUserRepository)
+        await user_repo.upsert(User(id=bot_me.id, username=bot_me.username, full_name=bot_me.full_name, is_bot=True))
+
+
 def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     """Регистрирует все middleware в правильном порядке."""
-    retry_mw = RetryNetworkMiddleware()
-    dp.message.outer_middleware(retry_mw)
-    dp.callback_query.outer_middleware(retry_mw)
-    dp.message_reaction.outer_middleware(retry_mw)
+    # Самый внешний: гасит ожидаемые ошибки Telegram и AbortUpdate.
+    # Должен стоять снаружи dishka — к нему исключение приходит уже
+    # после закрытия транзакции запроса.
+    errors_mw = TelegramErrorsMiddleware()
+    dp.message.outer_middleware(errors_mw)
+    dp.callback_query.outer_middleware(errors_mw)
+    dp.message_reaction.outer_middleware(errors_mw)
 
     dp.message.outer_middleware(ChatContextMiddleware())
     dp.message_reaction.outer_middleware(ChatContextMiddleware())
@@ -62,9 +80,9 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.admin_score import router as admin_score_router
     from bot.presentation.handlers.admin_user import router as admin_user_router
     from bot.presentation.handlers.anagram import router as anagram_router
+    from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.anon import router as anon_router
     from bot.presentation.handlers.blackjack import router as blackjack_router
-    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.buyop import router as buyop_router
     from bot.presentation.handlers.chatmode import router as chatmode_router
     from bot.presentation.handlers.commands import router as commands_router
@@ -79,17 +97,17 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.idea import router as idea_router
     from bot.presentation.handlers.iq import router as iq_router
     from bot.presentation.handlers.llm_commands import router as llm_router
-    from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.lot import router as lot_router
     from bot.presentation.handlers.mute import router as mute_router
+    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.poker import router as poker_router
     from bot.presentation.handlers.protect import router as protect_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
     from bot.presentation.handlers.selfban import router as selfban_router
     from bot.presentation.handlers.sixtyseven import router as sixtyseven_router
-    from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.slots import router as slots_router
+    from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.tag import router as tag_router
     from bot.presentation.handlers.tictactoe import router as ttt_router
     from bot.presentation.handlers.tracker import router as tracker_router

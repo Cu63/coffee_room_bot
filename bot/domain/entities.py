@@ -71,8 +71,8 @@ class IgnoreReason(str, Enum):
 class UserStats:
     user_id: int
     chat_id: int
-    score_given: int = 0     # подарено кирчиков реакциями (сумма положительных дельт)
-    score_taken: int = 0     # отнято кирчиков реакциями (сумма модулей отрицательных дельт)
+    score_given: int = 0  # подарено кирчиков реакциями (сумма положительных дельт)
+    score_taken: int = 0  # отнято кирчиков реакциями (сумма модулей отрицательных дельт)
     wins_blackjack: int = 0
     wins_slots: int = 0
     wins_dice: int = 0

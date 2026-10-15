@@ -85,5 +85,7 @@ class AutoReactMiddleware(BaseMiddleware):
         )
         logger.debug(
             "auto_react: %s on msg %d — applied=%s",
-            emoji, message.message_id, result.applied,
+            emoji,
+            message.message_id,
+            result.applied,
         )

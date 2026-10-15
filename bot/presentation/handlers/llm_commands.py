@@ -4,11 +4,10 @@ import logging
 import re
 from urllib.parse import urlparse
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram import F
 from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
 

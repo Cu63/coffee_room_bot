@@ -110,9 +110,7 @@ class AnalyzeService:
     def _warning(self, actual: int, requested: int) -> str:
         if actual >= requested:
             return ""
-        return self._fmt._t["analyze_shortage_warning"].format(
-            actual=actual, requested=requested
-        )
+        return self._fmt._t["analyze_shortage_warning"].format(actual=actual, requested=requested)
 
     # ── Публичный метод: глобальная статистика токенов за день ───────────
 
@@ -148,14 +146,21 @@ class AnalyzeService:
             actual=actual,
             messages=_format_messages(messages),
         )
-        resp = await self._client.chat([
-            {"role": "system", "content": self._fmt._t["analyze_system_prompt"]},
-            {"role": "user", "content": user_prompt},
-        ])
+        resp = await self._client.chat(
+            [
+                {"role": "system", "content": self._fmt._t["analyze_system_prompt"]},
+                {"role": "user", "content": user_prompt},
+            ]
+        )
 
         logger.info(
             "analyze: chat=%d user=%d n=%d actual=%d in=%d out=%d",
-            chat_id, user_id, n, actual, resp.input_tokens, resp.output_tokens,
+            chat_id,
+            user_id,
+            n,
+            actual,
+            resp.input_tokens,
+            resp.output_tokens,
         )
 
         await self._log(
@@ -202,14 +207,21 @@ class AnalyzeService:
             actual=actual,
             messages=_format_messages(messages),
         )
-        resp = await self._client.chat([
-            {"role": "system", "content": self._fmt._t["wir_system_prompt"]},
-            {"role": "user", "content": user_prompt},
-        ])
+        resp = await self._client.chat(
+            [
+                {"role": "system", "content": self._fmt._t["wir_system_prompt"]},
+                {"role": "user", "content": user_prompt},
+            ]
+        )
 
         logger.info(
             "wir: chat=%d user=%d n=%d actual=%d in=%d out=%d",
-            chat_id, user_id, n, actual, resp.input_tokens, resp.output_tokens,
+            chat_id,
+            user_id,
+            n,
+            actual,
+            resp.input_tokens,
+            resp.output_tokens,
         )
 
         await self._log(

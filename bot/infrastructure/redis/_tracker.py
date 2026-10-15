@@ -6,7 +6,6 @@ import json
 
 
 class TrackerStoreMixin:
-
     # ── Анонимные сообщения ───────────────────────────────
 
     async def anon_register_chat(self, chat_id: int, title: str) -> None:

@@ -58,7 +58,9 @@ async def cmd_mute(
     p = formatter._p
     parsed = await _resolve_mute_args(command.args, message, user_repo)
     if parsed is None:
-        await reply_and_delete(message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
+        await reply_and_delete(
+            message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
+        )
         return
     target, minutes = parsed
     if target is None:
@@ -88,9 +90,7 @@ async def cmd_mute(
         if not await store.mute_target_cooldown_ok(message.from_user.id, target.id, message.chat.id):
             await reply_and_delete(
                 message,
-                formatter._t["mute_target_cooldown"].format(
-                    target=target_link, hours=mute_cfg.target_cooldown_hours
-                ),
+                formatter._t["mute_target_cooldown"].format(target=target_link, hours=mute_cfg.target_cooldown_hours),
                 parse_mode=ParseMode.HTML,
                 link_preview_options=NO_PREVIEW,
             )
@@ -121,9 +121,7 @@ async def cmd_mute(
     bot = message.bot
     chat_id = message.chat.id
     # Стекуем: прибавляем к оставшемуся времени мута, не заменяем его
-    until, mute_was_stacked = await mute_service.compute_stacked_until(
-        target.id, chat_id, minutes * 60
-    )
+    until, mute_was_stacked = await mute_service.compute_stacked_until(target.id, chat_id, minutes * 60)
 
     # Проверяем, является ли цель владельцем чата
     try:
@@ -154,7 +152,9 @@ async def cmd_mute(
         if mute_cfg.daily_limit > 0:
             await store.mute_daily_increment(message.from_user.id, chat_id)
         if mute_cfg.target_cooldown_hours > 0:
-            await store.mute_target_cooldown_set(message.from_user.id, target.id, chat_id, mute_cfg.target_cooldown_hours)
+            await store.mute_target_cooldown_set(
+                message.from_user.id, target.id, chat_id, mute_cfg.target_cooldown_hours
+            )
         actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
         total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
         stack_note = f" (итого: {total_minutes} мин)" if mute_was_stacked else ""
@@ -168,7 +168,8 @@ async def cmd_mute(
                 score_word=p.pluralize(cost),
                 balance=result.new_balance,
                 score_word_balance=p.pluralize(result.new_balance),
-            ) + stack_note,
+            )
+            + stack_note,
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
@@ -180,9 +181,7 @@ async def cmd_mute(
     if was_admin:
         admin_perms = _extract_admin_permissions(member)
         try:
-            await bot.promote_chat_member(
-                chat_id=chat_id, user_id=target.id, **{f: False for f in _ADMIN_PERM_FIELDS}
-            )
+            await bot.promote_chat_member(chat_id=chat_id, user_id=target.id, **{f: False for f in _ADMIN_PERM_FIELDS})
         except Exception:
             await reply_and_delete(message, formatter._t["mute_failed"])
             return
@@ -256,7 +255,8 @@ async def cmd_mute(
             score_word=p.pluralize(cost),
             balance=result.new_balance,
             score_word_balance=p.pluralize(result.new_balance),
-        ) + stack_note,
+        )
+        + stack_note,
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
     )

@@ -47,10 +47,7 @@ class PostgresUserRepository(IUserRepository):
             "SELECT id, username, full_name FROM users WHERE id = ANY($1)",
             user_ids,
         )
-        return {
-            row["id"]: User(id=row["id"], username=row["username"], full_name=row["full_name"])
-            for row in rows
-        }
+        return {row["id"]: User(id=row["id"], username=row["username"], full_name=row["full_name"]) for row in rows}
 
     @staticmethod
     def _to_entity(row: asyncpg.Record | None) -> User | None:

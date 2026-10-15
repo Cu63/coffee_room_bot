@@ -13,7 +13,6 @@ from bot.infrastructure.redis.store import RedisStore
 
 
 class RedisProvider(Provider):
-
     # Получаем уже созданный клиент из контекста контейнера (main.py)
     redis = from_context(provides=aioredis.Redis, scope=Scope.APP)
 

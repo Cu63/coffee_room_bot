@@ -16,6 +16,7 @@ class MessageInfo:
 @dataclass(slots=True)
 class ChatMessage:
     """Сообщение с текстом и именем автора — для передачи в LLM."""
+
     message_id: int
     user_id: int
     username: str | None

@@ -14,29 +14,40 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW
-
-# Импортируем внутренние утилиты из игровых хендлеров
-from bot.presentation.handlers.tictactoe import (
-    _TTT_GAME_TTL,
-    _game_kb as _ttt_game_kb,
-    _render_board as _ttt_render_board,
-    _ttt_key,
-)
 from bot.presentation.handlers.blackjack import (
     _BJ_GAME_TTL,
     _BJ_REDIS_BUFFER,
     _bj_key,
-    _is_natural as _bj_is_natural,
+)
+from bot.presentation.handlers.blackjack import (
     _hand_score_from_dicts as _bj_hand_score,
+)
+from bot.presentation.handlers.blackjack import (
+    _is_natural as _bj_is_natural,
+)
+from bot.presentation.handlers.blackjack import (
     _play_kb as _bj_play_kb,
+)
+from bot.presentation.handlers.blackjack import (
     _turn_text as _bj_turn_text,
 )
 
-from bot.presentation.handlers.duel.helpers import _make_invite_id
-
+# Импортируем внутренние утилиты из игровых хендлеров
+from bot.presentation.handlers.tictactoe import (
+    _TTT_GAME_TTL,
+    _TTT_REDIS_BUFFER,
+    _ttt_key,
+)
+from bot.presentation.handlers.tictactoe import (
+    _game_kb as _ttt_game_kb,
+)
+from bot.presentation.handlers.tictactoe import (
+    _render_board as _ttt_render_board,
+)
+from bot.presentation.utils import NO_PREVIEW
 
 # ── Запуск TTT из дуэли ──────────────────────────────────────────────────
+
 
 async def _start_ttt_from_duel(
     cb: CallbackQuery,
@@ -48,7 +59,6 @@ async def _start_ttt_from_duel(
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует TTT игру, в которой оба игрока уже известны."""
-    from bot.infrastructure.message_formatter import user_link
 
     challenger_id = invite["challenger_id"]
     challenger_name = invite["challenger_name"]
@@ -82,10 +92,11 @@ async def _start_ttt_from_duel(
         "chat_id": chat_id,
         "message_id": cb.message.message_id,
         "created_at": time.time(),
+        "expires_at": time.time() + _TTT_GAME_TTL,
     }
 
     ttt_key = _ttt_key(chat_id, game_id)
-    await store._r.set(ttt_key, json.dumps(data), ex=_TTT_GAME_TTL)
+    await store._r.set(ttt_key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER)
 
     x_display = user_link(player_x_username or None, player_x_name, player_x_id)
     o_display = user_link(player_o_username or None, player_o_name, player_o_id)
@@ -113,6 +124,7 @@ async def _start_ttt_from_duel(
 
 # ── Запуск BJ из дуэли ───────────────────────────────────────────────────
 
+
 async def _start_bj_from_duel(
     cb: CallbackQuery,
     invite: dict,
@@ -124,7 +136,6 @@ async def _start_bj_from_duel(
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует BJ игру, в которой оба игрока уже известны."""
-    from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 
     challenger_id = invite["challenger_id"]
     challenger_name = invite["challenger_name"]
@@ -182,18 +193,24 @@ async def _start_bj_from_duel(
         await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         from bot.presentation.handlers.blackjack import _resolve_game
+
         # Получаем stats_repo из dishka через cb (нет прямого доступа, используем заглушку)
         # Поскольку natural BJ — редкий случай, логируем и продолжаем без stats
         try:
-            from bot.application.interfaces.user_stats_repository import IUserStatsRepository as _IUS
             # stats недоступны напрямую здесь, передаём фиктивный объект-заглушку
             class _NoStats:
-                async def add_win(self, *a, **kw): pass
+                async def add_win(self, *a, **kw):
+                    pass
+
             text = await _resolve_game(data, store, score_repo, _NoStats(), p, chat_id)
         except Exception:
             text = "🎰 Натуральный блекджек!"
+        if text is None:
+            # Игру уже рассчитали — итог в сообщении не трогаем
+            return
         try:
             from bot.presentation.utils import schedule_delete
+
             await cb.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,

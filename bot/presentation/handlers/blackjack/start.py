@@ -122,9 +122,7 @@ async def cmd_blackjack(
 
     # Создаём лобби
     game_id = _make_game_id()
-    display = user_link(
-        message.from_user.username, message.from_user.full_name or "", user_id
-    )
+    display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
     sw_bet = p.pluralize(bet)
 
     data = {
@@ -166,6 +164,5 @@ async def cmd_blackjack(
         reply_markup=_lobby_kb(game_id),
     )
 
-    # Сохраняем message_id
-    data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL + _BJ_REDIS_BUFFER)
+    # Сохраняем message_id — только пока это лобби: принятую игру не затираем
+    await store.game_patch_if_state(key, "lobby", {"message_id": sent.message_id})

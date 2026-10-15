@@ -41,6 +41,7 @@ async def cmd_help(
 
 # Callback для /help. Формат callback_data: "help:{section}:{caller_uid}"
 
+
 @router.callback_query(F.data.startswith("help:"))
 @inject
 async def cb_help(

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.types.chat import Chat
 from dishka.integrations.aiogram import FromDishka, inject
-from magic_filter import F
 
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.domain.bot_utils import is_admin
@@ -43,7 +43,7 @@ async def cmd_chats(
     for cid in chat_ids:
         try:
             chat: Chat = await bot.get_chat(cid)
-            title = chat.title or "—"
+            title = html.escape(chat.title or "—")
 
             invite_link = chat.invite_link
             if not invite_link:

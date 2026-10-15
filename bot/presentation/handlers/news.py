@@ -66,10 +66,7 @@ async def cmd_news(
     if hourly_limit > 0 and not _is_admin(username, config.admin.users):
         count = await redis.news_hourly_count(user_id)
         if count >= hourly_limit:
-            await message.reply(
-                f"⏳ Лимит /news исчерпан: не более {hourly_limit} раз в час. "
-                "Попробуй позже!"
-            )
+            await message.reply(f"⏳ Лимит /news исчерпан: не более {hourly_limit} раз в час. Попробуй позже!")
             return
         await redis.news_hourly_increment(user_id)
 

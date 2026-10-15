@@ -1,4 +1,5 @@
 """Фоновая задача: ежедневный прогрессивный налог на крупные балансы."""
+
 from __future__ import annotations
 
 import asyncio
@@ -87,16 +88,13 @@ async def _run_once(bot: Bot, container) -> None:
 
                     user = users_map.get(score.user_id)
                     name = user_link(user.username, user.full_name, user.id) if user else str(score.user_id)
-                    lines.append(
-                        f"  {name}: −{tax} {p.pluralize(tax)}"
-                        f" ({score.value} → {new_balance})"
-                    )
+                    lines.append(f"  {name}: −{tax} {p.pluralize(tax)} ({score.value} → {new_balance})")
 
                 if not lines:
                     continue
 
             text = (
-                f"🏛 <b>Ежедневный налог</b>\n\n"
+                "🏛 <b>Ежедневный налог</b>\n\n"
                 + "\n".join(lines)
                 + f"\n\nВсего собрано: <b>{total_tax}</b> {p.pluralize(total_tax)}"
             )

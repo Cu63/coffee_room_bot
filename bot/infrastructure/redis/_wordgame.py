@@ -7,7 +7,6 @@ import time
 
 
 class WordgameStoreMixin:
-
     _WG_PENDING = "wg:pending:"
     _WG_AWAITING = "wg:awaiting:"
     _WG_GAME = "wg:game:"
@@ -18,11 +17,20 @@ class WordgameStoreMixin:
 
     async def wg_pending_create(self, user_id: int, chat_id: int, bet: int, duration_seconds: int) -> str:
         import random as _r
+
         game_id = str(_r.randint(10000, 99999))
-        data = json.dumps({
-            "game_id": game_id, "user_id": user_id, "chat_id": chat_id,
-            "bet": bet, "duration_seconds": duration_seconds, "lobby_msg_id": 0,
-        })
+        data = json.dumps(
+            {
+                "game_id": game_id,
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "bet": bet,
+                "duration_seconds": duration_seconds,
+                "lobby_msg_id": 0,
+                # Ставка списывается, когда автор присылает слово (а не при /word)
+                "charge_on_submit": True,
+            }
+        )
         await self._r.set(f"{self._WG_PENDING}{game_id}", data, ex=self._WG_TTL)
         return game_id
 
@@ -37,8 +45,13 @@ class WordgameStoreMixin:
             return
         data = json.loads(raw)
         data["lobby_msg_id"] = message_id
-        ttl = await self._r.ttl(key)
-        await self._r.set(key, json.dumps(data), ex=max(ttl, 30))
+        # XX: не воскрешать уже забранную игру; KEEPTTL: не сдвигать срок
+        await self._r.set(key, json.dumps(data), xx=True, keepttl=True)
+
+    async def wg_pending_pop(self, game_id: str) -> dict | None:
+        """Атомарно забирает ожидающую игру: из параллельных вызовов данные получит только один."""
+        raw = await self._r.getdel(f"{self._WG_PENDING}{game_id}")
+        return json.loads(raw) if raw else None
 
     async def wg_pending_delete(self, game_id: str) -> None:
         await self._r.delete(f"{self._WG_PENDING}{game_id}")
@@ -86,12 +99,17 @@ class WordgameStoreMixin:
     async def wg_game_create(self, game) -> None:
         key = f"{self._WG_GAME}{game.game_id}"
         data = {
-            "game_id": game.game_id, "chat_id": game.chat_id,
-            "creator_id": game.creator_id, "word": game.word,
-            "bet": game.bet, "ends_at": game.ends_at,
-            "revealed": game.revealed, "guesses": game.guesses,
+            "game_id": game.game_id,
+            "chat_id": game.chat_id,
+            "creator_id": game.creator_id,
+            "word": game.word,
+            "bet": game.bet,
+            "ends_at": game.ends_at,
+            "revealed": game.revealed,
+            "guesses": game.guesses,
             "message_id": game.message_id,
-            "finished": game.finished, "winner_id": game.winner_id,
+            "finished": game.finished,
+            "winner_id": game.winner_id,
             "is_random": game.is_random,
         }
         ttl = int(game.ends_at - time.time()) + 120
@@ -101,21 +119,26 @@ class WordgameStoreMixin:
         raw = await self._r.get(f"{self._WG_GAME}{game_id}")
         return json.loads(raw) if raw else None
 
-    async def wg_game_save_raw(self, game_id: str, data: dict) -> None:
+    async def wg_game_save_raw(self, game_id: str, data: dict) -> bool:
+        """Сохраняет игру, только если она ещё идёт. False — игру уже завершили.
+
+        XX: не воскрешать игру, которую забрали победой или по времени;
+        KEEPTTL: не сдвигать срок жизни ключа.
+        """
         key = f"{self._WG_GAME}{game_id}"
-        ttl = await self._r.ttl(key)
-        await self._r.set(key, json.dumps(data), ex=max(ttl, 30))
+        return bool(await self._r.set(key, json.dumps(data), xx=True, keepttl=True))
 
     async def wg_game_finish(self, game_id: str) -> dict | None:
-        key = f"{self._WG_GAME}{game_id}"
-        raw = await self._r.get(key)
+        """Атомарно забирает игру (GETDEL): из параллельных вызовов — победы
+        и цикла истечения — данные получит только один, остальные — None.
+        """
+        raw = await self._r.getdel(f"{self._WG_GAME}{game_id}")
         if raw is None:
             return None
         data = json.loads(raw)
         if data.get("finished"):
             return None
         data["finished"] = True
-        await self._r.delete(key)
         return data
 
     async def wg_chat_add(self, chat_id: int, game_id: str) -> None:

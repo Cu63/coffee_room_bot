@@ -9,13 +9,13 @@ _BURST_COOLDOWN = "burst:cd:"
 _SPARK_ACTIVE = "spark:act:"
 _SPARK_RESP = "spark:resp:"
 _SPARK_COOLDOWN = "spark:cd:"
+_SPARK_WINDOW = "spark:win:"  # окно зачинщика: живёт window_seconds
 _CHAIN_COUNT = "chain:cnt:"
 _CHAIN_LAST = "chain:last:"
 _CHAIN_COOLDOWN = "chain:cd:"
 
 
 class BonusStoreMixin:
-
     # ── Burst ──────────────────────────────────────────────
 
     async def burst_cooldown_active(self, user_id: int, chat_id: int) -> bool:
@@ -50,21 +50,36 @@ class BonusStoreMixin:
         active_key = f"{_SPARK_ACTIVE}{chat_id}"
         resp_key = f"{_SPARK_RESP}{user_id}:{chat_id}"
         pipe = self._r.pipeline()
+        # Окно у каждого зачинщика своё; общий набор активных — только для перечисления
+        pipe.set(f"{_SPARK_WINDOW}{user_id}:{chat_id}", "1", ex=window_seconds)
         pipe.sadd(active_key, str(user_id))
         pipe.expire(active_key, window_seconds + 60)
         pipe.delete(resp_key)
-        pipe.expire(resp_key, window_seconds)
         await pipe.execute()
 
     async def spark_get_active(self, chat_id: int) -> set[int]:
-        members = await self._r.smembers(f"{_SPARK_ACTIVE}{chat_id}")
-        return {int(m) for m in members}
+        """Зачинщики, у которых ещё не истекло окно. Истёкшие удаляются из набора."""
+        active_key = f"{_SPARK_ACTIVE}{chat_id}"
+        members = [int(m) for m in await self._r.smembers(active_key)]
+        if not members:
+            return set()
+        pipe = self._r.pipeline()
+        for uid in members:
+            pipe.exists(f"{_SPARK_WINDOW}{uid}:{chat_id}")
+        alive_flags = await pipe.execute()
+        expired = [uid for uid, alive in zip(members, alive_flags) if not alive]
+        if expired:
+            await self._r.srem(active_key, *(str(uid) for uid in expired))
+        return {uid for uid, alive in zip(members, alive_flags) if alive}
 
-    async def spark_add_responder(self, anchor_id: int, responder_id: int, chat_id: int) -> int:
+    async def spark_add_responder(self, anchor_id: int, responder_id: int, chat_id: int, window_seconds: int) -> int:
         key = f"{_SPARK_RESP}{anchor_id}:{chat_id}"
         pipe = self._r.pipeline()
         pipe.sadd(key, str(responder_id))
         pipe.scard(key)
+        # TTL ставится при первом отклике (NX); раньше EXPIRE шёл сразу после DELETE
+        # пустого набора и не действовал — набор жил вечно
+        pipe.expire(key, window_seconds, nx=True)
         results = await pipe.execute()
         return results[1]
 
@@ -73,6 +88,7 @@ class BonusStoreMixin:
         pipe.set(f"{_SPARK_COOLDOWN}{user_id}:{chat_id}", "1", ex=cooldown_seconds)
         pipe.srem(f"{_SPARK_ACTIVE}{chat_id}", str(user_id))
         pipe.delete(f"{_SPARK_RESP}{user_id}:{chat_id}")
+        pipe.delete(f"{_SPARK_WINDOW}{user_id}:{chat_id}")
         await pipe.execute()
 
     # ── Reply chain ────────────────────────────────────────
@@ -86,7 +102,11 @@ class BonusStoreMixin:
         return bool(await self._r.exists(f"{_CHAIN_COOLDOWN}{pair}"))
 
     async def chain_add_reply(
-        self, chat_id: int, replier_id: int, author_id: int, window_seconds: int,
+        self,
+        chat_id: int,
+        replier_id: int,
+        author_id: int,
+        window_seconds: int,
     ) -> int | None:
         pair = self._chain_pair(chat_id, replier_id, author_id)
         last_key = f"{_CHAIN_LAST}{pair}"
@@ -102,7 +122,11 @@ class BonusStoreMixin:
         return results[1]
 
     async def chain_award_cleanup(
-        self, chat_id: int, user_a: int, user_b: int, cooldown_seconds: int,
+        self,
+        chat_id: int,
+        user_a: int,
+        user_b: int,
+        cooldown_seconds: int,
     ) -> None:
         pair = self._chain_pair(chat_id, user_a, user_b)
         pipe = self._r.pipeline()

@@ -161,9 +161,7 @@ async def apply_mute(
     if was_admin:
         admin_perms = _extract_admin_permissions(member)
         try:
-            await bot.promote_chat_member(
-                chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS}
-            )
+            await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS})
         except Exception:
             return False
     try:

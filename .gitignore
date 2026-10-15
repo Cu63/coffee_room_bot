@@ -219,3 +219,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .ai
+# macOS
+.DS_Store
+
+# Локальные worktree агентов (Claude Code и др.) — не для репозитория
+.claude/worktrees/
+.claire/

@@ -52,6 +52,7 @@ class NoAnonState(BaseFilter):
         state = await store.anon_get_state(message.from_user.id)
         return state is None
 
+
 logger = logging.getLogger(__name__)
 router = Router(name="anon")
 
@@ -64,10 +65,7 @@ _CB_CANCEL = "anon_cancel"
 
 def _chat_keyboard(chats: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     """Инлайн-клавиатура с кнопками выбора чата."""
-    buttons = [
-        [InlineKeyboardButton(text=title, callback_data=f"{_CB_PREFIX}{chat_id}")]
-        for chat_id, title in chats
-    ]
+    buttons = [[InlineKeyboardButton(text=title, callback_data=f"{_CB_PREFIX}{chat_id}")] for chat_id, title in chats]
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=_CB_CANCEL)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -225,15 +223,15 @@ async def on_private_text(
     if state is None or state.get("step") != "write_message":
         # Не в режиме ввода — игнорируем
         return
-    
 
     chat_id: int = state["chat_id"]
     chat_title: str = state.get("chat_title", str(chat_id))
 
-    if (await score_service.get_score(user_id, chat_id)).value < ANON_MESSAGE_PAYMENT:
-        await message.answer(f"❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
+    # Списываем до отправки: проверка баланса и списание — один атомарный запрос
+    spend = await score_service.spend_score(user_id, user_id, chat_id, ANON_MESSAGE_PAYMENT, quiet=True)
+    if not spend.success:
+        await message.answer("❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
         return
-
 
     await store.anon_clear_state(user_id)
 
@@ -251,9 +249,9 @@ async def on_private_text(
     except Exception:
         logger.exception("anon: failed to send message to chat %d", chat_id)
         await message.answer(
-            "❌ Не удалось отправить сообщение. Возможно, бот был удалён из чата.\n"
-            "Попробуй снова: /anon"
+            "❌ Не удалось отправить сообщение. Возможно, бот был удалён из чата.\nПопробуй снова: /anon"
         )
     finally:
-        if message_sent:
-            await score_service.add_score_quiet(user_id, chat_id, -ANON_MESSAGE_PAYMENT)
+        if not message_sent:
+            # Сообщение не ушло в чат — возвращаем оплату
+            await score_service.add_score_quiet(user_id, chat_id, ANON_MESSAGE_PAYMENT)

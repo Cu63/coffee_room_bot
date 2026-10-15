@@ -1,4 +1,5 @@
 """Хендлер /daily — предпросмотр лидерборда активности."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -44,7 +45,7 @@ async def cmd_daily(
         yesterday=yesterday_lb if not yesterday_lb.is_empty() else None,
     )
 
-    sent = await message.answer(text, parse_mode=ParseMode.HTML)
+    await message.answer(text, parse_mode=ParseMode.HTML)
     # Удаляем исходную команду
     try:
         await message.delete()

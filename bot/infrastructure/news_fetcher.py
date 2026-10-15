@@ -104,9 +104,7 @@ def _parse_rss(raw_xml: str, source_name: str) -> list[NewsItem]:
             title = (entry.findtext("atom:title", "", ns) or entry.findtext("title") or "").strip()
             link_el = entry.find("atom:link[@href]", ns) or entry.find("link[@href]")
             link = link_el.get("href", "").strip() if link_el is not None else ""
-            desc = _clean_html(
-                entry.findtext("atom:summary", "", ns) or entry.findtext("summary") or ""
-            )
+            desc = _clean_html(entry.findtext("atom:summary", "", ns) or entry.findtext("summary") or "")
             if title and link:
                 items.append(NewsItem(title=title, url=link, source=source_name, description=desc))
 
@@ -152,10 +150,12 @@ async def _llm_pick(
         for i, item in enumerate(candidates)
     )
     try:
-        resp = await llm.chat([
-            {"role": "system", "content": _FILTER_SYSTEM},
-            {"role": "user", "content": f"Список новостей:\n{numbered}"},
-        ])
+        resp = await llm.chat(
+            [
+                {"role": "system", "content": _FILTER_SYSTEM},
+                {"role": "user", "content": f"Список новостей:\n{numbered}"},
+            ]
+        )
         data = json.loads(_strip_json_fences(resp.text or ""))
         idx = int(data["index"])
         new_title = str(data.get("title", "")).strip()
@@ -179,10 +179,12 @@ async def _llm_translate(text: str, llm: "OpenAiClient") -> str:
     if not text.strip():
         return text
     try:
-        resp = await llm.chat([
-            {"role": "system", "content": _TRANSLATE_SYSTEM},
-            {"role": "user", "content": text},
-        ])
+        resp = await llm.chat(
+            [
+                {"role": "system", "content": _TRANSLATE_SYSTEM},
+                {"role": "user", "content": text},
+            ]
+        )
         translated = (resp.text or "").strip()
         return translated if translated else text
     except Exception:
@@ -230,11 +232,7 @@ async def fetch_random_news(
                 chosen, is_russian = await _llm_pick(candidates, llm)
 
                 # Перевод description, если нужно и источник иностранный
-                needs_translation = (
-                    translate
-                    and not is_russian
-                    and not _source_is_russian(source_name)
-                )
+                needs_translation = translate and not is_russian and not _source_is_russian(source_name)
                 if needs_translation and chosen.description:
                     translated_desc = await _llm_translate(chosen.description, llm)
                     chosen = NewsItem(

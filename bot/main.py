@@ -18,6 +18,7 @@ from bot.infrastructure.di import (
     RedisProvider,
 )
 from bot.infrastructure.logger import setup_logger
+from bot.infrastructure.telegram_retry import RetryIdempotentRequestsMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ async def main() -> None:
     # ── Redis ────────────────────────────────────────────────────
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     from bot.presentation import utils as presentation_utils
+
     presentation_utils.init_redis(redis)
 
     container = make_async_container(
@@ -54,6 +56,8 @@ async def main() -> None:
         logger.info("Using Telegram proxy: %s", proxy)
 
     session = AiohttpSession(timeout=15, proxy=proxy)
+    # Сетевые сбои повторяются точечно — только для идемпотентных запросов
+    session.middleware(RetryIdempotentRequestsMiddleware())
     bot = Bot(token=settings.bot_token, session=session)
 
     bot_me = await bot.get_me()
@@ -75,11 +79,13 @@ async def main() -> None:
     dp = Dispatcher()
 
     from bot.infrastructure.bootstrap import (
+        register_bot_user,
         register_middlewares,
         register_post_dishka_middlewares,
         register_routers,
     )
 
+    await register_bot_user(container, bot_me)
     register_middlewares(dp, bot_me)
     register_routers(dp, config, settings)
     setup_dishka(container, dp)
@@ -87,6 +93,7 @@ async def main() -> None:
 
     # ── Стартап-лог ченджлога ────────────────────────────────────
     from bot.infrastructure.redis_store import RedisStore as _RS
+
     _tmp_store = _RS(redis)
     try:
         all_logs = await _tmp_store.changelog_scan_all()
@@ -95,8 +102,11 @@ async def main() -> None:
             title = latest.get("text", "").split("\n", 1)[0]
             date = latest.get("date", "?")
             logger.info(
-                "changelog [tracker %d]: %d записей. Последнее: \"%s\" (%s)",
-                tracker_chat_id, len(entries), title, date,
+                'changelog [tracker %d]: %d записей. Последнее: "%s" (%s)',
+                tracker_chat_id,
+                len(entries),
+                title,
+                date,
             )
     except Exception:
         logger.warning("changelog: не удалось прочитать при старте")
@@ -113,8 +123,9 @@ async def main() -> None:
     from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
-    from bot.infrastructure.unmute_loop import unmute_loop
     from bot.infrastructure.tax_loop import tax_loop
+    from bot.infrastructure.ttt_cleanup_loop import ttt_cleanup_loop
+    from bot.infrastructure.unmute_loop import unmute_loop
     from bot.infrastructure.wordgame_loop import wordgame_loop
     from bot.presentation.utils import delete_loop
 
@@ -128,6 +139,7 @@ async def main() -> None:
         asyncio.create_task(mute_roulette_loop(container, bot)),
         asyncio.create_task(bj_cleanup_loop(container, bot)),
         asyncio.create_task(duel_cleanup_loop(container, bot)),
+        asyncio.create_task(ttt_cleanup_loop(container, bot)),
         asyncio.create_task(lot_loop(bot, container)),
         asyncio.create_task(anagram_expire_loop(bot, container)),
         asyncio.create_task(anagram_auto_loop(bot, container)),

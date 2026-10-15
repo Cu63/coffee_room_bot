@@ -17,7 +17,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 logger = logging.getLogger(__name__)
 
-_RESULT_DELETE_DELAY = 60   # секунд до удаления итогового сообщения
+_RESULT_DELETE_DELAY = 60  # секунд до удаления итогового сообщения
 
 
 async def anagram_expire_loop(bot: Bot, container) -> None:
@@ -42,6 +42,7 @@ async def anagram_auto_loop(bot: Bot, container) -> None:
 
 # ── expire tick ─────────────────────────────────────────────────────────
 
+
 async def _expire_tick(bot: Bot, container) -> None:
     from bot.application.score_service import ScoreService
     from bot.infrastructure.redis_store import RedisStore
@@ -52,11 +53,11 @@ async def _expire_tick(bot: Bot, container) -> None:
         score_service: ScoreService = await scope.get(ScoreService)
 
         for data in await store.anagram_scan_expired():
-            game_id  = data["game_id"]
-            chat_id  = data["chat_id"]
-            word     = data["word"]
-            bet      = data.get("bet", 0)
-            msg_id   = data.get("message_id", 0)
+            game_id = data["game_id"]
+            chat_id = data["chat_id"]
+            word = data["word"]
+            bet = data.get("bet", 0)
+            msg_id = data.get("message_id", 0)
 
             # Возвращаем деньги боту (если никто не угадал, банк вернуть)
             if bet > 0:
@@ -64,7 +65,9 @@ async def _expire_tick(bot: Bot, container) -> None:
 
             logger.info(
                 "anagram_expire: игра %s в чате %d истекла (слово: %s)",
-                game_id, chat_id, word,
+                game_id,
+                chat_id,
+                word,
             )
 
             if msg_id:
@@ -91,6 +94,7 @@ async def _expire_tick(bot: Bot, container) -> None:
 
 
 # ── auto tick ────────────────────────────────────────────────────────────
+
 
 async def _auto_tick(bot: Bot, container) -> None:
     from bot.application.score_service import ScoreService
@@ -143,5 +147,6 @@ async def _auto_tick(bot: Bot, container) -> None:
             if success:
                 logger.info(
                     "anagram_auto_tick: опубликована авто-игра в чате %d (следующая через %.0f сек)",
-                    chat_id, interval,
+                    chat_id,
+                    interval,
                 )

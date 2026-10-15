@@ -46,13 +46,14 @@ async def cmd_protect(
     hours = mute_cfg.protection_duration_hours
     score = await score_service.get_score(user_id, chat_id)
     if score.value < cost:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["protect_not_enough"].format(
                 cost=cost,
                 score_word=p.pluralize(cost),
                 balance=score.value,
                 score_word_balance=p.pluralize(score.value),
-            )
+            ),
         )
         return
     kb = InlineKeyboardMarkup(
@@ -66,7 +67,8 @@ async def cmd_protect(
             ]
         ]
     )
-    await reply_and_delete(message,
+    await reply_and_delete(
+        message,
         formatter._t["protect_confirm"].format(
             hours=hours,
             cost=cost,
@@ -109,7 +111,11 @@ async def cb_protect(
     hours = mute_cfg.protection_duration_hours
     user_id = owner_id
     result = await score_service.spend_score(
-        actor_id=user_id, target_id=user_id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["protect"],
+        actor_id=user_id,
+        target_id=user_id,
+        chat_id=chat_id,
+        cost=cost,
+        emoji=SPECIAL_EMOJI["protect"],
         bot_id=callback.bot.id,
     )
     if not result.success:
@@ -171,8 +177,8 @@ async def cmd_unprotect(
 
     existing = await protection_repo.get(user_id, chat_id)
     if existing is None:
-        await reply_and_delete(message,"У тебя нет активной защиты.")
+        await reply_and_delete(message, "У тебя нет активной защиты.")
         return
 
     await protection_repo.delete(user_id, chat_id)
-    await reply_and_delete(message,"🔓 Защита снята.")
+    await reply_and_delete(message, "🔓 Защита снята.")

@@ -25,7 +25,7 @@ from bot.application.xp_service import XpService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
 
 router = Router(name="commands")
 
@@ -70,8 +70,11 @@ async def cmd_score(
         display_name = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     user_id = target_user.id if target_user else message.from_user.id  # type: ignore[union-attr]
     score = await score_service.get_score(user_id, chat_id)
-    await reply_and_delete(message,
-        formatter.score_info(display_name, score.value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
+    await reply_and_delete(
+        message,
+        formatter.score_info(display_name, score.value),
+        parse_mode=ParseMode.HTML,
+        link_preview_options=NO_PREVIEW,
     )
 
 
@@ -115,7 +118,9 @@ async def cmd_top(
         text = "\n".join(lines) if rows else "🔻 <b>Антирейтинг</b>\n<i>Нет данных</i>"
         await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
     else:
-        await reply_and_delete(message, formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(
+            message, formatter.leaderboard(rows), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
+        )
 
 
 @router.message(Command("stats"))
@@ -409,7 +414,8 @@ async def cmd_uhistory(
         target = await user_repo.get_by_username(username)
 
     if target is None:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             "Использование: <code>/uhistory @username</code> или реплай на сообщение.",
             parse_mode=ParseMode.HTML,
         )
@@ -419,7 +425,8 @@ async def cmd_uhistory(
     target_link = user_link(target.username, target.full_name, target.id)
 
     if not events:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             f"Нет событий для {target_link} за последние {config.history.retention_days} дн.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -514,6 +521,7 @@ async def cb_uhistory(
         pass
     await safe_callback_answer(callback)
 
+
 @router.message(Command("level"))
 @inject
 async def cmd_level(
@@ -601,6 +609,4 @@ async def cmd_toplevel(
         level = xp_service.compute_level(entry.xp)
         lines.append(f"{rank}. {name} — Ур. <b>{level}</b> ({entry.xp} XP)")
 
-    await reply_and_delete(
-        message, "\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
-    )
+    await reply_and_delete(message, "\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import logging
 import random
 from datetime import datetime, timedelta
@@ -215,7 +216,7 @@ async def _finish_mute_roulette(
     for user_id in losers:
         try:
             member = await bot.get_chat_member(chat_id, user_id)
-            name = f'<a href="tg://user?id={user_id}">{member.user.full_name}</a>'
+            name = f'<a href="tg://user?id={user_id}">{html.escape(member.user.full_name)}</a>'
         except Exception:
             name = f"<code>{user_id}</code>"
             member = None

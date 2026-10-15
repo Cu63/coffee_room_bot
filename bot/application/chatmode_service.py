@@ -1,4 +1,5 @@
 """Бизнес-логика режимов чата (silence / gif)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -39,7 +40,7 @@ _GIF_PERMS = ChatPermissions(
     can_send_audios=False,
     can_send_documents=False,
     can_send_polls=False,
-    can_send_other_messages=True,   # стикеры + гифки разрешены
+    can_send_other_messages=True,  # стикеры + гифки разрешены
     can_add_web_page_previews=False,
     can_change_info=False,
     can_invite_users=False,
@@ -72,7 +73,7 @@ _PERM_FIELDS = [
 @dataclass(slots=True)
 class ActivateResult:
     success: bool
-    error: str | None = None          # причина отказа
+    error: str | None = None  # причина отказа
     cost: int = 0
     new_balance: int = 0
 
@@ -121,6 +122,7 @@ class ChatmodeService:
 
         # Снимаем баллы
         from bot.application.score_service import SPECIAL_EMOJI
+
         spend = await self._score.spend_score(
             actor_id=user_id,
             target_id=user_id,

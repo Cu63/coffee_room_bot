@@ -7,24 +7,34 @@ import time
 
 
 class MuteRouletteStoreMixin:
-
     _MUTE_ROULETTE = "mutegiveaway:"
 
     def _mg_key(self, chat_id: int, roulette_id: str) -> str:
         return f"{self._MUTE_ROULETTE}{chat_id}:{roulette_id}"
 
     async def mute_roulette_create(
-        self, chat_id: int, creator_id: int, mute_minutes: int,
-        losers_count: int, ends_at: float,
+        self,
+        chat_id: int,
+        creator_id: int,
+        mute_minutes: int,
+        losers_count: int,
+        ends_at: float,
     ) -> str:
         import random as _random
+
         roulette_id = str(_random.randint(10000, 99999))
         key = self._mg_key(chat_id, roulette_id)
-        data = json.dumps({
-            "roulette_id": roulette_id, "creator_id": creator_id,
-            "mute_minutes": mute_minutes, "losers_count": losers_count,
-            "ends_at": ends_at, "participants": [], "message_id": 0,
-        })
+        data = json.dumps(
+            {
+                "roulette_id": roulette_id,
+                "creator_id": creator_id,
+                "mute_minutes": mute_minutes,
+                "losers_count": losers_count,
+                "ends_at": ends_at,
+                "participants": [],
+                "message_id": 0,
+            }
+        )
         ttl = int(ends_at - time.time()) + 300
         await self._r.set(key, data, ex=max(ttl, 60))
         return roulette_id
@@ -53,14 +63,14 @@ class MuteRouletteStoreMixin:
         if user_id in data["participants"]:
             return False
         data["participants"].append(user_id)
-        ttl = await self._r.ttl(key)
-        await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
-        return True
+        # XX: не воскрешать уже завершённую рулетку; KEEPTTL: не сдвигать срок
+        return bool(await self._r.set(key, json.dumps(data), xx=True, keepttl=True))
 
     async def mute_roulette_delete(self, chat_id: int, roulette_id: str) -> dict | None:
-        key = self._mg_key(chat_id, roulette_id)
-        raw = await self._r.get(key)
-        await self._r.delete(key)
+        """Атомарно забирает рулетку (GETDEL): если её одновременно завершают
+        команда и цикл, данные получит только один — мутов не будет дважды.
+        """
+        raw = await self._r.getdel(self._mg_key(chat_id, roulette_id))
         return json.loads(raw) if raw else None
 
     async def mute_roulette_set_message_id(self, chat_id: int, roulette_id: str, message_id: int) -> None:
@@ -70,8 +80,7 @@ class MuteRouletteStoreMixin:
             return
         data = json.loads(raw)
         data["message_id"] = message_id
-        ttl = await self._r.ttl(key)
-        await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
+        await self._r.set(key, json.dumps(data), xx=True, keepttl=True)
 
     async def mute_roulette_count(self, chat_id: int, roulette_id: str) -> int:
         raw = await self._r.get(self._mg_key(chat_id, roulette_id))

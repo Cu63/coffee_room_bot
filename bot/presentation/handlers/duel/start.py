@@ -19,13 +19,6 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import (
-    NO_PREVIEW,
-    check_gameban,
-    reply_and_delete,
-    schedule_delete_id,
-)
-
 from bot.presentation.handlers.duel.helpers import (
     _DUEL_INVITE_TTL,
     _DUEL_TIMEOUT,
@@ -34,12 +27,19 @@ from bot.presentation.handlers.duel.helpers import (
     _invite_kb,
     _make_invite_id,
 )
+from bot.presentation.utils import (
+    NO_PREVIEW,
+    check_gameban,
+    reply_and_delete,
+    schedule_delete_id,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="duel_start")
 
 
 # ── /duel @user <game> <bet> ─────────────────────────────────────────────
+
 
 @router.message(Command("duel"))
 @inject
@@ -211,8 +211,10 @@ async def cmd_duel(
         reply_markup=_invite_kb(invite_id),
     )
 
-    # Сохраняем message_id и планируем удаление сообщения через таймаут
+    # Сохраняем message_id и планируем удаление сообщения через таймаут.
+    # XX: если приглашение уже приняли или отклонили (ключ удалён), не воскрешаем его —
+    # иначе cleanup-loop вернул бы ставку второй раз.
     data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_DUEL_INVITE_TTL)
+    await store._r.set(key, json.dumps(data), xx=True, keepttl=True)
 
     schedule_delete_id(message.bot, chat_id, message.message_id, delay=5)

@@ -37,34 +37,36 @@ async def cmd_transfer(
     chat_id = message.chat.id
     parsed = await _resolve_user_and_number(command.args, user_repo)
     if parsed is None:
-        await reply_and_delete(message,formatter._t["transfer_usage"])
+        await reply_and_delete(message, formatter._t["transfer_usage"])
         return
     target, amount = parsed
     if amount <= 0:
-        await reply_and_delete(message,formatter._t["transfer_invalid_amount"])
+        await reply_and_delete(message, formatter._t["transfer_invalid_amount"])
         return
     if target is None:
-        await reply_and_delete(message,formatter._t["error_user_not_found"])
+        await reply_and_delete(message, formatter._t["error_user_not_found"])
         return
     if target.id == message.from_user.id:
-        await reply_and_delete(message,formatter._t["transfer_self"])
+        await reply_and_delete(message, formatter._t["transfer_self"])
         return
     result = await score_service.transfer_score(
         sender_id=message.from_user.id, receiver_id=target.id, chat_id=chat_id, amount=amount
     )
     if not result.success:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["transfer_not_enough"].format(
                 amount=amount,
                 score_word=p.pluralize(amount),
                 balance=result.current_balance,
                 score_word_balance=p.pluralize(result.current_balance),
-            )
+            ),
         )
         return
     sender_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     receiver_link = user_link(target.username, target.full_name, target.id)
-    await reply_and_delete(message,
+    await reply_and_delete(
+        message,
         formatter._t["transfer_success"].format(
             sender=sender_link,
             receiver=receiver_link,

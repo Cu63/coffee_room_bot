@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from bot.application.interfaces.dice_repository import IDiceRepository
@@ -19,7 +19,7 @@ class CreateResult:
 @dataclass
 class JoinResult:
     success: bool
-    already_joined: bool = False        # уже в этой игре
+    already_joined: bool = False  # уже в этой игре
     already_in_other_game: bool = False  # уже в другой активной игре чата
     not_enough: bool = False
     game_not_found: bool = False
@@ -31,8 +31,8 @@ class JoinResult:
 class FinishResult:
     game: DiceGame
     participants: list[int]
-    dice_results: dict[int, int]         # user_id -> dice_value
-    winners: list[int]                   # user_ids с максимальным значением
+    dice_results: dict[int, int]  # user_id -> dice_value
+    winners: list[int]  # user_ids с максимальным значением
     prize_per_winner: int
     total_pot: int
 
@@ -60,14 +60,12 @@ class DiceService:
         if await self._dice_repo.is_user_in_active_game(chat_id, created_by):
             return CreateResult(game=None, user_already_in_game=True)
 
-        score = await self._score_repo.get(created_by, chat_id)
-        balance = score.value if score else 0
-        if balance < bet:
+        # Проверка баланса и списание — один атомарный запрос
+        if await self._score_repo.try_debit(created_by, chat_id, bet) is None:
             return CreateResult(game=None, not_enough=True)
 
         game = DiceGame(chat_id=chat_id, bet=bet, ends_at=ends_at, created_by=created_by)
         game = await self._dice_repo.create(game)
-        await self._score_repo.add_delta(created_by, chat_id, -bet)
         await self._dice_repo.add_participant(game.id, created_by)  # type: ignore[arg-type]
         return CreateResult(game=game)
 
@@ -97,19 +95,24 @@ class DiceService:
         if await self._dice_repo.is_user_in_active_game(game.chat_id, user_id):
             return JoinResult(success=False, already_in_other_game=True)
 
-        score = await self._score_repo.get(user_id, game.chat_id)
-        balance = score.value if score else 0
-        if balance < game.bet:
+        # Проверка баланса и списание — один атомарный запрос
+        if await self._score_repo.try_debit(user_id, game.chat_id, game.bet) is None:
+            score = await self._score_repo.get(user_id, game.chat_id)
+            balance = score.value if score else 0
             return JoinResult(success=False, not_enough=True, balance=balance, bet=game.bet)
 
-        await self._dice_repo.add_participant(game_id, user_id)
-        await self._score_repo.add_delta(user_id, game.chat_id, -game.bet)
+        if not await self._dice_repo.add_participant(game_id, user_id):
+            # Параллельное нажатие того же игрока уже добавило его — возвращаем ставку
+            await self._score_repo.add_delta(user_id, game.chat_id, game.bet)
+            return JoinResult(success=False, already_joined=True)
         return JoinResult(success=True)
 
     async def count_participants(self, game_id: int) -> int:
         return await self._dice_repo.count_participants(game_id)
 
-    async def finish(self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None) -> FinishResult | None:
+    async def finish(
+        self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None
+    ) -> FinishResult | None:
         """Завершает игру с уже известными значениями костей. Распределяет призы."""
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:

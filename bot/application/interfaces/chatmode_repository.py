@@ -8,15 +8,14 @@ from datetime import datetime
 @dataclass(slots=True)
 class ChatmodeEntry:
     chat_id: int
-    mode: str                  # 'silence' | 'gif'
-    activated_by: int          # user_id
+    mode: str  # 'silence' | 'gif'
+    activated_by: int  # user_id
     activated_at: datetime
     expires_at: datetime
-    saved_perms: dict          # права чата до активации
+    saved_perms: dict  # права чата до активации
 
 
 class IChatmodeRepository(ABC):
-
     @abstractmethod
     async def get(self, chat_id: int) -> ChatmodeEntry | None:
         """Вернуть активный режим чата или None."""

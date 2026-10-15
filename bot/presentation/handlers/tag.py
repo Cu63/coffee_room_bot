@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Router
@@ -44,27 +45,27 @@ async def cmd_tag(
     chat_id = message.chat.id
     args = command.args
     if not args:
-        await reply_and_delete(message,
-            formatter._t["tag_usage"].format(cost_self=tc.cost_self, sw_self=p.pluralize(tc.cost_self))
+        await reply_and_delete(
+            message, formatter._t["tag_usage"].format(cost_self=tc.cost_self, sw_self=p.pluralize(tc.cost_self))
         )
         return
     parts = args.strip().split(maxsplit=1)
     if parts[0].startswith("@"):
         target = await user_repo.get_by_username(parts[0].lstrip("@"))
         if target is None:
-            await reply_and_delete(message,formatter._t["error_user_not_found"])
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
             return
         new_tag = parts[1].strip() if len(parts) > 1 else None
         if new_tag is None:
-            await reply_and_delete(message,
-                formatter._t["tag_usage"].format(cost_self=tc.cost_self, sw_self=p.pluralize(tc.cost_self))
+            await reply_and_delete(
+                message, formatter._t["tag_usage"].format(cost_self=tc.cost_self, sw_self=p.pluralize(tc.cost_self))
             )
             return
         is_self = target.id == message.from_user.id
     else:
         target = await user_repo.get_by_id(message.from_user.id)
         if target is None:
-            await reply_and_delete(message,formatter._t["error_user_not_found"])
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
             return
         new_tag = args.strip()
         is_self = True
@@ -78,13 +79,17 @@ async def cmd_tag(
             hours = ttl // 3600
             minutes = (ttl % 3600) // 60
             if hours > 0:
-                await reply_and_delete(message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {hours}ч {minutes}мин.")
+                await reply_and_delete(
+                    message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {hours}ч {minutes}мин."
+                )
             else:
-                await reply_and_delete(message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {minutes}мин.")
+                await reply_and_delete(
+                    message, f"⏳ Тег можно менять раз в {tc.cooldown_hours}ч. Осталось: {minutes}мин."
+                )
             return
 
     if not clearing and len(new_tag) > tc.max_length:
-        await reply_and_delete(message,formatter._t["tag_too_long"].format(max=tc.max_length))
+        await reply_and_delete(message, formatter._t["tag_too_long"].format(max=tc.max_length))
         return
     if is_self:
         cost = tc.cost_self
@@ -92,7 +97,7 @@ async def cmd_tag(
         try:
             member = await bot.get_chat_member(chat_id, target.id)
         except Exception:
-            await reply_and_delete(message,formatter._t["tag_failed"])
+            await reply_and_delete(message, formatter._t["tag_failed"])
             return
         if isinstance(member, ChatMemberOwner):
             cost = tc.cost_owner
@@ -103,19 +108,20 @@ async def cmd_tag(
     if not is_free:
         score = await score_service.get_score(message.from_user.id, chat_id)
         if score.value < cost:
-            await reply_and_delete(message,
+            await reply_and_delete(
+                message,
                 formatter._t["tag_not_enough"].format(
                     cost=cost,
                     score_word=p.pluralize(cost),
                     balance=score.value,
                     score_word_balance=p.pluralize(score.value),
-                )
+                ),
             )
             return
     try:
         await bot.set_chat_member_tag(chat_id=chat_id, user_id=target.id, tag=None if clearing else new_tag)
     except Exception:
-        await reply_and_delete(message,formatter._t["tag_failed"])
+        await reply_and_delete(message, formatter._t["tag_failed"])
         return
 
     if not is_free and tc.cooldown_hours > 0:
@@ -127,22 +133,27 @@ async def cmd_tag(
         text = (
             formatter._t["tag_cleared_free"].format(target=target_link)
             if clearing
-            else formatter._t["tag_success_free"].format(target=target_link, tag=new_tag)
+            else formatter._t["tag_success_free"].format(target=target_link, tag=html.escape(new_tag))
         )
-        await reply_and_delete(message,text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         return
     result = await score_service.spend_score(
-        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, emoji=SPECIAL_EMOJI["tag"],
+        actor_id=message.from_user.id,
+        target_id=target.id,
+        chat_id=chat_id,
+        cost=cost,
+        emoji=SPECIAL_EMOJI["tag"],
         bot_id=message.bot.id,
     )
     if not result.success:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["tag_not_enough"].format(
                 cost=cost,
                 score_word=p.pluralize(cost),
                 balance=result.current_balance,
                 score_word_balance=p.pluralize(result.current_balance),
-            )
+            ),
         )
         return
     if clearing:
@@ -156,10 +167,10 @@ async def cmd_tag(
     else:
         text = formatter._t["tag_success"].format(
             target=target_link,
-            tag=new_tag,
+            tag=html.escape(new_tag),
             cost=cost,
             score_word=p.pluralize(cost),
             balance=result.new_balance,
             score_word_balance=p.pluralize(result.new_balance),
         )
-    await reply_and_delete(message,text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)

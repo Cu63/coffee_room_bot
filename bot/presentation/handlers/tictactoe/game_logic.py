@@ -12,8 +12,11 @@ from aiogram.types import (
 
 # ── Константы ──────────────────────────────────────────────────────────
 _TTT_PREFIX = "ttt:"
-_TTT_GAME_TTL = 600  # 10 минут на игру целиком
+_TTT_GAME_TTL = 600  # 10 минут на ход (expires_at продлевается каждым ходом)
 _TTT_LOBBY_TTL = 300  # 5 минут на принятие вызова
+# Запас Redis-TTL поверх логического expires_at: ttt_cleanup_loop должен успеть
+# увидеть просроченную игру и рассчитать ставки до того, как Redis удалит ключ.
+_TTT_REDIS_BUFFER = 3600
 _MAX_PIECES = 3  # максимум фигур на поле у каждого игрока
 _DELETE_DELAY = 120  # задержка удаления результатов
 
@@ -26,9 +29,14 @@ _CELL_O_FADE = "🟧"  # фигура O, которая исчезнет при 
 
 # Выигрышные комбинации
 _WIN_COMBOS = [
-    (0, 1, 2), (3, 4, 5), (6, 7, 8),  # ряды
-    (0, 3, 6), (1, 4, 7), (2, 5, 8),  # колонки
-    (0, 4, 8), (2, 4, 6),              # диагонали
+    (0, 1, 2),
+    (3, 4, 5),
+    (6, 7, 8),  # ряды
+    (0, 3, 6),
+    (1, 4, 7),
+    (2, 5, 8),  # колонки
+    (0, 4, 8),
+    (2, 4, 6),  # диагонали
 ]
 
 
@@ -74,11 +82,7 @@ def _render_board(
             cells.append(_CELL_X_FADE if i == fade_cell else _CELL_X)
         elif val == 2:
             cells.append(_CELL_O_FADE if i == fade_cell else _CELL_O)
-    return (
-        f"{cells[0]}{cells[1]}{cells[2]}\n"
-        f"{cells[3]}{cells[4]}{cells[5]}\n"
-        f"{cells[6]}{cells[7]}{cells[8]}"
-    )
+    return f"{cells[0]}{cells[1]}{cells[2]}\n{cells[3]}{cells[4]}{cells[5]}\n{cells[6]}{cells[7]}{cells[8]}"
 
 
 def _game_kb(game_id: str, board: list[int], active: bool = True) -> InlineKeyboardMarkup:

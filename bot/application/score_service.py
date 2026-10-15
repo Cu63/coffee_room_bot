@@ -43,6 +43,22 @@ SPECIAL_EMOJI = {
     "unsound": "🔕",
 }
 
+_last_pseudo_message_id = 0
+
+
+def _next_pseudo_message_id() -> int:
+    """Отрицательный message_id для служебных событий (не пересекается с реальными сообщениями).
+
+    Строго убывает в пределах процесса: две записи подряд (например, обе стороны перевода)
+    не получат одинаковый id и не упрутся в UNIQUE (actor_id, message_id, emoji).
+    """
+    global _last_pseudo_message_id
+    candidate = -(time.time_ns() // 1000)
+    if candidate >= _last_pseudo_message_id:
+        candidate = _last_pseudo_message_id - 1
+    _last_pseudo_message_id = candidate
+    return candidate
+
 
 @dataclass(slots=True)
 class SpendResult:
@@ -246,7 +262,6 @@ class ScoreService:
         return ApplyResult(applied=True, delta=reverse_delta, new_value=new_value)
 
     async def get_stats(self, user_id: int, chat_id: int):
-        from bot.domain.entities import UserStats  # локальный импорт во избежание цикла
         return await self._stats_repo.get(user_id, chat_id)
 
     async def get_score(self, user_id: int, chat_id: int) -> Score:
@@ -296,7 +311,24 @@ class ScoreService:
         emoji = SPECIAL_EMOJI["add"] if delta >= 0 else SPECIAL_EMOJI["sub"]
         await self._save_special_event(admin_id, user_id, chat_id, delta, emoji)
         return new_value
-    
+
+    async def debit_up_to(
+        self,
+        user_id: int,
+        chat_id: int,
+        amount: int,
+        *,
+        admin_id: int,
+    ) -> int:
+        """Атомарно списать до amount, не уводя баланс в минус. Возвращает списанное.
+
+        В историю пишется так же, как add_score с отрицательной дельтой.
+        """
+        taken = await self._score_repo.debit_up_to(user_id, chat_id, amount)
+        if taken > 0:
+            await self._save_special_event(admin_id, user_id, chat_id, -taken, SPECIAL_EMOJI["sub"])
+        return taken
+
     async def add_score_quiet(
         self,
         user_id: int,
@@ -316,31 +348,32 @@ class ScoreService:
         emoji: str = "",
         *,
         bot_id: int | None = None,
+        quiet: bool = False,
     ) -> SpendResult:
         """Списать баллы у actor за действие над target.
 
         Возвращает SpendResult. В долг не даётся — если баланс < cost, отказ.
+        Проверка и списание атомарны, поэтому параллельные траты не уводят баланс в минус.
         Если передан bot_id — списанные баллы начисляются боту.
+        quiet=True — не записывать событие в историю.
         """
-        score = await self._score_repo.get(actor_id, chat_id)
-        balance = score.value if score else 0
-
-        if balance < cost:
+        new_balance = await self._score_repo.try_debit(actor_id, chat_id, cost)
+        if new_balance is None:
+            balance = (await self.get_score(actor_id, chat_id)).value
             return SpendResult(success=False, cost=cost, current_balance=balance)
-
-        new_balance = await self._score_repo.add_delta(actor_id, chat_id, -cost)
 
         # Начислить списанные баллы боту
         if bot_id is not None:
             await self._score_repo.add_delta(bot_id, chat_id, cost)
 
-        await self._save_special_event(
-            actor_id,
-            target_id,
-            chat_id,
-            -cost,
-            emoji or SPECIAL_EMOJI["mute"],
-        )
+        if not quiet:
+            await self._save_special_event(
+                actor_id,
+                target_id,
+                chat_id,
+                -cost,
+                emoji or SPECIAL_EMOJI["mute"],
+            )
 
         return SpendResult(success=True, cost=cost, new_balance=new_balance)
 
@@ -363,13 +396,11 @@ class ScoreService:
             balance = score.value if score else 0
             return TransferResult(success=False, amount=amount, current_balance=balance)
 
-        score = await self._score_repo.get(sender_id, chat_id)
-        balance = score.value if score else 0
-
-        if balance < amount:
+        sender_new = await self._score_repo.try_debit(sender_id, chat_id, amount)
+        if sender_new is None:
+            balance = (await self.get_score(sender_id, chat_id)).value
             return TransferResult(success=False, amount=amount, current_balance=balance)
 
-        sender_new = await self._score_repo.add_delta(sender_id, chat_id, -amount)
         receiver_new = await self._score_repo.add_delta(receiver_id, chat_id, amount)
 
         # Записываем два события в историю: списание у отправителя и зачисление получателю
@@ -387,7 +418,11 @@ class ScoreService:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["burst"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["burst"],
         )
         return new_value
 
@@ -395,7 +430,11 @@ class ScoreService:
         """Тихое начисление за разжигание дискуссии."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["spark"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["spark"],
         )
         return new_value
 
@@ -403,7 +442,11 @@ class ScoreService:
         """Тихое начисление за цепочку реплаев."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["chain"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["chain"],
         )
         return new_value
 
@@ -411,7 +454,11 @@ class ScoreService:
         """Начисление бонуса лидеру дня."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["daily_leader"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["daily_leader"],
         )
         return new_value
 
@@ -423,8 +470,7 @@ class ScoreService:
         delta: int,
         emoji: str,
     ) -> None:
-        # Отрицательный message_id на базе времени — уникален и отличается от реальных сообщений
-        pseudo_message_id = -int(time.time() * 1000)
+        pseudo_message_id = _next_pseudo_message_id()
         await self._event_repo.save(
             ScoreEvent(
                 chat_id=chat_id,

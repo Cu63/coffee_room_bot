@@ -66,11 +66,7 @@ class MuteMentionNotifyMiddleware(BaseMiddleware):
                     mentioned_id = user.id
 
             elif entity.type == "text_mention":
-                if (
-                    entity.user is not None
-                    and not entity.user.is_bot
-                    and entity.user.id != message.from_user.id
-                ):
+                if entity.user is not None and not entity.user.is_bot and entity.user.id != message.from_user.id:
                     mentioned_id = entity.user.id
 
             if mentioned_id is not None:
@@ -80,6 +76,7 @@ class MuteMentionNotifyMiddleware(BaseMiddleware):
             return
 
         from bot.domain.tz import now_msk
+
         now = now_msk()
 
         for user_id in muted_user_ids:

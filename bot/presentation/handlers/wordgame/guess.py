@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import timedelta
 
 from aiogram import Bot, F, Router
@@ -36,6 +37,7 @@ router = Router(name="wordgame_guess")
 
 
 # ── Reply на игровое сообщение бота = попытка угадать ───────────────────────
+
 
 @router.message(
     F.reply_to_message.as_("replied"),
@@ -79,9 +81,7 @@ async def msg_reply_guess(
     wg = config.wordgame
 
     if not is_valid_word(guess, wg.min_word_length, wg.max_word_length):
-        err = await message.reply(
-            f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}."
-        )
+        err = await message.reply(f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}.")
         schedule_delete(bot, err, message, delay=30)
         return
 
@@ -93,11 +93,13 @@ async def msg_reply_guess(
         schedule_delete(bot, err, message, delay=30)
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     if game.already_tried(user_id, guess):
         err = await message.reply(
@@ -107,7 +109,7 @@ async def msg_reply_guess(
         schedule_delete(bot, err, message, delay=30)
         return
 
-    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
+    user_mention = f'<a href="tg://user?id={user_id}">{html.escape(message.from_user.full_name)}</a>'
 
     # Проверка баллов — только если ставка игры > 0 (иначе все попытки бесплатные)
     cost = wg.attempt_cost
@@ -134,19 +136,18 @@ async def msg_reply_guess(
 
     if is_correct:
         # ── ПОБЕДА ──────────────────────────────────────────────────────
+        # Атомарно забираем игру: если её уже завершил другой верный ответ
+        # или цикл истечения, приз второй раз не выплачиваем.
+        if await store.wg_game_finish(game.game_id) is None:
+            return
         game.finished = True
         game.winner_id = user_id
-        await store.wg_game_finish(game.game_id)
         await store.wg_chat_remove(chat_id, game.game_id)
 
         # Спец-правило для loss_username в /rword: победа без приза + тихий мут на сутки.
         rwg = config.rwordgame
         winner_username = (message.from_user.username or "").lower()
-        is_penalty_winner = (
-            game.is_random
-            and bool(rwg.loss_username)
-            and winner_username == rwg.loss_username.lower()
-        )
+        is_penalty_winner = game.is_random and bool(rwg.loss_username) and winner_username == rwg.loss_username.lower()
         if is_penalty_winner:
             # Приз не начисляем; возвращаем ставку боту (её списали при создании игры)
             if game.bet > 0:
@@ -198,7 +199,13 @@ async def msg_reply_guess(
             schedule_delete(bot, result_msg, delay=30)
 
     else:
-        # ── НЕВЕРНО — редактируем игровое сообщение с новой маской ──────
+        # ── НЕВЕРНО ─────────────────────────────────────────────────────
+        # Сохраняем, только если игра ещё идёт: завершённую (победой или по
+        # времени) не воскрешаем, её сообщение не трогаем и плату не берём.
+        if not await store.wg_game_save_raw(game.game_id, game_to_raw(game)):
+            return
+
+        # Редактируем игровое сообщение с новой маской
         try:
             await bot.edit_message_text(
                 chat_id=chat_id,
@@ -209,12 +216,7 @@ async def msg_reply_guess(
         except TelegramBadRequest:
             pass
 
-        await store.wg_game_save_raw(game.game_id, game_to_raw(game))
-
-        hint_parts = [
-            f"❌ {user_mention}: «{guess}» — не то "
-            f"({matched_count}/{len(game.word)} на месте)"
-        ]
+        hint_parts = [f"❌ {user_mention}: «{guess}» — не то ({matched_count}/{len(game.word)} на месте)"]
 
         if game.bet > 0 and cost > 0 and had_revealed:
             if game.is_random:

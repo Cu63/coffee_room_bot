@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable
 
 import asyncpg
+from aiogram.exceptions import TelegramAPIError
 from dishka import Provider, Scope, provide
 
 from bot.application.interfaces.chatmode_repository import IChatmodeRepository
@@ -60,12 +61,18 @@ class DatabaseProvider(Provider):
     async def get_tx_manager(self, pool: asyncpg.Pool) -> AsyncIterable[ITransactionManager]:
         tm = PostgresTransactionManager(pool)
         await tm.begin()
-        try:
-            yield tm
-            await tm.commit()
-        except Exception:
+        # dishka закрывает генератор через asend(exc): исключение обработчика
+        # приходит ЗНАЧЕНИЕМ yield, а не выбрасывается внутрь генератора, —
+        # try/except вокруг yield здесь никогда бы не сработал.
+        exc = yield tm
+        if isinstance(exc, Exception) and not isinstance(exc, TelegramAPIError):
+            # Ошибка в коде, БД, Redis или AbortUpdate — откатываем частичные изменения
             await tm.rollback()
-            raise
+        else:
+            # Успех. Ошибка Telegram API: внешний эффект (сообщение, мут…) мог
+            # уже произойти — фиксируем то, что успели записать.
+            # Отмена задачи (BaseException) — как раньше, коммит.
+            await tm.commit()
 
     @provide(scope=Scope.REQUEST)
     def get_score_repo(self, tm: ITransactionManager) -> IScoreRepository:

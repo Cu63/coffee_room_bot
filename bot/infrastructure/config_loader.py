@@ -35,11 +35,11 @@ class BotSettings(BaseSettings):
 
     bot_token: str = ""
     aitunnel_api_key: str = ""
-    openai_api_key: str = ""      # API-ключ для /analyze и /wir (proxyapi.ru)
-    gigachat_api_key: str = ""    # ключ авторизации GigaChat для /genai (пусто = команда отключена)
+    openai_api_key: str = ""  # API-ключ для /analyze и /wir (proxyapi.ru)
+    gigachat_api_key: str = ""  # ключ авторизации GigaChat для /genai (пусто = команда отключена)
     openserp_url: str = "http://openserp:7000"
     redis_url: str = "redis://redis:6379/0"
-    log_chat_id: int = 0   # Telegram chat ID для отправки логов (0 = отключено)
+    log_chat_id: int = 0  # Telegram chat ID для отправки логов (0 = отключено)
     log_level: str = "ERROR"  # уровень логов для Telegram: ERROR, WARNING, INFO
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -48,7 +48,7 @@ class BotSettings(BaseSettings):
 class _BaseConfig(BaseModel):
     """Базовая модель с общими настройками для всех конфигов."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
 
 class ScoreConfig(_BaseConfig):
@@ -107,17 +107,18 @@ class XpConfig(_BaseConfig):
 
 class IqConfig(_BaseConfig):
     """Настройки IQ-системы."""
+
     enabled: bool = True
-    default: int = 89              # стартовый IQ у всех
-    win_reward: int = 1           # +IQ за победу в /ttt и /rword
-    daily_win_cap: int = 5        # максимум IQ за победы в сутки
-    substr_trigger: str = "67"    # подстрока в сообщении, снимающая IQ
-    substr_penalty: int = 1       # сколько IQ снимать за сообщение с подстрокой
-    buy_amount: int = 5           # сколько IQ даёт один пакет /buyiq
-    buy_cost: int = 1000          # стоимость одного пакета (в кирчиках)
-    max_buy_packs: int = 100      # максимум пакетов за один /buyiq
-    top_default: int = 30         # N по умолчанию для /topiq
-    top_max: int = 100            # максимум N для /topiq
+    default: int = 89  # стартовый IQ у всех
+    win_reward: int = 1  # +IQ за победу в /ttt и /rword
+    daily_win_cap: int = 5  # максимум IQ за победы в сутки
+    substr_trigger: str = "67"  # подстрока в сообщении, снимающая IQ
+    substr_penalty: int = 1  # сколько IQ снимать за сообщение с подстрокой
+    buy_amount: int = 5  # сколько IQ даёт один пакет /buyiq
+    buy_cost: int = 1000  # стоимость одного пакета (в кирчиках)
+    max_buy_packs: int = 100  # максимум пакетов за один /buyiq
+    top_default: int = 30  # N по умолчанию для /topiq
+    top_max: int = 100  # максимум N для /topiq
 
 
 class AutoReactConfig(_BaseConfig):
@@ -240,62 +241,68 @@ class RenewConfig(_BaseConfig):
 class WordgameConfig(_BaseConfig):
     min_bet: int = 0
     max_bet: int = 1000
-    min_duration_seconds: int = 180    # 3 минуты
-    max_duration_seconds: int = 3600   # 1 час
-    attempt_cost: int = 1              # баллов за неудачную попытку
+    min_duration_seconds: int = 180  # 3 минуты
+    max_duration_seconds: int = 3600  # 1 час
+    attempt_cost: int = 1  # баллов за неудачную попытку
     min_word_length: int = 2
     max_word_length: int = 32
-    max_games_per_window: int = 3      # макс. игр за окно
-    game_window_hours: int = 4         # окно лимита в часах
+    max_games_per_window: int = 3  # макс. игр за окно
+    game_window_hours: int = 4  # окно лимита в часах
 
 
 class RwordgameConfig(_BaseConfig):
     """Настройки /rword — угадайка с рандомным словом из словаря."""
-    max_bet: int = 50                  # максимальная ставка (лимит N)
-    min_word_length: int = 4           # минимальная длина загадываемого слова
-    max_word_length: int = 9           # максимальная длина загадываемого слова
+
+    max_bet: int = 50  # максимальная ставка (лимит N)
+    min_word_length: int = 4  # минимальная длина загадываемого слова
+    max_word_length: int = 9  # максимальная длина загадываемого слова
     words_file: str = "configs/words_ru.txt"
-    max_games_per_window: int = 5      # макс. игр за окно
-    game_window_hours: int = 2         # окно лимита в часах
-    cooldown_minutes: int = 15         # задержка между играми /rword
-    loss_username: str = ""            # username, который при победе получает мут вместо приза (без @)
-    loss_mute_minutes: int = 1440      # длительность мута для loss_username (сутки)
+    max_games_per_window: int = 5  # макс. игр за окно
+    game_window_hours: int = 2  # окно лимита в часах
+    cooldown_minutes: int = 15  # задержка между играми /rword
+    loss_username: str = ""  # username, который при победе получает мут вместо приза (без @)
+    loss_mute_minutes: int = 1440  # длительность мута для loss_username (сутки)
 
 
 class SixtySevenConfig(_BaseConfig):
     """Пасхалка «67»: награда 6-го числа месяца и мут за спам."""
+
     enabled: bool = True
-    reward: int = 67                   # кирчиков за первый «67» в день награды
-    reward_day: int = 6                # число месяца (МСК), когда даётся награда
-    mute_minutes: int = 67             # мут за 2-й и последующий «67» за день
+    reward: int = 67  # кирчиков за первый «67» в день награды
+    reward_day: int = 6  # число месяца (МСК), когда даётся награда
+    mute_minutes: int = 67  # мут за 2-й и последующий «67» за день
+
 
 class LotConfig(_BaseConfig):
     """Настройки /lot — аукцион."""
+
     enabled: bool = True
-    min_duration_sec: int = 60         # минимальная длительность (1 минута)
-    max_duration_sec: int = 86400      # максимальная длительность (24 часа)
-    min_start_price: int = 0           # минимальная стартовая цена
-    max_start_price: int = 100_000     # максимальная стартовая цена
+    min_duration_sec: int = 60  # минимальная длительность (1 минута)
+    max_duration_sec: int = 86400  # максимальная длительность (24 часа)
+    min_start_price: int = 0  # минимальная стартовая цена
+    max_start_price: int = 100_000  # максимальная стартовая цена
     bid_steps: list[int] = [5, 10, 25, 50, 100]  # шаги ставок
-    delete_delay: int = 120            # секунд до удаления итога
+    delete_delay: int = 120  # секунд до удаления итога
 
 
 class AnagramConfig(_BaseConfig):
     """Настройки /anagram — угадай слово по перемешанным буквам."""
+
     enabled: bool = True
-    min_bet: int = 5              # минимальная ставка (приз из баланса бота)
-    max_bet: int = 100            # максимальная ставка
-    min_word_length: int = 4      # минимальная длина загадываемого слова
-    max_word_length: int = 10     # максимальная длина загадываемого слова
-    attempt_cost: int = 1         # стоимость неверной попытки для игрока
+    min_bet: int = 5  # минимальная ставка (приз из баланса бота)
+    max_bet: int = 100  # максимальная ставка
+    min_word_length: int = 4  # минимальная длина загадываемого слова
+    max_word_length: int = 10  # максимальная длина загадываемого слова
+    attempt_cost: int = 1  # стоимость неверной попытки для игрока
     answer_timeout_seconds: int = 300  # секунд на угадывание (5 минут)
-    games_per_hour: float = 2.0   # частота авто-игр в час (0 = авто отключено)
-    auto_bet: int = 20            # приз для авто-опубликованных игр
-    cooldown_minutes: int = 15    # задержка между играми /anagram (в минутах)
+    games_per_hour: float = 2.0  # частота авто-игр в час (0 = авто отключено)
+    auto_bet: int = 20  # приз для авто-опубликованных игр
+    cooldown_minutes: int = 15  # задержка между играми /anagram (в минутах)
 
 
 class TicTacToeConfig(_BaseConfig):
     """Настройки /ttt — исчезающие крестики-нолики."""
+
     enabled: bool = True
     min_bet: int = 1
     max_bet: int = 100
@@ -303,53 +310,60 @@ class TicTacToeConfig(_BaseConfig):
 
 class BuyopConfig(_BaseConfig):
     """Настройки /buyop — покупка титула админа без прав."""
+
     cost: int = 500
-    cost_step: int = 500       # прибавка к цене за каждого купленного админа
+    cost_step: int = 500  # прибавка к цене за каждого купленного админа
     tag: str = ""  # пустая строка = без тега
 
 
 class IdeaConfig(_BaseConfig):
     """Настройки /idea — голосование за идеи."""
-    cost: int = 0               # стоимость создания идеи (0 = бесплатно)
-    votes_threshold: int = 5    # сколько 👍 нужно для уведомления админов
-    vote_ttl_hours: int = 72    # сколько часов принимать голоса
+
+    cost: int = 0  # стоимость создания идеи (0 = бесплатно)
+    votes_threshold: int = 5  # сколько 👍 нужно для уведомления админов
+    vote_ttl_hours: int = 72  # сколько часов принимать голоса
 
 
 class PokerConfig(_BaseConfig):
     """Настройки /poker (кочерга) — удар кочергой с рулеткой дебаффов."""
+
     enabled: bool = True
-    cost: int = 50                    # стоимость вызова /poker
-    cooldown_hours: int = 6           # кулдаун между использованиями
-    steal_percent: int = 5            # % от баланса атакующего — макс. кража
-    steal_cap: int = 500              # жёсткий потолок кражи за один /poker (кирчиков)
-    mute_minutes: int = 5             # длительность мута-дебаффа
-    gameban_minutes: int = 30         # длительность запрета игр
-    score_percent: int = 5            # % баланса — потеря кирчиков
-    iq_loss: int = 3                  # сколько IQ теряет жертва удара
-    backfire_chance: int = 10         # шанс % удара по себе при атаке другого
+    cost: int = 50  # стоимость вызова /poker
+    cooldown_hours: int = 6  # кулдаун между использованиями
+    steal_percent: int = 5  # % от баланса атакующего — макс. кража
+    steal_cap: int = 500  # жёсткий потолок кражи за один /poker (кирчиков)
+    mute_minutes: int = 5  # длительность мута-дебаффа
+    gameban_minutes: int = 30  # длительность запрета игр
+    score_percent: int = 5  # % баланса — потеря кирчиков
+    iq_loss: int = 3  # сколько IQ теряет жертва удара
+    backfire_chance: int = 10  # шанс % удара по себе при атаке другого
 
 
 class DonotbuyConfig(_BaseConfig):
     """Настройки /donotbuy — «кнопка наёбка»."""
+
     enabled: bool = True
-    max_price: int = 5000             # верхняя граница случайной цены за нажатие
-    daily_limit: int = 2              # нажатий в сутки на пользователя (в т.ч. неудачных)
-    grid_size: int = 9               # сколько ячеек в сетке (кнопка стоит в случайной)
+    max_price: int = 5000  # верхняя граница случайной цены за нажатие
+    daily_limit: int = 2  # нажатий в сутки на пользователя (в т.ч. неудачных)
+    grid_size: int = 9  # сколько ячеек в сетке (кнопка стоит в случайной)
 
 
 class SelfbanConfig(_BaseConfig):
     """Настройки /selfban — самозапрет на игры."""
-    min_minutes: int = 30             # минимальная длительность
-    max_minutes: int = 10080          # максимальная длительность (7 дней)
+
+    min_minutes: int = 30  # минимальная длительность
+    max_minutes: int = 10080  # максимальная длительность (7 дней)
 
 
 class BugConfig(_BaseConfig):
     """Конфиг для команды /bug — кому отправлять баг-репорты."""
+
     recipients: list[int] = []
 
 
 class LoggingConfig(_BaseConfig):
     """Настройки логирования через structlog."""
+
     level: int = logging.INFO
     human_readable_logs: bool = False  # True = цветной консольный вывод (dev), False = JSON (prod)
 
@@ -367,35 +381,39 @@ class LoggingConfig(_BaseConfig):
 
 class DailySummaryConfig(_BaseConfig):
     """Настройки ежедневной сводки чата."""
+
     enabled: bool = False
-    time: str = "22:00"           # HH:MM, часовой пояс MSK
-    max_messages: int = 2000      # потолок на случай очень активного чата
+    time: str = "22:00"  # HH:MM, часовой пояс MSK
+    max_messages: int = 2000  # потолок на случай очень активного чата
     # ── map-reduce: слабая модель видит за раз только маленькую порцию ──
-    chunk_size: int = 200         # сообщений в одной пачке на этапе map
-    map_max_tokens: int = 1000    # лимит токенов на тезисы одной пачки
-    temperature: float = 0.3      # ниже = меньше отсебятины/галлюцинаций
+    chunk_size: int = 200  # сообщений в одной пачке на этапе map
+    map_max_tokens: int = 1000  # лимит токенов на тезисы одной пачки
+    temperature: float = 0.3  # ниже = меньше отсебятины/галлюцинаций
 
 
 class DailyLeaderboardConfig(_BaseConfig):
     """Настройки ежедневного лидерборда активности."""
+
     enabled: bool = True
-    time: str = "23:00"               # HH:MM, MSK — когда подводить итоги
-    bonus_messages: int = 50          # за наибольшее кол-во сообщений
-    bonus_reactions_given: int = 50   # за наибольшее кол-во данных реакций
+    time: str = "23:00"  # HH:MM, MSK — когда подводить итоги
+    bonus_messages: int = 50  # за наибольшее кол-во сообщений
+    bonus_reactions_given: int = 50  # за наибольшее кол-во данных реакций
     bonus_reactions_received: int = 50  # за наибольшее кол-во собранных реакций
-    bonus_replies: int = 50           # за наибольшее кол-во реплаев
-    bonus_ttt_wins: int = 50          # за наибольшее кол-во побед в TTT
-    bonus_wordgame_wins: int = 50     # за наибольшее кол-во побед в word/rword
+    bonus_replies: int = 50  # за наибольшее кол-во реплаев
+    bonus_ttt_wins: int = 50  # за наибольшее кол-во побед в TTT
+    bonus_wordgame_wins: int = 50  # за наибольшее кол-во побед в word/rword
 
 
 class ChatmodePresetConfig(_BaseConfig):
     """Настройки одного пресета режима чата."""
+
     cost_per_minute: int = 5
     max_minutes: int = 30
 
 
 class ChatmodeConfig(_BaseConfig):
     """Настройки режимов чата (/silence, /gif)."""
+
     enabled: bool = True
     default_minutes: int = 5
     silence: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=10, max_minutes=30)
@@ -404,14 +422,16 @@ class ChatmodeConfig(_BaseConfig):
 
 class NewsFeedConfig(_BaseConfig):
     """Один RSS-источник новостей."""
+
     name: str
     url: str
 
 
 class NewsConfig(_BaseConfig):
     """Настройки /news — лента IT-новостей."""
-    hourly_limit: int = 2   # вызовов на пользователя в час (0 = без лимита)
-    use_llm: bool = True    # фильтровать через LLM (IT + позитив)
+
+    hourly_limit: int = 2  # вызовов на пользователя в час (0 = без лимита)
+    use_llm: bool = True  # фильтровать через LLM (IT + позитив)
     translate: bool = True  # переводить иноязычные новости на русский через LLM
     feeds: list[NewsFeedConfig] = []
 
@@ -422,15 +442,16 @@ class NewsConfig(_BaseConfig):
 
 class AnalyzeConfig(_BaseConfig):
     """Настройки /analyze и /wir — анализ чата через OpenAI API."""
+
     model: str = "gpt-4.1-nano"
     base_url: str = "https://api.proxyapi.ru/openai/v1"
     max_output_tokens: int = 4096
-    max_messages: int = 500           # максимум N для /analyze
-    wir_default_messages: int = 300   # N по умолчанию для /wir
-    wir_max_messages: int = 1000      # максимум N для /wir
+    max_messages: int = 500  # максимум N для /analyze
+    wir_default_messages: int = 300  # N по умолчанию для /wir
+    wir_max_messages: int = 1000  # максимум N для /wir
     # ── Лимиты ───────────────────────────────────────────────────
     daily_input_token_limit: int = 50_000  # max input-токенов на юзера в сутки (0 = без лимита)
-    max_history_hours: int = 32            # максимальная глубина истории в часах
+    max_history_hours: int = 32  # максимальная глубина истории в часах
 
 
 class UnsoundConfig(_BaseConfig):
@@ -439,11 +460,12 @@ class UnsoundConfig(_BaseConfig):
     Пока запрет активен, сообщения с @упоминанием этого участника
     удаляются, а в чат уходит короткое предупреждение.
     """
+
     enabled: bool = True
-    cost_per_minute: int = 1        # стоимость одной минуты (в кирчиках)
+    cost_per_minute: int = 1  # стоимость одной минуты (в кирчиках)
     min_minutes: int = 1
-    max_minutes: int = 10080        # максимум 7 дней
-    notice_delete_seconds: int = 150   # через сколько убирать «юзер недоступен»
+    max_minutes: int = 10080  # максимум 7 дней
+    notice_delete_seconds: int = 150  # через сколько убирать «юзер недоступен»
     notice_cooldown_seconds: int = 30  # как часто повторять предупреждение (0 = всегда)
 
 
@@ -453,13 +475,14 @@ class FanficConfig(_BaseConfig):
     Ходит к тому же провайдеру, что /analyze и /wir (OPENAI_API_KEY),
     но своей — самой дешёвой — моделью.
     """
+
     enabled: bool = True
     model: str = "gpt-4.1-nano"
     max_output_tokens: int = 2048
-    temperature: float = 1.0       # выше = больше фантазии
-    messages_per_user: int = 10    # сколько последних сообщений героя брать в контекст
-    max_users: int = 6             # максимум героев за один фанфик
-    max_prompt_length: int = 500   # максимальная длина сюжета
+    temperature: float = 1.0  # выше = больше фантазии
+    messages_per_user: int = 10  # сколько последних сообщений героя брать в контекст
+    max_users: int = 6  # максимум героев за один фанфик
+    max_prompt_length: int = 500  # максимальная длина сюжета
 
 
 class GenaiConfig(_BaseConfig):
@@ -468,27 +491,30 @@ class GenaiConfig(_BaseConfig):
     Ключ авторизации живёт в .env (GIGACHAT_API_KEY). Без ключа команда
     не регистрируется, остальной бот работает как обычно.
     """
+
     enabled: bool = True
-    cost: int = 100                # стоимость одной генерации (в кирчиках)
-    model: str = "GigaChat"        # самая дешёвая модель (GigaChat Lite)
+    cost: int = 100  # стоимость одной генерации (в кирчиках)
+    model: str = "GigaChat"  # самая дешёвая модель (GigaChat Lite)
     base_url: str = "https://api.giga.chat/v1"
     oauth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
     scope: str = "GIGACHAT_API_PERS"  # PERS — физлица, B2B/CORP — юрлица
-    verify_ssl: bool = True        # False — если в системе нет сертификата Минцифры
-    timeout: int = 120             # таймаут HTTP-запроса к API (секунды)
-    max_prompt_length: int = 500   # максимальная длина описания картинки
+    verify_ssl: bool = True  # False — если в системе нет сертификата Минцифры
+    timeout: int = 120  # таймаут HTTP-запроса к API (секунды)
+    max_prompt_length: int = 500  # максимальная длина описания картинки
 
 
 class TaxBracket(_BaseConfig):
     """Одна ступень прогрессивной шкалы налога."""
+
     threshold: int = 10000
     percent: int = 3
 
 
 class TaxConfig(_BaseConfig):
     """Настройки ежедневного налога на крупные балансы."""
+
     enabled: bool = True
-    time: str = "03:00"                    # HH:MM MSK — когда списывать
+    time: str = "03:00"  # HH:MM MSK — когда списывать
     brackets: list[TaxBracket] = [
         TaxBracket(threshold=10000, percent=3),
         TaxBracket(threshold=20000, percent=5),

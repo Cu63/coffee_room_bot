@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import time
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
@@ -31,6 +32,7 @@ from bot.presentation.handlers.tictactoe.game_logic import (
     _MAX_PIECES,
     _TTT_GAME_TTL,
     _TTT_LOBBY_TTL,
+    _TTT_REDIS_BUFFER,
     _check_winner,
     _game_kb,
     _is_draw,
@@ -88,6 +90,18 @@ async def cb_ttt_accept(
         await safe_callback_answer(cb, "Нельзя играть с самим собой.", show_alert=True)
         return
 
+    # Лобби без expires_at создано до появления поля — считаем от created_at
+    expires_at = data.get("expires_at") or data.get("created_at", 0) + _TTT_LOBBY_TTL
+    if expires_at < time.time():
+        await safe_callback_answer(cb, formatter._t["ttt_expired"], show_alert=True)
+        return
+
+    # Одно принятие на лобби: второй нажавший (или двойное нажатие) не будет списан
+    accept_lock = f"ttt:lock:accept:{chat_id}:{game_id}"
+    if not await store._r.set(accept_lock, "1", nx=True, ex=30):
+        await safe_callback_answer(cb, "Игра уже началась.", show_alert=True)
+        return
+
     # Upsert пользователя
     await user_repo.upsert(
         User(
@@ -109,6 +123,7 @@ async def cb_ttt_accept(
         emoji=SPECIAL_EMOJI.get("ttt", "🎮"),
     )
     if not result.success:
+        await store._r.delete(accept_lock)
         sw = p.pluralize(bet)
         sw_bal = p.pluralize(result.current_balance)
         await safe_callback_answer(
@@ -134,15 +149,25 @@ async def cb_ttt_accept(
         data["player_x_name"] = cb.from_user.full_name or ""
         data["player_x_username"] = cb.from_user.username or ""
     data["turn"] = "x"  # X всегда ходит первым
+    data["expires_at"] = time.time() + _TTT_GAME_TTL
 
-    await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
+    # XX: если лобби уже забрал цикл истечения (и вернул ставку создателю) —
+    # игру не воскрешаем, а ставку принимающего возвращаем
+    if not await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER, xx=True):
+        await score_service.add_score(user_id, chat_id, bet, admin_id=user_id)
+        await safe_callback_answer(cb, formatter._t["ttt_expired"], show_alert=True)
+        return
 
     # Определяем имена
     x_display = user_link(
-        data["player_x_username"] or None, data["player_x_name"], data["player_x"],
+        data["player_x_username"] or None,
+        data["player_x_name"],
+        data["player_x"],
     )
     o_display = user_link(
-        data["player_o_username"] or None, data["player_o_name"], data["player_o"],
+        data["player_o_username"] or None,
+        data["player_o_name"],
+        data["player_o"],
     )
 
     turn_player = x_display
@@ -281,10 +306,14 @@ async def cb_ttt_move(
 
         p = pluralizer
         x_display = user_link(
-            data["player_x_username"] or None, data["player_x_name"], data["player_x"],
+            data["player_x_username"] or None,
+            data["player_x_name"],
+            data["player_x"],
         )
         o_display = user_link(
-            data["player_o_username"] or None, data["player_o_name"], data["player_o"],
+            data["player_o_username"] or None,
+            data["player_o_name"],
+            data["player_o"],
         )
         bet = data["bet"]
         sw_bet = p.pluralize(bet)
@@ -356,10 +385,14 @@ async def cb_ttt_move(
             await safe_callback_answer(cb)
             return
 
-        # Переключаем ход
+        # Переключаем ход; каждый ход продлевает срок игры
         next_turn = "o" if turn == "x" else "x"
         data["turn"] = next_turn
-        await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL)
+        data["expires_at"] = time.time() + _TTT_GAME_TTL
+        # XX: игру, которую уже забрал цикл истечения, не воскрешаем
+        if not await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER, xx=True):
+            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+            return
 
         turn_player = x_display if next_turn == "x" else o_display
         turn_symbol = _CELL_X if next_turn == "x" else _CELL_O

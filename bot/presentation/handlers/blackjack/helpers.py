@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import random
 import time
 
-from aiogram.enums import ParseMode
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 
 from bot.application.blackjack_service import (
-    build_deck,
-    cards_to_dicts,
     dicts_to_cards,
     format_hand,
     hand_score,
@@ -25,7 +21,6 @@ from bot.application.interfaces.user_stats_repository import IUserStatsRepositor
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, schedule_delete
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +80,7 @@ def _play_kb(game_id: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="\U0001f0cf Ещё", callback_data=f"bj:hit:{game_id}"),
-                InlineKeyboardButton(
-                    text="\U0001f6d1 Хватит", callback_data=f"bj:stand:{game_id}"
-                ),
+                InlineKeyboardButton(text="\U0001f6d1 Хватит", callback_data=f"bj:stand:{game_id}"),
             ]
         ]
     )
@@ -105,7 +98,11 @@ def _player_display(data: dict, prefix: str) -> str:
 
 
 def _render_hand_line(
-    name: str, hand: list[dict], *, done: bool = False, busted: bool = False,
+    name: str,
+    hand: list[dict],
+    *,
+    done: bool = False,
+    busted: bool = False,
     hidden: bool = False,
 ) -> str:
     if hidden:
@@ -123,7 +120,10 @@ def _render_hand_line(
 
 
 def _render_table(
-    data: dict, *, result_line: str = "", reveal: bool = False,
+    data: dict,
+    *,
+    result_line: str = "",
+    reveal: bool = False,
 ) -> str:
     p1_display = _player_display(data, "p1")
     p2_display = _player_display(data, "p2")
@@ -163,12 +163,7 @@ def _turn_text(data: dict, p: ScorePluralizer) -> str:
     turn_display = _player_display(data, turn)
 
     table = _render_table(data)
-    return (
-        f"\U0001f0cf <b>Блекджек — дуэль</b>\n"
-        f"Ставка: <b>{bet} {sw}</b>\n\n"
-        f"{table}\n\n"
-        f"Ходит: {turn_display}"
-    )
+    return f"\U0001f0cf <b>Блекджек — дуэль</b>\nСтавка: <b>{bet} {sw}</b>\n\n{table}\n\nХодит: {turn_display}"
 
 
 # ── Логика завершения ──────────────────────────────────────────────────
@@ -181,16 +176,19 @@ async def _resolve_game(
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
     chat_id: int,
-) -> str:
-    """Определить победителя и выплатить. Возвращает текст результата."""
+) -> str | None:
+    """Определить победителя и выплатить. Возвращает текст результата.
+
+    None — игру уже рассчитал другой запрос или цикл истечения: ничего не платим
+    и не трогаем сообщение, чтобы не затереть настоящий итог.
+    """
     game_id = data["game_id"]
     key = _bj_key(chat_id, game_id)
 
-    # Атомарно забираем ключ, чтобы cleanup loop не смог его обработать параллельно
-    # Если ключ уже удалён (cleanup loop опередил) — значит рефунд уже выполнен
+    # Атомарно забираем ключ, чтобы cleanup loop и параллельный ход не обработали игру дважды
     if not await store._r.delete(key):
-        logger.warning("BJ game %s already cleaned up by loop, skipping resolve", game_id)
-        return "\u23f0 Игра была завершена по таймауту. Ставки возвращены."
+        logger.warning("BJ game %s already settled, skipping resolve", game_id)
+        return None
 
     bet = data["bet"]
     total_pot = bet * 2
@@ -251,7 +249,10 @@ async def _resolve_game(
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: winner %d awarded %d, new balance %d",
-            game_id, winner_id, total_pot, new_balance,
+            game_id,
+            winner_id,
+            total_pot,
+            new_balance,
         )
         sw = p.pluralize(total_pot)
         result_line = f"\U0001f3c6 {winner_display} выигрывает <b>{total_pot} {sw}</b>!"
@@ -261,11 +262,10 @@ async def _resolve_game(
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: natural BJ winner %d awarded %d, new balance %d",
-            game_id, winner_id, total_pot, new_balance,
+            game_id,
+            winner_id,
+            total_pot,
+            new_balance,
         )
 
-    return (
-        f"\U0001f0cf <b>Блекджек — результат</b>\n\n"
-        f"{table}\n\n"
-        f"{result_line}"
-    )
+    return f"\U0001f0cf <b>Блекджек — результат</b>\n\n{table}\n\n{result_line}"

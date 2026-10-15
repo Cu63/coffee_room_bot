@@ -18,7 +18,7 @@ class GenAiResult:
     image: bytes | None = None
     cost: int = 0
     new_balance: int = 0
-    current_balance: int = 0   # баланс при отказе «недостаточно баллов»
+    current_balance: int = 0  # баланс при отказе «недостаточно баллов»
     # Причина отказа: "not_enough" | "no_image" | "error"
     reason: str = ""
 

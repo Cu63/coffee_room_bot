@@ -11,8 +11,7 @@ from bot.application.score_service import ScoreService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
-
-from bot.presentation.handlers.anagram.helpers import _make_game_id, _shuffle_word, _game_text
+from bot.presentation.handlers.anagram.helpers import _game_text, _make_game_id, _shuffle_word
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +90,9 @@ async def create_anagram_game(
 
     logger.info(
         "anagram_loop: создана авто-игра %s в чате %d, слово длиной %d, ставка %d",
-        game_id, chat_id, len(word), bet,
+        game_id,
+        chat_id,
+        len(word),
+        bet,
     )
     return True

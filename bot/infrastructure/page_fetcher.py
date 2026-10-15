@@ -18,6 +18,7 @@ def _get_traf_config():
     global _TRAF_CONFIG
     if _TRAF_CONFIG is None:
         from trafilatura.settings import use_config  # lazy import
+
         _TRAF_CONFIG = use_config()
         _TRAF_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", "5")
         _TRAF_CONFIG.set("DEFAULT", "MAX_REDIRECTS", "2")
@@ -27,6 +28,7 @@ def _get_traf_config():
 def _fetch_sync(url: str) -> str:
     """Скачивает и извлекает основной текст страницы через trafilatura."""
     import trafilatura  # lazy import — не грузить при старте бота
+
     try:
         cfg = _get_traf_config()
         downloaded = trafilatura.fetch_url(url, config=cfg)

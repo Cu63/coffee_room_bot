@@ -139,9 +139,7 @@ async def check_gameban(
     return templates["selfban_blocked"].format(remaining=format_duration(remaining))
 
 
-async def safe_callback_answer(
-    callback: CallbackQuery, text: str = "", show_alert: bool = False
-) -> None:
+async def safe_callback_answer(callback: CallbackQuery, text: str = "", show_alert: bool = False) -> None:
     """Отвечает на callback-запрос, игнорируя ошибки устаревших запросов."""
     try:
         await callback.answer(text, show_alert=show_alert)
@@ -190,9 +188,7 @@ async def send_html_parts(message: Message, thinking: Message, text: str) -> Non
                 await message.answer(stripped)
 
 
-async def reply_and_delete(
-    message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any
-) -> Message:
+async def reply_and_delete(message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any) -> Message:
     """Отправляет reply и планирует его удаление через delay секунд.
 
     Если оригинальное сообщение уже удалено (бот не успел ответить),

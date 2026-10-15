@@ -68,18 +68,19 @@ class PostgresDiceRepository(IDiceRepository):
         return [self._row_to_game(r) for r in rows]
 
     async def add_participant(self, game_id: int, user_id: int) -> bool:
-        try:
-            await self._conn.execute(
-                """
-                INSERT INTO dice_participants (game_id, user_id)
-                VALUES ($1, $2)
-                """,
-                game_id,
-                user_id,
-            )
-            return True
-        except asyncpg.UniqueViolationError:
-            return False
+        # ON CONFLICT вместо перехвата UniqueViolationError: ошибка внутри
+        # транзакции запроса прервала бы её, и все дальнейшие запросы упали бы.
+        inserted = await self._conn.fetchval(
+            """
+            INSERT INTO dice_participants (game_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING user_id
+            """,
+            game_id,
+            user_id,
+        )
+        return inserted is not None
 
     async def get_participants(self, game_id: int) -> list[int]:
         rows = await self._conn.fetch(

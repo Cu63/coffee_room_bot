@@ -77,9 +77,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
         )
 
     async def get_active_chats(self) -> list[int]:
-        rows = await self._conn.fetch(
-            "SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL AND chat_id < 0"
-        )
+        rows = await self._conn.fetch("SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL AND chat_id < 0")
         return [r["chat_id"] for r in rows]
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -106,7 +104,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 
@@ -132,7 +132,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 
@@ -158,7 +160,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 
@@ -182,7 +186,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 
@@ -198,7 +204,8 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY dw.ttt_wins DESC
             LIMIT 1
             """,
-            chat_id, for_date,
+            chat_id,
+            for_date,
         )
         return _row_to_leader(row)
 
@@ -215,10 +222,10 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, for_date,
+            chat_id,
+            for_date,
         )
         return _row_to_leader(row)
-
 
     async def _top_mutes_given(
         self,
@@ -240,7 +247,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 
@@ -263,7 +272,9 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
             ORDER BY cnt DESC
             LIMIT 1
             """,
-            chat_id, start, end,
+            chat_id,
+            start,
+            end,
         )
         return _row_to_leader(row)
 

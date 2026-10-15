@@ -14,7 +14,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
-from bot.application.score_service import ScoreService
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
@@ -35,12 +35,12 @@ router = Router(name="slots")
 _JACKPOT_VALUE = 64
 
 # Множители для обычных ставок
-_MULT_JACKPOT = 30     # net: +29×bet
-_MULT_WIN = 8          # net: +7×bet
+_MULT_JACKPOT = 30  # net: +29×bet
+_MULT_WIN = 8  # net: +7×bet
 
 # Множители для ставки all (сниженные, чтобы не ломать экономику)
-_ALL_MULT_JACKPOT = 5    # net: +4×bet
-_ALL_MULT_WIN = 3        # net: +2×bet
+_ALL_MULT_JACKPOT = 5  # net: +4×bet
+_ALL_MULT_WIN = 3  # net: +2×bet
 
 
 def _get_slots(value: int) -> tuple[int, int, int]:
@@ -85,11 +85,7 @@ async def cmd_slots(
     bot_id = bot.id
 
     if not command.args:
-        cooldown_str = (
-            f"\n⏳ Кулдаун: {sc.cooldown_minutes} мин. между спинами"
-            if sc.cooldown_minutes > 0
-            else ""
-        )
+        cooldown_str = f"\n⏳ Кулдаун: {sc.cooldown_minutes} мин. между спинами" if sc.cooldown_minutes > 0 else ""
         bot_balance = await score_service.get_bot_balance(bot_id, chat_id)
         await reply_and_delete(
             message,
@@ -170,24 +166,21 @@ async def cmd_slots(
             )
             return
 
-    # ── Проверяем баланс (для обычной ставки) ────────────────────
-    if not is_all_bet:
-        score = await score_service.get_score(user_id, chat_id)
-        if score.value < bet:
-            await reply_and_delete(
-                message,
-                f"Недостаточно баллов. У тебя: {score.value} {p.pluralize(score.value)}.",
-            )
-            return
+    # ── Списываем ставку (проверка баланса и списание — один атомарный запрос) ──
+    spend = await score_service.spend_score(user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"])
+    if not spend.success:
+        balance = spend.current_balance
+        await reply_and_delete(
+            message,
+            f"Недостаточно баллов. У тебя: {balance} {p.pluralize(balance)}.",
+        )
+        return
 
     # ── Устанавливаем кулдаун и отмечаем all-ставку ──────────────
     if cooldown_seconds > 0:
         await store.slots_cooldown_set(user_id, chat_id, cooldown_seconds)
     if is_all_bet:
         await store.slots_all_mark_used(user_id, chat_id)
-
-    # ── Списываем ставку ──────────────────────────────────────────
-    await score_service.add_score(user_id, chat_id, -bet, admin_id=user_id)
 
     # ── Запускаем анимацию ────────────────────────────────────────
     dice_msg = await message.answer_dice(emoji="🎰")
@@ -204,14 +197,13 @@ async def cmd_slots(
 
     if outcome in ("win", "jackpot"):
         net_gain = raw_payout - bet
-        bot_balance = await score_service.get_bot_balance(bot_id, chat_id)
-        actual_gain = min(net_gain, max(bot_balance, 0))
+        # Выигрыш сверх ставки платит бот — не больше, чем у него есть.
+        # Списание атомарное: два одновременных выигрыша не уведут баланс бота в минус.
+        actual_gain = await score_service.debit_up_to(bot_id, chat_id, net_gain, admin_id=bot_id)
         actual_payout = bet + actual_gain
         payout_capped = actual_gain < net_gain
 
         await score_service.add_score(user_id, chat_id, actual_payout, admin_id=user_id)
-        if actual_gain > 0:
-            await score_service.add_score(bot_id, chat_id, -actual_gain, admin_id=bot_id)
 
     else:  # loss
         actual_payout = 0
@@ -254,9 +246,7 @@ async def cmd_slots(
             result_line = f"{all_prefix}🏆 Три одинаковых! Ты выиграл <b>{win_net}</b> {p.pluralize(win_net)}!"
 
     else:  # loss
-        result_line = (
-            f"{all_prefix}💸 Мимо. Потерял <b>{bet}</b> {p.pluralize(bet)}."
-        )
+        result_line = f"{all_prefix}💸 Мимо. Потерял <b>{bet}</b> {p.pluralize(bet)}."
 
     result_msg = await message.answer(
         f"{result_line}\nБаланс: {bal_str}",

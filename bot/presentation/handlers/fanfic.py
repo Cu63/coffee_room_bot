@@ -90,14 +90,10 @@ async def cmd_fanfic(
             heroes.append(user)
 
     if not heroes:
-        await reply_and_delete(
-            message, formatter._t["ff_unknown_users"].format(users=", ".join(unknown))
-        )
+        await reply_and_delete(message, formatter._t["ff_unknown_users"].format(users=", ".join(unknown)))
         return
     if unknown:
-        await reply_and_delete(
-            message, formatter._t["ff_partial_users"].format(users=", ".join(unknown))
-        )
+        await reply_and_delete(message, formatter._t["ff_partial_users"].format(users=", ".join(unknown)))
 
     thinking = await message.reply(formatter._t["ff_thinking"])
     try:

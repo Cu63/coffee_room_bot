@@ -96,9 +96,7 @@ async def cmd_summary_admin(
     thinking = await message.reply("📰 Готовлю сводку за последние 24 часа...")
 
     try:
-        messages = await message_repo.get_recent_with_text(
-            message.chat.id, cfg.max_messages, since=since
-        )
+        messages = await message_repo.get_recent_with_text(message.chat.id, cfg.max_messages, since=since)
 
         if not messages:
             await thinking.edit_text("За последние 24 часа сообщений не найдено.")
@@ -106,7 +104,11 @@ async def cmd_summary_admin(
             return
 
         text = await generate_daily_summary(
-            client, formatter, cfg, messages, date_str,
+            client,
+            formatter,
+            cfg,
+            messages,
+            date_str,
             admin_prefix=config.admin.prefix,
         )
         logger.info(

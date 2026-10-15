@@ -27,9 +27,9 @@ from bot.application.interfaces.per_target_limits_repository import IPerTargetLi
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.interfaces.xp_repository import IXpRepository
+from bot.application.iq_service import IqService
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
-from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.application.xp_service import XpService
@@ -44,7 +44,6 @@ from bot.infrastructure.search_engine import SearchEngine
 
 
 class AppServiceProvider(Provider):
-
     @provide(scope=Scope.REQUEST)
     def get_score_service(
         self,
@@ -78,7 +77,10 @@ class AppServiceProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def get_daily_leaderboard_service(
-        self, repo: IDailyLeaderboardRepository, score_service: ScoreService, pluralizer: ScorePluralizer,
+        self,
+        repo: IDailyLeaderboardRepository,
+        score_service: ScoreService,
+        pluralizer: ScorePluralizer,
     ) -> DailyLeaderboardService:
         return DailyLeaderboardService(repo, score_service, pluralizer)
 
@@ -100,40 +102,64 @@ class AppServiceProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def get_dice_service(
-        self, dice_repo: IDiceRepository, score_repo: IScoreRepository, stats_repo: IUserStatsRepository,
+        self,
+        dice_repo: IDiceRepository,
+        score_repo: IScoreRepository,
+        stats_repo: IUserStatsRepository,
     ) -> DiceService:
         return DiceService(dice_repo, score_repo, stats_repo)
 
     @provide(scope=Scope.REQUEST)
     def get_giveaway_service(
-        self, repo: IGiveawayRepository, score_repo: IScoreRepository, stats_repo: IUserStatsRepository,
+        self,
+        repo: IGiveawayRepository,
+        score_repo: IScoreRepository,
+        stats_repo: IUserStatsRepository,
     ) -> GiveawayService:
         return GiveawayService(repo, score_repo, stats_repo)
 
     @provide(scope=Scope.REQUEST)
     def get_analyze_service(
-        self, client: OpenAiClient, message_repo: IMessageRepository,
-        llm_repo: ILlmRepository, config: AppConfig, formatter: MessageFormatter,
+        self,
+        client: OpenAiClient,
+        message_repo: IMessageRepository,
+        llm_repo: ILlmRepository,
+        config: AppConfig,
+        formatter: MessageFormatter,
     ) -> AnalyzeService:
         return AnalyzeService(
-            client=client, message_repo=message_repo, llm_repo=llm_repo,
-            config=config.analyze, formatter=formatter, admin_users=config.admin.users,
+            client=client,
+            message_repo=message_repo,
+            llm_repo=llm_repo,
+            config=config.analyze,
+            formatter=formatter,
+            admin_users=config.admin.users,
         )
 
     @provide(scope=Scope.REQUEST)
     def get_fanfic_service(
-        self, client: OpenAiClient, message_repo: IMessageRepository,
-        llm_repo: ILlmRepository, config: AppConfig, formatter: MessageFormatter,
+        self,
+        client: OpenAiClient,
+        message_repo: IMessageRepository,
+        llm_repo: ILlmRepository,
+        config: AppConfig,
+        formatter: MessageFormatter,
     ) -> FanficService:
         return FanficService(
-            client=client, message_repo=message_repo, llm_repo=llm_repo,
-            config=config.fanfic, formatter=formatter,
+            client=client,
+            message_repo=message_repo,
+            llm_repo=llm_repo,
+            config=config.fanfic,
+            formatter=formatter,
         )
 
     @provide(scope=Scope.REQUEST)
     def get_genai_service(
-        self, client: GigaChatClient, score_service: ScoreService,
-        config: AppConfig, formatter: MessageFormatter,
+        self,
+        client: GigaChatClient,
+        score_service: ScoreService,
+        config: AppConfig,
+        formatter: MessageFormatter,
     ) -> GenAiService:
         return GenAiService(
             client=client,
@@ -144,8 +170,11 @@ class AppServiceProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def get_llm_service(
-        self, llm_repo: ILlmRepository, client: AiTunnelClient,
-        config: AppConfig, settings: BotSettings,
+        self,
+        llm_repo: ILlmRepository,
+        client: AiTunnelClient,
+        config: AppConfig,
+        settings: BotSettings,
     ) -> LlmService:
         return LlmService(
             client=client,
@@ -160,12 +189,16 @@ class AppServiceProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     def get_xp_service(
-        self, xp_repo: IXpRepository, config: AppConfig,
+        self,
+        xp_repo: IXpRepository,
+        config: AppConfig,
     ) -> XpService:
         return XpService(xp_repo=xp_repo, config=config.xp)
 
     @provide(scope=Scope.REQUEST)
     def get_iq_service(
-        self, iq_repo: IIqRepository, config: AppConfig,
+        self,
+        iq_repo: IIqRepository,
+        config: AppConfig,
     ) -> IqService:
         return IqService(iq_repo=iq_repo, config=config.iq)

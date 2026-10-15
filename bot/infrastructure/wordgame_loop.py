@@ -18,6 +18,7 @@ async def wordgame_loop(bot: Bot, container) -> None:
         try:
             async with container() as scope:
                 from bot.infrastructure.redis_store import RedisStore
+
                 store: RedisStore = await scope.get(RedisStore)
 
                 for game_id in await store.wg_scan_expired():
@@ -38,12 +39,16 @@ async def wordgame_loop(bot: Bot, container) -> None:
                     if bet > 0 and creator_id:
                         try:
                             from bot.application.score_service import ScoreService
+
                             score_service: ScoreService = await scope.get(ScoreService)
                             refund_target = bot.id if is_random else creator_id
                             await score_service.add_score(refund_target, chat_id, bet, admin_id=refund_target)
                             logger.info(
                                 "wordgame: refunded %d to %s (%d) in chat %d",
-                                bet, "bot" if is_random else "creator", refund_target, chat_id,
+                                bet,
+                                "bot" if is_random else "creator",
+                                refund_target,
+                                chat_id,
                             )
                         except Exception:
                             logger.exception("wordgame_loop: failed to refund bet")
@@ -70,9 +75,7 @@ async def wordgame_loop(bot: Bot, container) -> None:
                                 parse_mode="HTML",
                             )
                             # Удаляем через 30 секунд
-                            asyncio.get_running_loop().create_task(
-                                _delete_after(bot, chat_id, message_id, delay=30)
-                            )
+                            asyncio.get_running_loop().create_task(_delete_after(bot, chat_id, message_id, delay=30))
                         except TelegramBadRequest:
                             pass
                         except Exception:

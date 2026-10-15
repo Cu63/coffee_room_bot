@@ -62,7 +62,10 @@ class BurstBonusMiddleware(BaseMiddleware):
             new_value = await score_service.award_burst(user_id, chat_id, cfg.reward)
             logger.debug(
                 "burst: user %d in chat %d awarded %d, new score %d",
-                user_id, chat_id, cfg.reward, new_value,
+                user_id,
+                chat_id,
+                cfg.reward,
+                new_value,
             )
 
             # Начисляем XP
@@ -72,5 +75,9 @@ class BurstBonusMiddleware(BaseMiddleware):
                 result = await xp_service.add_xp(user_id, chat_id, xp_cfg.rewards.burst)
                 logger.debug(
                     "burst xp: user %d in chat %d +%d xp (total %d, level %d)",
-                    user_id, chat_id, xp_cfg.rewards.burst, result.new_xp, result.new_level,
+                    user_id,
+                    chat_id,
+                    xp_cfg.rewards.burst,
+                    result.new_xp,
+                    result.new_level,
                 )

@@ -11,15 +11,14 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.application.score_service import ScoreService
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import schedule_delete, schedule_delete_id
-
 from bot.presentation.handlers.anagram.helpers import _game_text
+from bot.presentation.utils import schedule_delete, schedule_delete_id
 
 router = Router(name="anagram_play")
 
@@ -83,10 +82,7 @@ async def msg_reply_guess(
     )
 
     # Проверяем повторную попытку с тем же словом
-    already_tried = any(
-        t["user_id"] == user_id and t["word"] == guess
-        for t in data["tries"]
-    )
+    already_tried = any(t["user_id"] == user_id and t["word"] == guess for t in data["tries"])
     if already_tried:
         err = await message.reply(
             f"🔄 {user_mention}: «<b>{guess}</b>» ты уже пробовал. Другое слово!",
@@ -96,11 +92,13 @@ async def msg_reply_guess(
         return
 
     # Upsert пользователя
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     schedule_delete(message.bot, message, delay=30)
 
@@ -126,9 +124,7 @@ async def msg_reply_guess(
         )
 
         try:
-            await message.bot.unpin_chat_message(
-                chat_id=chat_id, message_id=data["message_id"]
-            )
+            await message.bot.unpin_chat_message(chat_id=chat_id, message_id=data["message_id"])
         except Exception:
             pass
         try:
@@ -148,22 +144,32 @@ async def msg_reply_guess(
     else:
         # ── НЕВЕРНО ──────────────────────────────────────────────────
         data["tries"].append({"user_id": user_id, "word": guess})
-        ttl_left = max(30, int(data["expires_at"] - time.time()))
 
-        # Снимаем балл за неверную попытку
+        # Сохраняем, только если игра ещё идёт: завершённую (победой или по
+        # времени) не воскрешаем, её сообщение не трогаем и плату не берём.
+        if not await store.anagram_game_save(game_id, data):
+            return
+
+        # Снимаем балл за неверную попытку (если хватает) — он уходит боту
         cost = cfg.attempt_cost
         if cost > 0:
-            bal = await score_service.get_score(user_id, chat_id)
-            if bal.value >= cost:
-                await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
-                # Возвращаем на баланс бота
-                await score_service.add_score(message.bot.id, chat_id, cost, admin_id=message.bot.id)
+            await score_service.spend_score(
+                user_id,
+                user_id,
+                chat_id,
+                cost,
+                SPECIAL_EMOJI["sub"],
+                bot_id=message.bot.id,
+            )
 
         # Обновляем игровое сообщение
         sw_bet = p.pluralize(data["bet"])
         new_text = _game_text(
-            data["shuffled"], data["bet"],
-            len(data["tries"]), sw_bet, data["expires_at"],
+            data["shuffled"],
+            data["bet"],
+            len(data["tries"]),
+            sw_bet,
+            data["expires_at"],
         )
         try:
             await message.bot.edit_message_text(
@@ -174,9 +180,6 @@ async def msg_reply_guess(
             )
         except Exception:
             pass
-
-        # Сохраняем обновлённые данные
-        await store.anagram_game_save(game_id, data, ttl_left)
 
         cost_note = f"\n<i>−{cost} балл за попытку</i>" if cost > 0 else ""
         hint = await message.reply(
