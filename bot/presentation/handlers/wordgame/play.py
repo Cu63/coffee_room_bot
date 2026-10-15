@@ -11,6 +11,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.wordgame_entities import WordGame, is_valid_word, normalize_word
 from bot.infrastructure.config_loader import AppConfig
@@ -59,6 +60,7 @@ async def msg_private_word(
     message: Message,
     bot: Bot,
     store: FromDishka[RedisStore],
+    score_service: FromDishka[ScoreService],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
@@ -77,20 +79,38 @@ async def msg_private_word(
         )
         return
 
-    pending = await store.wg_pending_get(game_id)
+    # Атомарно забираем ожидающую игру: повторно присланное слово её не создаст
+    pending = await store.wg_pending_pop(game_id)
+    await store.wg_awaiting_delete(user_id)
     if pending is None:
-        await store.wg_awaiting_delete(user_id)
         await message.answer("❌ Игра устарела. Начни новую командой /word в группе.")
         return
-
-    await store.wg_pending_delete(game_id)
-    await store.wg_awaiting_delete(user_id)
 
     chat_id = pending["chat_id"]
     bet = pending["bet"]
     duration_secs = pending["duration_seconds"]
     lobby_msg_id = pending.get("lobby_msg_id", 0)
     ends_at = time.time() + duration_secs
+
+    # Ставка списывается сейчас, когда игра действительно начинается.
+    # Без флага — игра создана до этого изменения, и ставку уже списали при /word.
+    if bet > 0 and pending.get("charge_on_submit"):
+        spend = await score_service.spend_score(user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"])
+        if not spend.success:
+            await message.answer(
+                f"❌ Недостаточно баллов для ставки {bet}: у тебя {spend.current_balance}. Игра отменена."
+            )
+            if lobby_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=lobby_msg_id,
+                        text="🔤 Угадайка отменена: у автора не хватило баллов на ставку.",
+                        reply_markup=None,
+                    )
+                except TelegramBadRequest:
+                    pass
+            return
 
     game = WordGame(
         game_id=game_id,

@@ -31,8 +31,15 @@ class AnagramStoreMixin:
         raw = await self._r.get(f"{self._ANAGRAM_GAME}{game_id}")
         return json.loads(raw) if raw else None
 
-    async def anagram_game_save(self, game_id: str, data: dict, ttl: int) -> None:
-        await self._r.set(f"{self._ANAGRAM_GAME}{game_id}", json.dumps(data), ex=ttl)
+    async def anagram_game_save(self, game_id: str, data: dict) -> bool:
+        """Сохраняет игру, только если она ещё идёт. False — игру уже завершили.
+
+        XX: не воскрешать игру, которую забрали победой или по времени;
+        KEEPTTL: срок ключа не сокращается до expires_at, и цикл истечения
+        успевает её обработать (вернуть приз боту, показать слово).
+        """
+        key = f"{self._ANAGRAM_GAME}{game_id}"
+        return bool(await self._r.set(key, json.dumps(data), xx=True, keepttl=True))
 
     async def anagram_game_delete(self, game_id: str) -> bool:
         return bool(await self._r.delete(f"{self._ANAGRAM_GAME}{game_id}"))

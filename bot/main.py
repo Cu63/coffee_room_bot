@@ -122,6 +122,7 @@ async def main() -> None:
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
     from bot.infrastructure.tax_loop import tax_loop
+    from bot.infrastructure.ttt_cleanup_loop import ttt_cleanup_loop
     from bot.infrastructure.unmute_loop import unmute_loop
     from bot.infrastructure.wordgame_loop import wordgame_loop
     from bot.presentation.utils import delete_loop
@@ -136,6 +137,7 @@ async def main() -> None:
         asyncio.create_task(mute_roulette_loop(container, bot)),
         asyncio.create_task(bj_cleanup_loop(container, bot)),
         asyncio.create_task(duel_cleanup_loop(container, bot)),
+        asyncio.create_task(ttt_cleanup_loop(container, bot)),
         asyncio.create_task(lot_loop(bot, container)),
         asyncio.create_task(anagram_expire_loop(bot, container)),
         asyncio.create_task(anagram_auto_loop(bot, container)),

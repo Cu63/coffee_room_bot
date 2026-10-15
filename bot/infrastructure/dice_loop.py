@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 from datetime import datetime
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramMigrateToChat
 
 from bot.domain.tz import TZ_MSK
 from bot.presentation.utils import schedule_delete, schedule_delete_id
@@ -30,9 +32,38 @@ async def dice_loop(bot: Bot, container) -> None:
 
             for game in expired:
                 logger.info("Auto-finishing dice game %d in chat %d", game.id, game.chat_id)
-                await _resolve_game(bot, game, container)
+                # Каждая игра отдельно: ошибка в одном чате не блокирует игры в остальных
+                try:
+                    await _resolve_game(bot, game, container)
+                except Exception as e:
+                    logger.exception("Failed to resolve dice game %d in chat %d", game.id, game.chat_id)
+                    if _is_unreachable_chat(e):
+                        await _refund_unreachable(container, game)
         except Exception:
             logger.exception("Error in dice_loop")
+
+
+def _is_unreachable_chat(exc: BaseException) -> bool:
+    """Бот больше не может писать в чат (выгнали, нет прав, чат мигрировал) — повтор не поможет."""
+    if isinstance(exc, (TelegramForbiddenError, TelegramMigrateToChat)):
+        return True
+    if isinstance(exc, TelegramBadRequest):
+        msg = str(exc).lower()
+        return "chat not found" in msg or "rights" in msg or "write_forbidden" in msg
+    return False
+
+
+async def _refund_unreachable(container, game) -> None:
+    """Возвращает ставки игры, которую невозможно провести, и закрывает её."""
+    from bot.application.dice_service import DiceService
+
+    try:
+        async with container() as scope:
+            service = await scope.get(DiceService)
+            await service.finish(game.id, {})  # пустой dict → рефанд всем
+        logger.warning("Dice game %d in unreachable chat %d: bets refunded", game.id, game.chat_id)
+    except Exception:
+        logger.exception("Failed to refund dice game %d", game.id)
 
 
 async def _resolve_game(bot: Bot, game, container) -> None:
@@ -117,7 +148,7 @@ async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
         crown = " 👑" if is_winner else ""
         try:
             member = await bot.get_chat_member(chat_id, user_id)
-            name = f'<a href="tg://user?id={user_id}">{member.user.full_name}</a>'
+            name = f'<a href="tg://user?id={user_id}">{html.escape(member.user.full_name)}</a>'
         except Exception:
             name = f"<code>{user_id}</code>"
         lines.append(f"• {name}: {value}{crown}")
@@ -129,7 +160,7 @@ async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
         winner_id = result.winners[0]
         try:
             member = await bot.get_chat_member(chat_id, winner_id)
-            winner_name = f'<a href="tg://user?id={winner_id}">{member.user.full_name}</a>'
+            winner_name = f'<a href="tg://user?id={winner_id}">{html.escape(member.user.full_name)}</a>'
         except Exception:
             winner_name = f"<code>{winner_id}</code>"
         lines.append(f"🏆 {winner_name} выигрывает <b>{result.prize_per_winner} {score_word}</b>!")
@@ -138,7 +169,7 @@ async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
         for uid in result.winners:
             try:
                 member = await bot.get_chat_member(chat_id, uid)
-                winner_mentions.append(f'<a href="tg://user?id={uid}">{member.user.full_name}</a>')
+                winner_mentions.append(f'<a href="tg://user?id={uid}">{html.escape(member.user.full_name)}</a>')
             except Exception:
                 winner_mentions.append(f"<code>{uid}</code>")
         winners_str = ", ".join(winner_mentions)

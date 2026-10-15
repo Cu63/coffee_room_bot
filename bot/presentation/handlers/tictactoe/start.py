@@ -20,6 +20,7 @@ from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.tictactoe.game_logic import (
     _TTT_LOBBY_TTL,
+    _TTT_REDIS_BUFFER,
     _lobby_kb,
     _make_game_id,
     _ttt_key,
@@ -157,10 +158,11 @@ async def cmd_ttt(
         "chat_id": chat_id,
         "message_id": 0,
         "created_at": time.time(),
+        "expires_at": time.time() + _TTT_LOBBY_TTL,
     }
 
     key = _ttt_key(chat_id, game_id)
-    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
+    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL + _TTT_REDIS_BUFFER)
 
     lobby_text = formatter._t["ttt_lobby"].format(
         user=display,
@@ -174,6 +176,5 @@ async def cmd_ttt(
         reply_markup=_lobby_kb(game_id),
     )
 
-    # Сохраняем message_id
-    data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
+    # Сохраняем message_id — только пока это лобби: принятую игру не затираем
+    await store.game_patch_if_state(key, "lobby", {"message_id": sent.message_id})

@@ -13,8 +13,10 @@ from aiogram.types import (
 
 # ── Константы ───────────────────────────────────────────────────────────
 _DUEL_PREFIX = "duel:invite:"
-_DUEL_INVITE_TTL = 150  # секунд — с запасом, cleanup-loop проверяет expires_at=120
 _DUEL_TIMEOUT = 120  # секунд — реальный таймаут для игрока
+# Redis-TTL с часовым запасом поверх expires_at: duel_cleanup_loop должен успеть
+# вернуть ставку, даже если бот был недоступен (деплой), до того как Redis удалит ключ
+_DUEL_INVITE_TTL = _DUEL_TIMEOUT + 3600
 
 _SUPPORTED_GAMES = ("ttt", "bj")
 

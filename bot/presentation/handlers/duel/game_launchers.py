@@ -35,6 +35,7 @@ from bot.presentation.handlers.blackjack import (
 # Импортируем внутренние утилиты из игровых хендлеров
 from bot.presentation.handlers.tictactoe import (
     _TTT_GAME_TTL,
+    _TTT_REDIS_BUFFER,
     _ttt_key,
 )
 from bot.presentation.handlers.tictactoe import (
@@ -91,10 +92,11 @@ async def _start_ttt_from_duel(
         "chat_id": chat_id,
         "message_id": cb.message.message_id,
         "created_at": time.time(),
+        "expires_at": time.time() + _TTT_GAME_TTL,
     }
 
     ttt_key = _ttt_key(chat_id, game_id)
-    await store._r.set(ttt_key, json.dumps(data), ex=_TTT_GAME_TTL)
+    await store._r.set(ttt_key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER)
 
     x_display = user_link(player_x_username or None, player_x_name, player_x_id)
     o_display = user_link(player_o_username or None, player_o_name, player_o_id)
@@ -203,6 +205,9 @@ async def _start_bj_from_duel(
             text = await _resolve_game(data, store, score_repo, _NoStats(), p, chat_id)
         except Exception:
             text = "🎰 Натуральный блекджек!"
+        if text is None:
+            # Игру уже рассчитали — итог в сообщении не трогаем
+            return
         try:
             from bot.presentation.utils import schedule_delete
 
