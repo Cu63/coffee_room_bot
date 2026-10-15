@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Router
@@ -31,14 +32,15 @@ router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 
 def _format_news_item(item: NewsItem, template: str) -> str:
+    """Поля ленты — обычный текст: «AT&T» или «a < b» в заголовке не должны ломать HTML."""
     desc = item.description[:300]
     if len(item.description) > 300:
         desc += "…"
     return template.format(
-        title=item.title,
-        description=desc,
-        url=item.url,
-        source=item.source,
+        title=html.escape(item.title),
+        description=html.escape(desc),
+        url=html.escape(item.url, quote=True),
+        source=html.escape(item.source),
     )
 
 

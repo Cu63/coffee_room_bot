@@ -1,4 +1,6 @@
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import asyncpg
@@ -47,6 +49,12 @@ class PostgresTransactionManager(ITransactionManager):
 
     async def checkpoint(self) -> None:
         await self.commit()
+
+    @asynccontextmanager
+    async def savepoint(self) -> AsyncIterator[None]:
+        conn = await self.acquire()
+        async with conn.transaction():  # внутри открытой транзакции asyncpg делает SAVEPOINT
+            yield
 
     async def commit(self) -> None:
         try:

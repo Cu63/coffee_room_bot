@@ -24,7 +24,7 @@ from bot.presentation.handlers.blackjack.helpers import (
     _lobby_kb,
     _make_game_id,
 )
-from bot.presentation.utils import NO_PREVIEW, check_gameban, reply_and_delete
+from bot.presentation.utils import NO_PREVIEW, check_bet, check_gameban, reply_and_delete
 
 router = Router(name="blackjack_start")
 
@@ -66,23 +66,9 @@ async def cmd_blackjack(
         )
         return
 
-    # Парсим ставку
-    try:
-        bet = int(args[0])
-        if bet <= 0:
-            raise ValueError
-    except ValueError:
-        await reply_and_delete(message, "\u274c Ставка должна быть положительным числом.")
-        return
-
-    if bet < bjc.min_bet:
-        sw = p.pluralize(bjc.min_bet)
-        await reply_and_delete(message, f"\u274c Минимальная ставка: {bjc.min_bet} {sw}.")
-        return
-
-    if bet > bjc.max_bet:
-        sw = p.pluralize(bjc.max_bet)
-        await reply_and_delete(message, f"\u274c Максимальная ставка: {bjc.max_bet} {sw}.")
+    bet, bet_error = check_bet(args[0], bjc.min_bet, bjc.max_bet, formatter)
+    if bet_error:
+        await reply_and_delete(message, bet_error)
         return
 
     user_id = message.from_user.id

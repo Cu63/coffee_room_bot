@@ -115,6 +115,7 @@ async def main() -> None:
 
     # ── Фоновые задачи ───────────────────────────────────────────
     from bot.infrastructure.anagram_loop import anagram_auto_loop, anagram_expire_loop
+    from bot.infrastructure.background import BackgroundTasks
     from bot.infrastructure.bj_cleanup_loop import bj_cleanup_loop
     from bot.infrastructure.chatmode_loop import chatmode_loop
     from bot.infrastructure.cleanup_loop import cleanup_loop
@@ -133,27 +134,26 @@ async def main() -> None:
     from bot.presentation.utils import delete_loop
 
     sys_cfg = config.system
-    tasks = [
-        asyncio.create_task(cleanup_loop(container, sys_cfg.cleanup_interval_hours)),
-        asyncio.create_task(unmute_loop(container, bot, sys_cfg.unmute_check_interval_seconds)),
-        asyncio.create_task(giveaway_loop(bot, container)),
-        asyncio.create_task(giveaway_period_loop(bot, container)),
-        asyncio.create_task(dice_loop(bot, container)),
-        asyncio.create_task(mute_roulette_loop(container, bot)),
-        asyncio.create_task(bj_cleanup_loop(container, bot)),
-        asyncio.create_task(duel_cleanup_loop(container, bot)),
-        asyncio.create_task(ttt_cleanup_loop(container, bot)),
-        asyncio.create_task(lot_loop(bot, container)),
-        asyncio.create_task(anagram_expire_loop(bot, container)),
-        asyncio.create_task(anagram_auto_loop(bot, container)),
-        asyncio.create_task(wordgame_loop(bot, container)),
-        asyncio.create_task(delete_loop(bot, redis)),
-        asyncio.create_task(daily_summary_loop(bot, container)),
-        asyncio.create_task(daily_leaderboard_loop(bot, container)),
-        asyncio.create_task(chatmode_loop(bot, container)),
-        asyncio.create_task(tax_loop(bot, container)),
-        asyncio.create_task(ledger_audit_loop(container)),
-    ]
+    tasks = BackgroundTasks()
+    tasks.start("cleanup", lambda: cleanup_loop(container, sys_cfg.cleanup_interval_hours))
+    tasks.start("unmute", lambda: unmute_loop(container, bot, sys_cfg.unmute_check_interval_seconds))
+    tasks.start("giveaway", lambda: giveaway_loop(bot, container))
+    tasks.start("giveaway_period", lambda: giveaway_period_loop(bot, container))
+    tasks.start("dice", lambda: dice_loop(bot, container))
+    tasks.start("mute_roulette", lambda: mute_roulette_loop(container, bot))
+    tasks.start("bj_cleanup", lambda: bj_cleanup_loop(container, bot))
+    tasks.start("duel_cleanup", lambda: duel_cleanup_loop(container, bot))
+    tasks.start("ttt_cleanup", lambda: ttt_cleanup_loop(container, bot))
+    tasks.start("lot", lambda: lot_loop(bot, container))
+    tasks.start("anagram_expire", lambda: anagram_expire_loop(bot, container))
+    tasks.start("anagram_auto", lambda: anagram_auto_loop(bot, container))
+    tasks.start("wordgame", lambda: wordgame_loop(bot, container))
+    tasks.start("delete", lambda: delete_loop(bot, redis))
+    tasks.start("daily_summary", lambda: daily_summary_loop(bot, container))
+    tasks.start("daily_leaderboard", lambda: daily_leaderboard_loop(bot, container))
+    tasks.start("chatmode", lambda: chatmode_loop(bot, container))
+    tasks.start("tax", lambda: tax_loop(bot, container))
+    tasks.start("ledger_audit", lambda: ledger_audit_loop(container))
 
     logger.info("Bot starting…")
     try:
@@ -162,8 +162,7 @@ async def main() -> None:
             await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
-        for task in tasks:
-            task.cancel()
+        await tasks.stop()
         if tg_log_handler:
             tg_log_handler.stop()
         await container.close()

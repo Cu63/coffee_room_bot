@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import logging
 from datetime import timedelta
 
 from aiogram import Bot, F, Router
@@ -13,6 +14,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
@@ -34,6 +36,7 @@ from bot.presentation.handlers._iq_utils import award_game_iq
 from bot.presentation.handlers.wordgame.helpers import game_text, game_to_raw, raw_to_game
 from bot.presentation.utils import schedule_delete, schedule_delete_id
 
+logger = logging.getLogger(__name__)
 router = Router(name="wordgame_guess")
 
 
@@ -59,6 +62,7 @@ async def msg_reply_guess(
     pluralizer: FromDishka[ScorePluralizer],
     mute_service: FromDishka[MuteService],
     iq_service: FromDishka[IqService],
+    tx: FromDishka[ITransactionManager],
 ) -> None:
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -169,19 +173,22 @@ async def msg_reply_guess(
                 user_id, chat_id, game.bet, admin_id=user_id, kind=LedgerKind.PRIZE, ref=f"wordgame:{game.game_id}"
             )
 
-        # Записываем победу в дневной лидерборд
+        # Лидерборд и IQ не критичны, но игра в Redis уже завершена: их ошибка не должна
+        # откатить приз. Каждая запись — в своей вложенной транзакции
         game_type = "rword" if game.is_random else "word"
         try:
-            await lb_repo.add_game_win(user_id, chat_id, game_type, now_msk().date())
+            async with tx.savepoint():
+                await lb_repo.add_game_win(user_id, chat_id, game_type, now_msk().date())
         except Exception:
-            pass  # не прерываем победу из-за ошибки статистики
+            logger.exception("wordgame %s: победа не записана в лидерборд", game.game_id)
 
         # +IQ за победу в /rword (обычный /word IQ не даёт)
         if game.is_random:
             try:
-                await award_game_iq(store, iq_service, config.iq, user_id, chat_id)
+                async with tx.savepoint():
+                    await award_game_iq(store, iq_service, config.iq, user_id, chat_id)
             except Exception:
-                pass  # IQ — не критично, не срываем победу
+                logger.exception("wordgame %s: IQ за победу не начислен", game.game_id)
 
         bet_str = pluralizer.pluralize(game.bet)
         win_text = (

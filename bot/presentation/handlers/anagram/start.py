@@ -21,7 +21,7 @@ from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
 from bot.presentation.handlers.anagram.helpers import _game_text, _make_game_id, _shuffle_word
-from bot.presentation.utils import check_gameban, reply_and_delete, schedule_delete
+from bot.presentation.utils import check_bet, check_gameban, reply_and_delete, schedule_delete
 
 router = Router(name="anagram_start")
 
@@ -83,21 +83,9 @@ async def cmd_anagram(
         )
         return
 
-    try:
-        bet = int(args[0])
-        if bet <= 0:
-            raise ValueError
-    except ValueError:
-        await reply_and_delete(message, "❌ Ставка должна быть положительным числом.")
-        return
-
-    if bet < cfg.min_bet:
-        sw = p.pluralize(cfg.min_bet)
-        await reply_and_delete(message, f"❌ Минимальная ставка: {cfg.min_bet} {sw}.")
-        return
-    if bet > cfg.max_bet:
-        sw = p.pluralize(cfg.max_bet)
-        await reply_and_delete(message, f"❌ Максимальная ставка: {cfg.max_bet} {sw}.")
+    bet, bet_error = check_bet(args[0], cfg.min_bet, cfg.max_bet, formatter)
+    if bet_error:
+        await reply_and_delete(message, bet_error)
         return
 
     # Проверяем, нет ли уже активной игры в чате

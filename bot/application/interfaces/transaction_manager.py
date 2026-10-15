@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 
@@ -19,6 +20,16 @@ class ITransactionManager(ABC):
     @abstractmethod
     async def checkpoint(self) -> None:
         """Закоммитить сделанное и отпустить соединение. Откат после этого затронет только новое."""
+        ...
+
+    @abstractmethod
+    def savepoint(self) -> AbstractAsyncContextManager[None]:
+        """Вложенная транзакция для необязательной записи (статистика, IQ).
+
+        Ошибка внутри откатывает только её. Без savepoint упавший запрос оставляет всю
+        транзакцию в состоянии ошибки, и при выходе откатывается всё — например, уже
+        начисленный приз за игру, которая в Redis уже завершена.
+        """
         ...
 
     @abstractmethod

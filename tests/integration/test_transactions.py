@@ -125,3 +125,18 @@ async def test_checkpoint_commits_and_lets_the_connection_go(container, conn):
             await repo.add_delta(A, CHAT, -1, kind=LedgerKind.ADMIN)  # тот же репозиторий открывает новую транзакцию
             raise ValueError
     assert await balance(conn, A) == 90  # до checkpoint — зафиксировано, после — откачено
+
+
+async def test_savepoint_keeps_the_transaction_alive(app_container, conn):
+    """Упавшая необязательная запись откатывает только себя: приз до неё остаётся."""
+    await seed_users(conn, 41)
+    async with app_container() as scope:
+        tx = await scope.get(ITransactionManager)
+        scores = await scope.get(IScoreRepository)
+        await scores.add_delta(41, CHAT, 10, kind=LedgerKind.PRIZE, ref="wordgame:1")
+        with pytest.raises(asyncpg.DataError):
+            async with tx.savepoint():
+                await tx.get_connection().execute("SELECT 1 / 0")
+        await scores.add_delta(41, CHAT, 5, kind=LedgerKind.BONUS, ref="after")
+
+    assert await balance(conn, 41) == 15
