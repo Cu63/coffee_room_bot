@@ -1,0 +1,6 @@
+# Коммиты только с форматированием — git blame их пропускает.
+# Подключить локально: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub учитывает этот файл автоматически.)
+
+# style: ruff format
+0f1b96cbf9de1a03587031ff09f05936a58db19c
