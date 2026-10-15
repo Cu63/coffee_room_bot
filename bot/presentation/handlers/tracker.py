@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Bot, F, Router
@@ -93,12 +94,12 @@ async def _send_report(
     report_id = await store.tracker_next_id()
     report_body = (
         f"{icon} <b>{label} #{report_id}</b>\n"
-        f"От: <a href=\"tg://user?id={sender.id}\">{sender.full_name}</a>{username_part}\n"
-        f"Чат: {chat_title} (<code>{message.chat.id}</code>)\n"
+        f"От: <a href=\"tg://user?id={sender.id}\">{html.escape(sender.full_name)}</a>{username_part}\n"
+        f"Чат: {html.escape(chat_title)} (<code>{message.chat.id}</code>)\n"
     )
     if target_line:
         report_body += f"Цель: {target_line}\n"
-    report_body += f"\n{text}"
+    report_body += f"\n{html.escape(text)}"
 
     tracker_chat_id = await store.tracker_get_tracker_id(message.chat.id)
 
@@ -294,13 +295,13 @@ async def cmd_report(
     if message.reply_to_message and message.reply_to_message.from_user:
         ru = message.reply_to_message.from_user
         uname = f" (@{ru.username})" if ru.username else ""
-        target_line = f"<a href=\"tg://user?id={ru.id}\">{ru.full_name}</a>{uname}"
+        target_line = f"<a href=\"tg://user?id={ru.id}\">{html.escape(ru.full_name)}</a>{uname}"
         reason = text or "(причина не указана)"
     elif text:
         # /report @username причина — берём первый токен как юзернейм
         parts = text.split(None, 1)
         if parts[0].startswith("@"):
-            target_line = parts[0]
+            target_line = html.escape(parts[0])
             reason = parts[1] if len(parts) > 1 else "(причина не указана)"
         else:
             reason = text

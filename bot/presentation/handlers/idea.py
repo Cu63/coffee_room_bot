@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import time
@@ -82,7 +83,7 @@ async def cmd_idea(
 
     # Формируем сообщение
     idea_text = formatter._t["idea_created"].format(
-        id=idea_id, user=display, text=text, up=0, down=0,
+        id=idea_id, user=display, text=html.escape(text), up=0, down=0,
     )
     reply = await message.reply(
         idea_text,
@@ -187,7 +188,7 @@ async def cb_idea_vote(
         data["author_username"] or None, data["author_name"], data["author_id"],
     )
     new_text = formatter._t["idea_created"].format(
-        id=idea_id, user=display, text=data["text"], up=up_count, down=down_count,
+        id=idea_id, user=display, text=html.escape(data["text"]), up=up_count, down=down_count,
     )
     try:
         await callback.message.edit_text(
@@ -232,7 +233,7 @@ async def _notify_threshold(
     notify_text = formatter._t["idea_threshold"].format(
         id=data["id"],
         votes=votes,
-        text=data["text"],
+        text=html.escape(data["text"]),
         author=author_display,
     )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import re
 from datetime import datetime, timedelta
 
@@ -113,7 +114,7 @@ async def _post_results(
             prize_str = f"{prize} {pluralizer.pluralize(prize)}"
             try:
                 chat_member = await bot.get_chat_member(giveaway.chat_id, user_id)
-                mention = f'<a href="tg://user?id={user_id}">{chat_member.user.full_name}</a>'
+                mention = f'<a href="tg://user?id={user_id}">{html.escape(chat_member.user.full_name)}</a>'
             except Exception:
                 mention = f"<code>{user_id}</code>"
             lines.append(f"{medal} {mention} — +{prize_str}")

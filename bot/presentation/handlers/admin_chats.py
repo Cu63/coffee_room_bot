@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Bot, Router
@@ -43,7 +44,7 @@ async def cmd_chats(
     for cid in chat_ids:
         try:
             chat: Chat = await bot.get_chat(cid)
-            title = chat.title or "—"
+            title = html.escape(chat.title or "—")
 
             invite_link = chat.invite_link
             if not invite_link:
