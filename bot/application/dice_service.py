@@ -60,14 +60,12 @@ class DiceService:
         if await self._dice_repo.is_user_in_active_game(chat_id, created_by):
             return CreateResult(game=None, user_already_in_game=True)
 
-        score = await self._score_repo.get(created_by, chat_id)
-        balance = score.value if score else 0
-        if balance < bet:
+        # Проверка баланса и списание — один атомарный запрос
+        if await self._score_repo.try_debit(created_by, chat_id, bet) is None:
             return CreateResult(game=None, not_enough=True)
 
         game = DiceGame(chat_id=chat_id, bet=bet, ends_at=ends_at, created_by=created_by)
         game = await self._dice_repo.create(game)
-        await self._score_repo.add_delta(created_by, chat_id, -bet)
         await self._dice_repo.add_participant(game.id, created_by)  # type: ignore[arg-type]
         return CreateResult(game=game)
 
@@ -97,13 +95,16 @@ class DiceService:
         if await self._dice_repo.is_user_in_active_game(game.chat_id, user_id):
             return JoinResult(success=False, already_in_other_game=True)
 
-        score = await self._score_repo.get(user_id, game.chat_id)
-        balance = score.value if score else 0
-        if balance < game.bet:
+        # Проверка баланса и списание — один атомарный запрос
+        if await self._score_repo.try_debit(user_id, game.chat_id, game.bet) is None:
+            score = await self._score_repo.get(user_id, game.chat_id)
+            balance = score.value if score else 0
             return JoinResult(success=False, not_enough=True, balance=balance, bet=game.bet)
 
-        await self._dice_repo.add_participant(game_id, user_id)
-        await self._score_repo.add_delta(user_id, game.chat_id, -game.bet)
+        if not await self._dice_repo.add_participant(game_id, user_id):
+            # Параллельное нажатие того же игрока уже добавило его — возвращаем ставку
+            await self._score_repo.add_delta(user_id, game.chat_id, game.bet)
+            return JoinResult(success=False, already_joined=True)
         return JoinResult(success=True)
 
     async def count_participants(self, game_id: int) -> int:

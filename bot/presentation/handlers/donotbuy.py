@@ -106,13 +106,11 @@ async def cb_donotbuy_hit(
     # Любое нажатие — успешное или нет — расходует лимит
     await store.donotbuy_daily_increment(user_id, chat_id)
 
-    # Случайная цена и списание без ухода в минус
+    # Случайная цена и списание без ухода в минус (атомарно)
     price = random.randint(0, cfg.max_price)
-    balance = (await score_service.get_score(user_id, chat_id)).value
-    charged = min(price, balance) if balance > 0 else 0
+    charged = await score_repo.debit_up_to(user_id, chat_id, price)
 
     if charged > 0:
-        await score_repo.add_delta(user_id, chat_id, -charged)
         await score_repo.add_delta(callback.bot.id, chat_id, charged)
 
     # Кнопка меняет цвет — обновляем только клавиатуру (текст сообщения не трогаем)

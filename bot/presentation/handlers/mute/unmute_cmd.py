@@ -13,7 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
-from bot.application.score_service import ScoreService
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -84,32 +84,30 @@ async def cmd_unmute(
 
     cost = max(1, math.ceil(remaining_minutes * mute_cfg.cost_per_minute * mute_cfg.unmute_multiplier))
 
-    score = await score_service.get_score(actor_id, chat_id)
-    if score.value < cost:
+    # Списываем баллы с актора: проверка баланса и списание — один атомарный запрос
+    spend = await score_service.spend_score(actor_id, actor_id, chat_id, cost, SPECIAL_EMOJI["sub"])
+    if not spend.success:
         await reply_and_delete(
             message,
             formatter._t["unmute_not_enough"].format(
                 target=target_display,
                 cost=cost,
                 score_word=p.pluralize(cost),
-                balance=score.value,
-                score_word_balance=p.pluralize(score.value),
+                balance=spend.current_balance,
+                score_word_balance=p.pluralize(spend.current_balance),
                 minutes=math.ceil(remaining_minutes),
             ),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
+    new_balance = spend.new_balance
 
     # Снимаем мут
     if is_owner_muted:
         await store.owner_mute_delete(chat_id, target_id)
     if entry is not None:
         await _unmute_user(message.bot, mute_service, entry)
-
-    # Списываем баллы с актора
-    await score_service.add_score(actor_id, chat_id, -cost, admin_id=actor_id)
-    new_balance = score.value - cost
 
     await reply_and_delete(
         message,
