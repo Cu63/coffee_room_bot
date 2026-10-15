@@ -58,7 +58,7 @@ class SparkBonusMiddleware(BaseMiddleware):
         for anchor_id in active:
             if anchor_id == user_id:
                 continue
-            count = await store.spark_add_responder(anchor_id, user_id, chat_id)
+            count = await store.spark_add_responder(anchor_id, user_id, chat_id, window_seconds)
             if count >= cfg.unique_responders:
                 await store.spark_award_cleanup(anchor_id, chat_id, cooldown_seconds)
                 new_value = await score_service.award_spark(anchor_id, chat_id, cfg.reward)

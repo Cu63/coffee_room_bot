@@ -9,7 +9,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Только localhost: Docker обходит ufw, и "5432:5432" открывал БД в интернет.
+      # Сервисы compose ходят на db:5432 по внутренней сети, flyway — через --network=host.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U scorebot"]
       interval: 5s

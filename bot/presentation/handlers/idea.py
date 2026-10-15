@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import time
@@ -84,7 +85,7 @@ async def cmd_idea(
     idea_text = formatter._t["idea_created"].format(
         id=idea_id,
         user=display,
-        text=text,
+        text=html.escape(text),
         up=0,
         down=0,
     )
@@ -195,7 +196,7 @@ async def cb_idea_vote(
     new_text = formatter._t["idea_created"].format(
         id=idea_id,
         user=display,
-        text=data["text"],
+        text=html.escape(data["text"]),
         up=up_count,
         down=down_count,
     )
@@ -248,7 +249,7 @@ async def _notify_threshold(
     notify_text = formatter._t["idea_threshold"].format(
         id=data["id"],
         votes=votes,
-        text=data["text"],
+        text=html.escape(data["text"]),
         author=author_display,
     )
 

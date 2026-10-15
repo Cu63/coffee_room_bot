@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Router
@@ -132,7 +133,7 @@ async def cmd_tag(
         text = (
             formatter._t["tag_cleared_free"].format(target=target_link)
             if clearing
-            else formatter._t["tag_success_free"].format(target=target_link, tag=new_tag)
+            else formatter._t["tag_success_free"].format(target=target_link, tag=html.escape(new_tag))
         )
         await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
         return
@@ -166,7 +167,7 @@ async def cmd_tag(
     else:
         text = formatter._t["tag_success"].format(
             target=target_link,
-            tag=new_tag,
+            tag=html.escape(new_tag),
             cost=cost,
             score_word=p.pluralize(cost),
             balance=result.new_balance,
