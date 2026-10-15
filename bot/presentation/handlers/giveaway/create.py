@@ -39,7 +39,7 @@ async def cmd_giveaway(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "⛔ Только администраторы могут создавать розыгрыши.")
         return
 
@@ -109,7 +109,7 @@ async def cmd_giveaway_period(
       /giveaway_period weekly 5000 1000 1d  — еженедельно, раунд 1 день
       /giveaway_period 6h 200 100           — каждые 6 часов
     """
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "⛔ Только администраторы могут создавать периодические розыгрыши.")
         return
 
@@ -203,7 +203,7 @@ async def cmd_giveaway_period_stop(
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
     """Останавливает периодический розыгрыш по ID или единственный активный."""
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "⛔ Только администраторы могут останавливать периодические розыгрыши.")
         return
 
@@ -254,7 +254,7 @@ async def cmd_giveaway_end(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "⛔ Только администраторы могут завершать розыгрыши.")
         return
 

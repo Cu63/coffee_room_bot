@@ -6,12 +6,9 @@ import random
 from datetime import datetime, timedelta
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
-    ChatMemberAdministrator,
-    ChatPermissions,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -20,11 +17,10 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.mute_service import MuteService
 from bot.domain.bot_utils import is_admin, parse_duration
-from bot.domain.entities import MuteEntry
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import _ADMIN_PERM_FIELDS, _extract_admin_permissions
+from bot.presentation.handlers._admin_utils import MuteOutcome, apply_mute
 from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
@@ -56,7 +52,7 @@ async def cmd_mute_roulette(
     config: FromDishka[AppConfig],
     store: FromDishka[RedisStore],
 ) -> None:
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "Только администраторы могут запускать мут-гивэвей.")
         return
 
@@ -152,7 +148,7 @@ async def cmd_mute_roulette_end(
     store: FromDishka[RedisStore],
     mute_service: FromDishka[MuteService],
 ) -> None:
-    if not is_admin(message.from_user and message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "Только администраторы.")
         return
 
@@ -221,49 +217,16 @@ async def _finish_mute_roulette(
             name = f"<code>{user_id}</code>"
             member = None
 
-        # Проверяем, является ли участник администратором
-        was_admin = isinstance(member, ChatMemberAdministrator)
-        admin_perms: dict | None = None
-        if was_admin:
-            admin_perms = _extract_admin_permissions(member)
-
-        try:
-            # Если админ — сначала снимаем права, потом мутим
-            if was_admin:
-                demote_kw = {f: False for f in _ADMIN_PERM_FIELDS}
-                try:
-                    await bot.promote_chat_member(chat_id=chat_id, user_id=user_id, **demote_kw)
-                except TelegramBadRequest:
-                    # Не удалось снять права — значит owner или выше наших прав
-                    lines.append(f"🛡️ {name} — администратор, мут невозможен")
-                    continue
-
-            await bot.restrict_chat_member(
-                chat_id=chat_id,
-                user_id=user_id,
-                permissions=ChatPermissions(can_send_messages=False),
-                until_date=until,
-            )
-            await mute_service.save_mute(
-                MuteEntry(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    muted_by=creator_id,
-                    until_at=until,
-                    was_admin=was_admin,
-                    admin_permissions=admin_perms,
-                )
-            )
+        muted = await apply_mute(
+            bot, mute_service, target_id=user_id, chat_id=chat_id, muted_by=creator_id, until=until
+        )
+        if muted.outcome == MuteOutcome.MUTED:
             lines.append(f"🔇 {name} — мут {mute_minutes} мин")
-        except TelegramBadRequest as e:
-            err = str(e).lower()
-            if any(w in err for w in ("not enough rights", "creator", "owner", "can't restrict", "administrator")):
-                lines.append(f"🛡️ {name} — администратор, мут невозможен")
-            else:
-                logger.exception("Failed to mute %d in roulette", user_id)
-                lines.append(f"⚠️ {name} — не удалось замутить")
-        except Exception:
-            logger.exception("Failed to mute %d in roulette", user_id)
+        elif muted.outcome == MuteOutcome.OWNER:
+            lines.append(f"🛡️ {name} — владелец чата, мут невозможен")
+        elif muted.outcome == MuteOutcome.RESTRICTED_BY_ADMIN:
+            lines.append(f"🛡️ {name} — уже ограничен админом")
+        else:
             lines.append(f"⚠️ {name} — не удалось замутить")
 
     result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")

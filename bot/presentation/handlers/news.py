@@ -17,6 +17,7 @@ from aiogram.filters import Command
 from aiogram.types import LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
+from bot.domain.bot_utils import is_admin
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.news_fetcher import NewsItem, fetch_random_news
@@ -41,12 +42,6 @@ def _format_news_item(item: NewsItem, template: str) -> str:
     )
 
 
-def _is_admin(username: str | None, admin_users: list[str]) -> bool:
-    if not username:
-        return False
-    return username.lower() in {u.lower() for u in admin_users}
-
-
 @router.message(Command("news"))
 @inject
 async def cmd_news(
@@ -61,11 +56,10 @@ async def cmd_news(
         return
 
     user_id = message.from_user.id
-    username = message.from_user.username
 
     # ── Hourly rate limit для не-админов ────────────────────────────────
     hourly_limit = config.news.hourly_limit
-    if hourly_limit > 0 and not _is_admin(username, config.admin.users):
+    if hourly_limit > 0 and not is_admin(message.from_user, config.admin.users):
         count = await redis.news_hourly_count(user_id)
         if count >= hourly_limit:
             await message.reply(f"⏳ Лимит /news исчерпан: не более {hourly_limit} раз в час. Попробуй позже!")

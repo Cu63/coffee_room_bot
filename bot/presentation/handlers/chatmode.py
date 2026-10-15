@@ -11,10 +11,10 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.chatmode_service import ChatmodeService
-from bot.domain.bot_utils import is_admin
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import user_link
+from bot.presentation.handlers._admin_utils import can_moderate
 from bot.presentation.utils import reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -190,26 +190,18 @@ async def cmd_chatmode(
 
     chat_id = message.chat.id
     user_id = message.from_user.id
-    is_cfg_admin = is_admin(message.from_user.username, config.admin.users)
 
     entry = await service.get_active(chat_id)
     if entry is None:
         await reply_and_delete(message, "ℹ️ Нет активного режима.")
         return
 
-    # Отменить может только инициатор или админ конфига
-    if entry.activated_by != user_id and not is_cfg_admin:
-        # Проверяем Telegram-админа
-        try:
-            from aiogram.types import ChatMemberAdministrator, ChatMemberOwner
-
-            member = await message.bot.get_chat_member(chat_id, user_id)
-            if not isinstance(member, (ChatMemberAdministrator, ChatMemberOwner)):
-                await reply_and_delete(message, "❌ Отменить режим может только его инициатор или администратор.")
-                return
-        except Exception:
-            await reply_and_delete(message, "❌ Не удалось проверить права.")
-            return
+    # Отменить может инициатор, админ бота или модератор чата (не купленный /buyop титул)
+    if entry.activated_by != user_id and not await can_moderate(
+        message.bot, chat_id, message.from_user, config.admin.users
+    ):
+        await reply_and_delete(message, "❌ Отменить режим может только его инициатор или администратор.")
+        return
 
     await service.deactivate(message.bot, entry)
 

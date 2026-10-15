@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Collection
+
 from aiogram import Dispatcher
 from aiogram.types import User as TgUser
 from dishka import AsyncContainer
@@ -22,6 +25,8 @@ from bot.presentation.middlewares.telegram_errors import TelegramErrorsMiddlewar
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation.middlewares.unsound_guard import UnsoundGuardMiddleware
 
+logger = logging.getLogger(__name__)
+
 
 async def register_bot_user(container: AsyncContainer, bot_me: TgUser) -> None:
     """Заводит бота в users.
@@ -33,6 +38,22 @@ async def register_bot_user(container: AsyncContainer, bot_me: TgUser) -> None:
     async with container() as scope:
         user_repo = await scope.get(IUserRepository)
         await user_repo.upsert(User(id=bot_me.id, username=bot_me.username, full_name=bot_me.full_name, is_bot=True))
+
+
+async def warn_about_username_admins(container: AsyncContainer, admins: Collection[str]) -> None:
+    """Подсказывает id для админов из admin.users, заданных по username.
+
+    username можно сменить, и освободившееся имя займёт кто-то другой — вместе с админкой бота.
+    """
+    usernames = [entry for entry in admins if not entry.isdigit()]
+    if not usernames:
+        return
+    async with container() as scope:
+        user_repo = await scope.get(IUserRepository)
+        for username in usernames:
+            user = await user_repo.get_by_username(username)
+            hint = f"замените на его id: {user.id}" if user else "id появится в users, когда он напишет в чат"
+            logger.warning("admin.users: @%s задан по username, который можно сменить и занять; %s", username, hint)
 
 
 def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:

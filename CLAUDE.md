@@ -66,9 +66,14 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 - Timeouts: a lobby nobody accepted → refund the creator; an abandoned started game → both stakes go to the bot.
 - The bot's own balance in each chat (`bot.id`) is the house: purchases and fees go there, prizes are paid from it. `scores.user_id` references `users`, so `main()` upserts the bot into `users` at startup (`register_bot_user`).
 
+### Moderation
+
+- Every mute goes through `apply_mute()` and every unmute through `lift_mute()` (`bot/presentation/handlers/_admin_utils.py`). They keep the admin-rights snapshot in `active_mutes` (merged in SQL, so a repeated mute never loses it), never shorten a longer mute, and leave a restriction set by hand alone (`MuteOutcome.RESTRICTED_BY_ADMIN`).
+- A title bought with `/buyop` (or given by `/op`) is not a moderator: check rights with `can_moderate()`: a bot admin, the chat owner, or an admin who can delete messages or restrict members.
+
 ### Configuration
 
-- `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Unknown keys are an error (`extra="forbid"`): a typo fails startup and `tests/unit/test_config.py`. Admins are `admin.users` (Telegram usernames); `admin.prefix` only filters admin messages out of chat summaries.
+- `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Unknown keys are an error (`extra="forbid"`): a typo fails startup and `tests/unit/test_config.py`. Admins are `admin.users`: numeric Telegram ids (preferred: a username can be changed and taken by someone else) or usernames, matched by `is_admin()`; at startup the bot logs the id for every admin still listed by username. `admin.prefix` only filters admin messages out of chat summaries.
 - `configs/messages.yaml` — user-facing texts. New texts go here (plenty of older code still has hardcoded strings). `tests/unit/test_smoke.py` checks that every `_t["key"]` used in code exists.
 - `configs/help.yaml` — `/help` menu structure and texts.
 - `configs/words_ru.txt` — word list for `/rword` and `/anagram`. It is gitignored and has to be put on the server by hand.

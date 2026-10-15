@@ -6,13 +6,34 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
+from typing import Protocol
 
 
-def is_admin(username: str | None, admins: list[str]) -> bool:
-    """Проверяет, входит ли username в список администраторов конфига."""
-    if not username:
-        return False
-    return username.lower() in admins
+class Account(Protocol):
+    """Пользователь Telegram: годится и aiogram.types.User, и domain.entities.User."""
+
+    @property
+    def id(self) -> int: ...
+
+    @property
+    def username(self) -> str | None: ...
+
+
+def is_admin(user: Account | None, admins: Collection[str]) -> bool:
+    """Админ бота из конфига (admin.users)."""
+    return user is not None and is_admin_account(user.id, user.username, admins)
+
+
+def is_admin_account(user_id: int, username: str | None, admins: Collection[str]) -> bool:
+    """admins — нормализованный admin.users: числовые id строками и username в нижнем регистре без @.
+
+    Надёжнее id: username можно сменить, и освободившееся имя займёт кто-то другой —
+    вместе с админкой бота.
+    """
+    if str(user_id) in admins:
+        return True
+    return bool(username) and username.lower() in admins
 
 
 _DURATION_PATTERN = re.compile(r"^(?:(\d+)[dд])?(?:(\d+)[hч])?(?:(\d+)[mм])?(?:(\d+)[sс])?$")

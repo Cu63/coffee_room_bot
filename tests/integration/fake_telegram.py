@@ -19,12 +19,16 @@ from aiogram.methods import (
     AnswerCallbackQuery,
     DeleteMessage,
     EditMessageText,
+    GetChat,
+    GetChatAdministrators,
     GetChatMember,
     GetMe,
     PinChatMessage,
     PromoteChatMember,
     RestrictChatMember,
     SendMessage,
+    SetChatAdministratorCustomTitle,
+    SetChatPermissions,
     SetMessageReaction,
     TelegramMethod,
     UnpinChatMessage,
@@ -35,8 +39,61 @@ from tests.integration.helpers import BOT_ID, CHAT
 
 M = TypeVar("M", bound=TelegramMethod[Any])
 
+# Права, с которыми getChatMember отдаёт статус administrator
+ADMIN_RIGHTS: dict[str, Any] = {
+    "can_be_edited": True,
+    "is_anonymous": False,
+    "can_manage_chat": True,
+    "can_delete_messages": True,
+    "can_manage_video_chats": False,
+    "can_restrict_members": False,
+    "can_promote_members": False,
+    "can_change_info": False,
+    "can_invite_users": True,
+    "can_post_stories": False,
+    "can_edit_stories": False,
+    "can_delete_stories": False,
+    "can_pin_messages": True,
+    "custom_title": "модер",
+}
+# Права, которые выдаёт promoteChatMember (все, кроме can_be_edited и титула)
+_PROMOTE_RIGHTS = tuple(name for name in ADMIN_RIGHTS if name not in ("can_be_edited", "custom_title"))
+_RESTRICTED_FLAGS = (
+    "can_send_messages",
+    "can_send_audios",
+    "can_send_documents",
+    "can_send_photos",
+    "can_send_videos",
+    "can_send_video_notes",
+    "can_send_voice_notes",
+    "can_send_polls",
+    "can_send_other_messages",
+    "can_add_web_page_previews",
+    "can_edit_tag",
+    "can_change_info",
+    "can_invite_users",
+    "can_pin_messages",
+    "can_manage_topics",
+)
+
 BOT_USER = User(id=BOT_ID, is_bot=True, first_name="Кофебот", username="coffee_test_bot")
 CHAT_JSON = {"id": CHAT, "type": "supergroup", "title": "Кофейня"}
+# Права участников чата по умолчанию (getChat → permissions): писать можно всё, менять чат и закреплять — нет
+CHAT_PERMISSIONS: dict[str, bool] = {
+    "can_send_messages": True,
+    "can_send_audios": True,
+    "can_send_documents": True,
+    "can_send_photos": True,
+    "can_send_videos": True,
+    "can_send_video_notes": True,
+    "can_send_voice_notes": True,
+    "can_send_polls": True,
+    "can_send_other_messages": True,
+    "can_add_web_page_previews": True,
+    "can_change_info": False,
+    "can_invite_users": True,
+    "can_pin_messages": False,
+}
 
 
 def member(uid: int, **fields: Any) -> User:
@@ -61,8 +118,13 @@ class FakeTelegramSession(BaseSession):
         super().__init__()
         self.log: list[tuple[TelegramMethod[Any], Any]] = []
         self._message_ids = itertools.count(10_000)
-        # Статус в чате для getChatMember: member, left, kicked, creator. По умолчанию — member.
+        # Статус в чате для getChatMember: member, administrator, restricted, left, kicked, creator.
+        # По умолчанию — member. promoteChatMember меняет его так же, как Telegram.
         self.member_status: dict[int, str] = {}
+        # Права админов, назначенных через promoteChatMember; остальные администраторы — с ADMIN_RIGHTS
+        self.admin_rights: dict[int, dict[str, Any]] = {}
+        # Права участников чата: getChat отдаёт, setChatPermissions меняет
+        self.chat_permissions: dict[str, bool] = dict(CHAT_PERMISSIONS)
 
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
         content = json.dumps({"ok": True, "result": self._result(method)})
@@ -80,6 +142,31 @@ class FakeTelegramSession(BaseSession):
                 return BOT_USER.model_dump(mode="json", exclude_none=True)
             case GetChatMember():
                 return self._chat_member_json(method.user_id)
+            case GetChatAdministrators():
+                admins = [uid for uid, status in self.member_status.items() if status in ("administrator", "creator")]
+                return [self._chat_member_json(uid) for uid in admins]
+            case GetChat():
+                return CHAT_JSON | {
+                    "accent_color_id": 0,
+                    "max_reaction_count": 11,
+                    "accepted_gift_types": {
+                        "unlimited_gifts": True,
+                        "limited_gifts": True,
+                        "unique_gifts": True,
+                        "premium_subscription": True,
+                        "gifts_from_channels": True,
+                    },
+                    "permissions": self.chat_permissions,
+                }
+            case SetChatPermissions():
+                self.chat_permissions = method.permissions.model_dump(mode="json", exclude_none=True)
+                return True
+            case PromoteChatMember():
+                self._promote(method)
+                return True
+            case SetChatAdministratorCustomTitle():
+                self.admin_rights.setdefault(method.user_id, dict(ADMIN_RIGHTS))["custom_title"] = method.custom_title
+                return True
             case (
                 AnswerCallbackQuery()
                 | PinChatMessage()
@@ -87,7 +174,6 @@ class FakeTelegramSession(BaseSession):
                 | DeleteMessage()
                 | SetMessageReaction()
                 | RestrictChatMember()
-                | PromoteChatMember()
             ):
                 return True
         raise NotImplementedError(f"фейковый Telegram не умеет {type(method).__name__}")
@@ -99,7 +185,21 @@ class FakeTelegramSession(BaseSession):
             result["until_date"] = 0
         if status == "creator":
             result["is_anonymous"] = False
+        if status == "administrator":
+            result |= self.admin_rights.get(user_id, ADMIN_RIGHTS)
+        if status == "restricted":
+            result |= {field: False for field in _RESTRICTED_FLAGS} | {"is_member": True, "until_date": 0}
         return result
+
+    def _promote(self, method: PromoteChatMember) -> None:
+        """Хоть одно право — администратор ровно с этими правами; ни одного — снова обычный участник."""
+        rights = {name: bool(getattr(method, name)) for name in _PROMOTE_RIGHTS}
+        if any(value for name, value in rights.items() if name.startswith("can_")):
+            self.member_status[method.user_id] = "administrator"
+            self.admin_rights[method.user_id] = rights | {"can_be_edited": True}
+        elif self.member_status.get(method.user_id) == "administrator":
+            self.member_status[method.user_id] = "member"
+            self.admin_rights.pop(method.user_id, None)
 
     async def stream_content(
         self,

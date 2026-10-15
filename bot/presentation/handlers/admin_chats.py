@@ -31,7 +31,7 @@ async def cmd_chats(
     if message.from_user is None:
         return
 
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         return
 
     chat_ids = await message_repo.get_active_chats()

@@ -83,9 +83,11 @@ async def main() -> None:
         register_middlewares,
         register_post_dishka_middlewares,
         register_routers,
+        warn_about_username_admins,
     )
 
     await register_bot_user(container, bot_me)
+    await warn_about_username_admins(container, config.admin.users)
     register_middlewares(dp, bot_me)
     register_routers(dp, config, settings)
     setup_dishka(container, dp)

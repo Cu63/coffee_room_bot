@@ -14,7 +14,7 @@ from bot.domain.bot_utils import is_admin
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import _resolve_username, _unmute_user
+from bot.presentation.handlers._admin_utils import _resolve_username, lift_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 router = Router(name="aunmute_cmd")
@@ -34,7 +34,7 @@ async def cmd_aunmute(
     """Админская команда: бесплатное снятие мута."""
     if message.from_user is None or message.bot is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
@@ -71,7 +71,7 @@ async def cmd_aunmute(
             link_preview_options=NO_PREVIEW,
         )
         return
-    await _unmute_user(message.bot, mute_service, entry)
+    await lift_mute(message.bot, mute_service, entry)
     await reply_and_delete(
         message,
         formatter._t["unmute_success"].format(user=display),

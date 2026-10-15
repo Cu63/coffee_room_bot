@@ -71,7 +71,7 @@ async def cmd_tag(
         new_tag = args.strip()
         is_self = True
     clearing = new_tag == "--clear"
-    is_free = is_admin(message.from_user.username, config.admin.users)
+    is_free = is_admin(message.from_user, config.admin.users)
 
     if not is_free and tc.cooldown_hours > 0:
         cd_key = f"{_TAG_CD_PREFIX}{chat_id}:{target.id}"

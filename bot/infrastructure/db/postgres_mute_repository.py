@@ -18,10 +18,12 @@ class PostgresMuteRepository(IMuteRepository):
             INSERT INTO active_mutes (user_id, chat_id, muted_by, until_at, was_admin, admin_permissions)
             VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (user_id, chat_id) DO UPDATE
+                -- Повторный мут не укорачивает срок и не теряет снимок админских прав:
+                -- второй мут видит цель уже без админки
                 SET muted_by = EXCLUDED.muted_by,
-                    until_at = EXCLUDED.until_at,
-                    was_admin = EXCLUDED.was_admin,
-                    admin_permissions = EXCLUDED.admin_permissions,
+                    until_at = GREATEST(active_mutes.until_at, EXCLUDED.until_at),
+                    was_admin = active_mutes.was_admin OR EXCLUDED.was_admin,
+                    admin_permissions = COALESCE(active_mutes.admin_permissions, EXCLUDED.admin_permissions),
                     created_at = now()
             """,
             entry.user_id,

@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
+from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from aiogram import Bot
-from aiogram.types import ChatMemberAdministrator, ChatPermissions, Message
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import (
+    ChatMember,
+    ChatMemberAdministrator,
+    ChatMemberOwner,
+    ChatMemberRestricted,
+    ChatPermissions,
+    Message,
+    User,
+)
 
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
-from bot.domain.bot_utils import parse_duration
+from bot.domain.bot_utils import is_admin, parse_duration
 from bot.domain.entities import MuteEntry
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 
@@ -45,6 +57,29 @@ MODERATOR_PERMS = {
     "can_manage_video_chats": False,
     "can_manage_topics": False,
 }
+
+
+def has_moderation_rights(member: ChatMember) -> bool:
+    """Владелец чата или админ, который может удалять сообщения или ограничивать участников.
+
+    Админка из /buyop и /op — титул без этих прав, она в счёт не идёт: иначе любой,
+    кто купил /buyop, отменял бы чужую оплаченную тишину и перепривязывал трекер.
+    """
+    if isinstance(member, ChatMemberOwner):
+        return True
+    return isinstance(member, ChatMemberAdministrator) and (member.can_restrict_members or member.can_delete_messages)
+
+
+async def can_moderate(bot: Bot, chat_id: int, user: User, admins: Collection[str]) -> bool:
+    """Админ бота из конфига или модератор чата с настоящими правами."""
+    if is_admin(user, admins):
+        return True
+    try:
+        member = await bot.get_chat_member(chat_id, user.id)
+    except TelegramAPIError:
+        logger.warning("Не удалось проверить права %d в чате %d", user.id, chat_id)
+        return False
+    return has_moderation_rights(member)
 
 
 def _extract_admin_permissions(member: ChatMemberAdministrator) -> dict:
@@ -136,6 +171,19 @@ def _admin_reply(formatter: MessageFormatter, target, new_value: int) -> str:
     )
 
 
+class MuteOutcome(StrEnum):
+    MUTED = "muted"
+    OWNER = "owner"  # владельца чата ограничить нельзя
+    RESTRICTED_BY_ADMIN = "restricted_by_admin"  # уже ограничен админом вручную — не трогаем
+    FAILED = "failed"  # Telegram не дал: нет прав и т.п.
+
+
+@dataclass(slots=True, frozen=True)
+class MuteResult:
+    outcome: MuteOutcome
+    until: datetime | None = None  # фактический срок: не раньше уже действующего мута
+
+
 async def apply_mute(
     bot: Bot,
     mute_service: MuteService,
@@ -144,26 +192,38 @@ async def apply_mute(
     chat_id: int,
     muted_by: int,
     until: datetime,
-) -> bool:
-    """Тихо мутит участника до `until` через Telegram restrict.
+) -> MuteResult:
+    """Единственный способ замутить участника через Telegram restrict.
 
-    Снимает админку у цели (и восстанавливает её при откате), сохраняет
-    MuteEntry и пишет лог. НЕ списывает баллы и НЕ шлёт сообщений в чат.
-    Возвращает True при успехе, False если замутить не удалось (нет прав,
-    цель — владелец, и т.п.).
+    - Не укорачивает действующий мут бота: срок — максимум из нового и текущего.
+    - Повторный мут не затирает снимок админских прав: второй мут видит цель уже
+      без админки, а права после размута нужно вернуть по снимку первого.
+    - Не трогает ограничения, наложенные админом вручную: restrict заменил бы их,
+      а размут снял бы совсем — их снимет только админ.
+
+    НЕ списывает баллы и НЕ шлёт сообщений в чат. Владельца (OWNER) вызывающий
+    может «мутить» мягко — удалением сообщений (owner_mute).
     """
     try:
         member = await bot.get_chat_member(chat_id, target_id)
-    except Exception:
-        return False
-    was_admin = isinstance(member, ChatMemberAdministrator)
-    admin_perms: dict | None = None
-    if was_admin:
-        admin_perms = _extract_admin_permissions(member)
+    except TelegramAPIError:
+        return MuteResult(MuteOutcome.FAILED)
+    if isinstance(member, ChatMemberOwner):
+        return MuteResult(MuteOutcome.OWNER)
+
+    existing = await mute_service.get_mute(target_id, chat_id)
+    if existing is None and isinstance(member, ChatMemberRestricted):
+        return MuteResult(MuteOutcome.RESTRICTED_BY_ADMIN)
+    if existing is not None and existing.until_at > until:
+        until = existing.until_at
+
+    now_admin = isinstance(member, ChatMemberAdministrator)
+    perms = _extract_admin_permissions(member) if now_admin else None
+    if now_admin:
         try:
             await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS})
-        except Exception:
-            return False
+        except TelegramAPIError:
+            return MuteResult(MuteOutcome.FAILED)
     try:
         await bot.restrict_chat_member(
             chat_id=chat_id,
@@ -171,28 +231,30 @@ async def apply_mute(
             permissions=ChatPermissions(can_send_messages=False),
             until_date=until,
         )
-    except Exception:
-        if was_admin and admin_perms:
+    except TelegramAPIError:
+        if now_admin and perms:
             try:
-                await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **_promote_kwargs(admin_perms))
-            except Exception:
-                logger.exception("Failed to restore admin rights after silent mute failure")
-        return False
+                await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **_promote_kwargs(perms))
+            except TelegramAPIError:
+                logger.exception("Failed to restore admin rights after mute failure")
+        return MuteResult(MuteOutcome.FAILED)
+
     await mute_service.save_mute(
         MuteEntry(
             user_id=target_id,
             chat_id=chat_id,
             muted_by=muted_by,
             until_at=until,
-            was_admin=was_admin,
-            admin_permissions=admin_perms,
+            was_admin=bool(existing and existing.was_admin) or now_admin,
+            admin_permissions=(existing.admin_permissions if existing else None) or perms,
         )
     )
     await mute_service.log_mute(target_id, muted_by, chat_id)
-    return True
+    return MuteResult(MuteOutcome.MUTED, until)
 
 
-async def _unmute_user(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> None:
+async def lift_mute(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> None:
+    """Снимает мут бота: возвращает права участника и админку по снимку."""
     try:
         await bot.restrict_chat_member(
             chat_id=entry.chat_id,

@@ -23,6 +23,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.handlers._admin_utils import can_moderate
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,11 @@ _TOPIC_ICONS = {
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 
-async def _is_admin(message: Message) -> bool:
+async def _is_admin(message: Message, config: AppConfig) -> bool:
+    """Админ бота или модератор чата: титул из /buyop настраивать трекер не даёт."""
     if message.from_user is None or message.bot is None:
         return False
-    member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
-    return member.status in ("administrator", "creator")
+    return await can_moderate(message.bot, message.chat.id, message.from_user, config.admin.users)
 
 
 async def _send_to_tracker(
@@ -149,10 +150,11 @@ async def cmd_settracker(
     message: Message,
     command: CommandObject,
     store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
 ) -> None:
     """Без аргументов — показать ID этого чата.
     С аргументом <tracker_chat_id> — привязать трекер."""
-    if not await _is_admin(message):
+    if not await _is_admin(message, config):
         await reply_and_delete(message, "❌ Только администраторы могут настраивать трекер.")
         return
 
@@ -194,10 +196,11 @@ async def cmd_settopic(
     message: Message,
     command: CommandObject,
     store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
 ) -> None:
     """Назначить текущий топик для типа обращений.
     Использование (внутри топика): /settopic bug|feature|report|changelog"""
-    if not await _is_admin(message):
+    if not await _is_admin(message, config):
         await reply_and_delete(message, "❌ Только администраторы могут настраивать топики.")
         return
 
@@ -379,7 +382,9 @@ async def cmd_updates(
 # данного чата — сохраняем в Redis.
 
 
-async def _handle_changelog_message(message: Message, store: RedisStore, is_edit: bool = False) -> None:
+async def _handle_changelog_message(
+    message: Message, store: RedisStore, config: AppConfig, is_edit: bool = False
+) -> None:
     """Общая логика обработки сообщения в changelog-топике."""
     if message.message_thread_id is None or not message.text:
         return
@@ -392,10 +397,8 @@ async def _handle_changelog_message(message: Message, store: RedisStore, is_edit
         return  # Не changelog-топик
 
     # Только сообщения от администраторов (фильтруем мусор)
-    if message.from_user:
-        member = await message.bot.get_chat_member(chat_id, message.from_user.id)
-        if member.status not in ("administrator", "creator"):
-            return
+    if message.from_user and not await _is_admin(message, config):
+        return
 
     date_str = to_msk(message.date).strftime("%d.%m.%Y") if message.date else ""
     await store.changelog_add(
@@ -418,8 +421,9 @@ async def _handle_changelog_message(message: Message, store: RedisStore, is_edit
 async def on_changelog_message(
     message: Message,
     store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
 ) -> None:
-    await _handle_changelog_message(message, store, is_edit=False)
+    await _handle_changelog_message(message, store, config, is_edit=False)
 
 
 @router.edited_message(F.chat.type == "supergroup", F.message_thread_id.is_not(None))
@@ -427,5 +431,6 @@ async def on_changelog_message(
 async def on_changelog_edited(
     message: Message,
     store: FromDishka[RedisStore],
+    config: FromDishka[AppConfig],
 ) -> None:
-    await _handle_changelog_message(message, store, is_edit=True)
+    await _handle_changelog_message(message, store, config, is_edit=True)

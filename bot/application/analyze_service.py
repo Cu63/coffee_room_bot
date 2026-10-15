@@ -7,6 +7,7 @@ from datetime import datetime
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import ChatMessage, IMessageRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
+from bot.domain.bot_utils import is_admin_account
 from bot.infrastructure.config_loader import AnalyzeConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.openai_client import OpenAiClient
@@ -75,15 +76,12 @@ class AnalyzeService:
 
     # ── Вспомогательные методы ───────────────────────────────────────────
 
-    def _is_admin(self, username: str | None) -> bool:
-        return username is not None and username.lower() in self._admin_users
-
     async def _check_token_limit(self, user_id: int, username: str | None) -> None:
         """Проверяет дневной лимит input-токенов. Raises AnalyzeRateLimitExceeded."""
         limit = self._config.daily_input_token_limit
         if limit <= 0:
             return  # 0 = без лимита
-        if self._is_admin(username):
+        if is_admin_account(user_id, username, self._admin_users):
             return  # администраторы не ограничены
         used = await self._llm_repo.sum_input_tokens_today(user_id, _ANALYZE_COMMANDS)
         if used >= limit:

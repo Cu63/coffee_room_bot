@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import ChatMessage, IMessageRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
+from bot.domain.bot_utils import is_admin_account
 from bot.domain.entities import User
 from bot.infrastructure.config_loader import FanficConfig
 from bot.infrastructure.message_formatter import MessageFormatter
@@ -83,8 +84,7 @@ class FanficService:
         Raises FanficRateLimitExceeded, если дневной лимит исчерпан (админов не касается).
         """
         limit = self._config.daily_limit_per_user
-        is_admin = username is not None and username.lower() in self._admin_users
-        if limit > 0 and not is_admin:
+        if limit > 0 and not is_admin_account(user_id, username, self._admin_users):
             used = await self._llm_repo.count_today(user_id, ("ff",))
             if used >= limit:
                 raise FanficRateLimitExceeded(used, limit)

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 async def unmute_loop(container, bot: Bot, interval_seconds: int) -> None:
     from bot.application.mute_service import MuteService
-    from bot.presentation.handlers._admin_utils import _unmute_user
+    from bot.presentation.handlers._admin_utils import lift_mute
 
     while True:
         await asyncio.sleep(interval_seconds)
@@ -27,6 +27,6 @@ async def unmute_loop(container, bot: Bot, interval_seconds: int) -> None:
                         entry.chat_id,
                         entry.was_admin,
                     )
-                    await _unmute_user(bot, mute_service, entry)
+                    await lift_mute(bot, mute_service, entry)
         except Exception:
             logger.exception("Unmute task failed")

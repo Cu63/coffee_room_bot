@@ -22,10 +22,7 @@ from bot.domain.bot_utils import is_admin
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.handlers._admin_utils import (
-    _resolve_mute_args,
-    apply_mute,
-)
+from bot.presentation.handlers._admin_utils import MuteOutcome, _resolve_mute_args, apply_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -48,7 +45,7 @@ async def cmd_amute(
     bot = message.bot
     chat_id = message.chat.id
     mute_cfg = config.mute
-    is_config_admin = is_admin(message.from_user.username, config.admin.users)
+    is_config_admin = is_admin(message.from_user, config.admin.users)
     if not is_config_admin:
         try:
             caller_member = await bot.get_chat_member(chat_id, message.from_user.id)
@@ -74,7 +71,7 @@ async def cmd_amute(
         await reply_and_delete(message, formatter._t["mute_self"])
         return
     until, amute_was_stacked = await mute_service.compute_stacked_until(target.id, chat_id, minutes * 60)
-    ok = await apply_mute(
+    muted = await apply_mute(
         bot,
         mute_service,
         target_id=target.id,
@@ -82,11 +79,20 @@ async def cmd_amute(
         muted_by=message.from_user.id,
         until=until,
     )
-    if not ok:
+    target_link = user_link(target.username, target.full_name, target.id)
+    if muted.outcome == MuteOutcome.RESTRICTED_BY_ADMIN:
+        await reply_and_delete(
+            message,
+            formatter._t["mute_restricted_by_admin"].format(target=target_link),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+        )
+        return
+    if muted.outcome != MuteOutcome.MUTED:
         await reply_and_delete(message, formatter._t["mute_failed"])
         return
+    until = muted.until or until
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
-    target_link = user_link(target.username, target.full_name, target.id)
     amute_total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
     amute_stack_note = f" (итого: {amute_total_minutes} мин)" if amute_was_stacked else ""
     await reply_and_delete(

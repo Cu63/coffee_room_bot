@@ -79,13 +79,14 @@ class HistoryConfig(_BaseConfig):
 
 class AdminConfig(_BaseConfig):
     prefix: str = "admin"
+    # Числовые id Telegram (надёжно) или username (его можно сменить и занять)
     users: list[str] = []
 
     @field_validator("users", mode="before")
     @classmethod
-    def normalize_users(cls, v: list[str] | None) -> list[str]:
-        """Приводит имена пользователей к нижнему регистру и убирает @."""
-        return [u.lstrip("@").lower() for u in (v or [])]
+    def normalize_users(cls, v: list[str | int] | None) -> list[str]:
+        """id — строкой; username — в нижнем регистре и без @."""
+        return [str(u).strip().lstrip("@").lower() for u in (v or [])]
 
 
 class XpLevelsConfig(_BaseConfig):

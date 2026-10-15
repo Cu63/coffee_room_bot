@@ -22,7 +22,7 @@ from bot.domain.tz import now_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import apply_mute
+from bot.presentation.handlers._admin_utils import MuteOutcome, apply_mute
 from bot.presentation.utils import schedule_delete
 
 router = Router(name="sixtyseven")
@@ -75,8 +75,8 @@ async def on_sixtyseven(
         muted_by=bot.id,
         until=until,
     )
-    if not muted:
-        # Не удалось замутить (нет прав / владелец) — молча выходим.
+    if muted.outcome != MuteOutcome.MUTED:
+        # Не удалось замутить (нет прав / владелец / уже ограничен админом) — молча выходим.
         return
 
     # Раз мут выдан за «67» — удаляем это сообщение и сообщаем о муте.

@@ -129,7 +129,7 @@ async def cmd_lot(
         return
 
     # Только конфиг-администраторы
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "❌ Только администраторы могут выставлять лоты.")
         return
 

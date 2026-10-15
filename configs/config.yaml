@@ -27,6 +27,8 @@ history:
 
 admin:
   prefix: "coffee"
+  # Числовые id Telegram или username. id надёжнее: username можно сменить, и имя займёт другой.
+  # При старте бот пишет в лог id каждого админа, заданного по username.
   users:
     - "shared_mutex"
     - "ju57_4_cu63"

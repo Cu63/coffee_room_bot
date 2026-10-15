@@ -85,7 +85,7 @@ async def cmd_summary_admin(
     # Авто-удаление самой команды через 5 минут (срабатывает в любом случае).
     schedule_delete(bot, message, delay=_AUTO_DELETE_SEC)
 
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         deny = await message.reply(formatter._t["admin_not_allowed"])
         schedule_delete(bot, deny, delay=_AUTO_DELETE_SEC)
         return

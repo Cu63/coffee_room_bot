@@ -40,7 +40,7 @@ async def cmd_save(
 ) -> None:
     if message.from_user is None or message.bot is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
@@ -92,7 +92,7 @@ async def cmd_restore(
 ) -> None:
     if message.from_user is None or message.bot is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
@@ -139,7 +139,7 @@ async def cmd_op(
 ) -> None:
     if message.from_user is None or message.bot is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
@@ -186,7 +186,7 @@ async def cmd_deop(
 ) -> None:
     if message.from_user is None or message.bot is None:
         return
-    if not is_admin(message.from_user.username, config.admin.users):
+    if not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
