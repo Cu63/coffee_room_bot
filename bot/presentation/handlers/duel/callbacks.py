@@ -9,10 +9,9 @@ from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
-from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.application.stake_service import StakeService
 from bot.domain.entities import User
 from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
@@ -44,8 +43,7 @@ router = Router(name="duel_callbacks")
 async def cb_duel_accept(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_service: FromDishka[ScoreService],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
@@ -94,17 +92,10 @@ async def cb_duel_accept(
         )
     )
 
-    # Списываем ставку с целевого
-    emoji = SPECIAL_EMOJI.get(game, "⚔️")
-    result = await score_service.spend_score(
-        actor_id=user_id,
-        target_id=user_id,
-        chat_id=chat_id,
-        cost=bet,
-        emoji=emoji,
-        kind=LedgerKind.STAKE,
-        ref=f"duel:{invite_id}",
-    )
+    # Списываем ставку целевого в банк дуэли
+    ref = f"duel:{invite_id}"
+    in_pot = data.get("pot", False)
+    result = await stakes.hold(user_id, chat_id, ref, bet, pot=in_pot)
     if not result.success:
         sw = p.pluralize(bet)
         sw_bal = p.pluralize(result.current_balance)
@@ -118,7 +109,7 @@ async def cb_duel_accept(
     # Забираем приглашение: если его уже забрал цикл истечения (и вернул ставку создателю)
     # или второе нажатие — возвращаем ставку принимающего
     if not await store.game_delete(key):
-        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{invite_id}")
+        await stakes.pay(user_id, chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
         await safe_callback_answer(cb, "⏰ Приглашение уже истекло.", show_alert=True)
         return
 
@@ -127,7 +118,7 @@ async def cb_duel_accept(
     if game == "ttt":
         await _start_ttt_from_duel(cb, data, game_id, chat_id, bet, store, p)
     else:
-        await _start_bj_from_duel(cb, data, game_id, chat_id, bet, store, score_repo, stats_repo, p)
+        await _start_bj_from_duel(cb, data, game_id, chat_id, bet, store, stakes, stats_repo, p)
 
 
 # ── Callback: Отказаться от дуэли ───────────────────────────────────────
@@ -138,7 +129,7 @@ async def cb_duel_accept(
 async def cb_duel_decline(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     pluralizer: FromDishka[ScorePluralizer],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
@@ -175,7 +166,9 @@ async def cb_duel_decline(
     # Возвращаем ставку создателю
     bet = data["bet"]
     challenger_id = data["challenger_id"]
-    await score_repo.add_delta(challenger_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{invite_id}")
+    await stakes.pay(
+        challenger_id, chat_id, f"duel:{invite_id}", bet, kind=LedgerKind.REFUND, pot=data.get("pot", False)
+    )
 
     challenger_display = user_link(
         data["challenger_username"] or None,

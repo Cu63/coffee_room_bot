@@ -15,11 +15,10 @@ from aiogram.types import CallbackQuery
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.daily_leaderboard_repository import IDailyLeaderboardRepository
-from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.iq_service import IqService
-from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.application.stake_service import StakeService
 from bot.domain.entities import User
 from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
@@ -66,8 +65,7 @@ def _display(data: dict, side: str) -> str:
 async def cb_ttt_accept(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_service: FromDishka[ScoreService],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
@@ -120,16 +118,9 @@ async def cb_ttt_accept(
     p = pluralizer
     ref = _game_ref(data)
 
-    # Списываем ставку с принимающего
-    result = await score_service.spend_score(
-        actor_id=user_id,
-        target_id=user_id,
-        chat_id=chat_id,
-        cost=bet,
-        emoji=SPECIAL_EMOJI.get("ttt", "🎮"),
-        kind=LedgerKind.STAKE,
-        ref=ref,
-    )
+    # Списываем ставку принимающего в банк игры
+    in_pot = data.get("pot", False)
+    result = await stakes.hold(user_id, chat_id, ref, bet, pot=in_pot)
     if not result.success:
         await store.game_unlock(accept_lock)
         sw = p.pluralize(bet)
@@ -157,7 +148,7 @@ async def cb_ttt_accept(
     # Лобби → игра, только если лобби ещё ждёт: если его уже забрал цикл истечения
     # (и вернул ставку создателю), игру не воскрешаем, а ставку принимающего возвращаем
     if await store.game_replace_if_state(key, "lobby", data, _TTT_GAME_TTL + _TTT_REDIS_BUFFER) is None:
-        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+        await stakes.pay(user_id, chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
         await safe_callback_answer(cb, formatter._t["ttt_expired"], show_alert=True)
         return
 
@@ -190,7 +181,7 @@ async def _answer_stale(cb: CallbackQuery, store: RedisStore, snapshot: GameSnap
 async def cb_ttt_move(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     stats_repo: FromDishka[IUserStatsRepository],
     lb_repo: FromDishka[IDailyLeaderboardRepository],
     iq_service: FromDishka[IqService],
@@ -261,10 +252,11 @@ async def cb_ttt_move(
             return
 
         ref = _game_ref(data)
+        in_pot = data.get("pot", False)
         board_text = _render_board(board, data["history_x"], data["history_o"], turn)
         if draw:
             for side in ("x", "o"):
-                await score_repo.add_delta(data[f"player_{side}"], chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+                await stakes.pay(data[f"player_{side}"], chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
             text = formatter._t["ttt_draw"].format(
                 player_x=_display(data, "x"),
                 player_o=_display(data, "o"),
@@ -276,7 +268,7 @@ async def cb_ttt_move(
             winner_side = "x" if winner == 1 else "o"
             winner_id = data[f"player_{winner_side}"]
             total_pot = bet * 2
-            await score_repo.add_delta(winner_id, chat_id, total_pot, kind=LedgerKind.PRIZE, ref=ref)
+            await stakes.pay(winner_id, chat_id, ref, total_pot, kind=LedgerKind.PRIZE, pot=in_pot)
             await stats_repo.add_win(winner_id, chat_id, "ttt")
             await lb_repo.add_game_win(winner_id, chat_id, "ttt", now_msk().date())
             # +IQ за победу (с учётом дневного лимита)

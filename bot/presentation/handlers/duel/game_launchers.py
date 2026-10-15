@@ -11,8 +11,8 @@ import time
 
 from aiogram.types import CallbackQuery
 
-from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.stake_service import StakeService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
@@ -65,6 +65,7 @@ async def _start_ttt_from_duel(
     data = {
         "game_id": game_id,
         "ref": f"duel:{invite['invite_id']}",
+        "pot": invite.get("pot", False),
         "state": "playing",
         "player_x": x_id,
         "player_x_name": x_name,
@@ -108,7 +109,7 @@ async def _start_bj_from_duel(
     chat_id: int,
     bet: int,
     store: RedisStore,
-    score_repo: IScoreRepository,
+    stakes: StakeService,
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
 ) -> None:
@@ -117,6 +118,7 @@ async def _start_bj_from_duel(
     data = {
         "game_id": game_id,
         "ref": f"duel:{invite['invite_id']}",
+        "pot": invite.get("pot", False),
         "p1_id": p1_id,
         "p1_name": p1_name,
         "p1_username": p1_username,
@@ -137,7 +139,7 @@ async def _start_bj_from_duel(
     if data["p1_done"] and data["p2_done"]:
         # Натуральный блекджек — сразу вскрытие. Игра никуда не сохранялась, а приглашение
         # уже забрано: рассчитать её больше некому
-        text = await _settle_game(data, score_repo, stats_repo, p, chat_id)
+        text = await _settle_game(data, stakes, stats_repo, p, chat_id)
         await edit_callback_message(cb, text)
         if cb.message.bot:
             schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)

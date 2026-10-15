@@ -14,10 +14,9 @@ from aiogram.types import CallbackQuery
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.blackjack_service import cards_to_dicts, dicts_to_cards
-from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
-from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.application.stake_service import StakeService
 from bot.domain.entities import User
 from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
@@ -62,8 +61,7 @@ def _game_id(cb: CallbackQuery) -> str | None:
 async def cb_bj_accept(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_service: FromDishka[ScoreService],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
@@ -115,16 +113,9 @@ async def cb_bj_accept(
     p = pluralizer
     ref = _game_ref(data)
 
-    # Списываем ставку с принимающего
-    result = await score_service.spend_score(
-        actor_id=user_id,
-        target_id=user_id,
-        chat_id=chat_id,
-        cost=bet,
-        emoji=SPECIAL_EMOJI.get("bj", "\U0001f0cf"),
-        kind=LedgerKind.STAKE,
-        ref=ref,
-    )
+    # Списываем ставку принимающего в банк игры
+    in_pot = data.get("pot", False)
+    result = await stakes.hold(user_id, chat_id, ref, bet, pot=in_pot)
     if not result.success:
         await store.game_unlock(accept_lock)
         sw = p.pluralize(bet)
@@ -152,14 +143,14 @@ async def cb_bj_accept(
     # (и вернул ставку создателю), игру не воскрешаем, а ставку принимающего возвращаем
     snapshot = await store.game_replace_if_state(key, "lobby", data, _BJ_GAME_TTL + _BJ_REDIS_BUFFER)
     if snapshot is None:
-        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+        await stakes.pay(user_id, chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
         await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
         return
 
     side = _side_of(data, user_id)
     if data["p1_done"] and data["p2_done"]:
         # Натуральный блекджек — сразу вскрытие
-        if await _finish(cb, store, snapshot, score_repo, stats_repo, p):
+        if await _finish(cb, store, snapshot, stakes, stats_repo, p):
             await safe_callback_answer(cb, "\U0001f3b0 Блекджек!")
         return
 
@@ -200,7 +191,7 @@ async def _finish(
     cb: CallbackQuery,
     store: RedisStore,
     snapshot: GameSnapshot,
-    score_repo: IScoreRepository,
+    stakes: StakeService,
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
 ) -> bool:
@@ -208,7 +199,7 @@ async def _finish(
     if not await store.game_claim(snapshot):
         await _answer_stale(cb, store, snapshot)
         return False
-    text = await _settle_game(snapshot.data, score_repo, stats_repo, p, cb.message.chat.id)
+    text = await _settle_game(snapshot.data, stakes, stats_repo, p, cb.message.chat.id)
     await _edit(cb, text, None)
     if cb.message.bot:
         schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
@@ -228,7 +219,7 @@ async def _end_turn(
     store: RedisStore,
     snapshot: GameSnapshot,
     side: str,
-    score_repo: IScoreRepository,
+    stakes: StakeService,
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
     alert: str,
@@ -236,7 +227,7 @@ async def _end_turn(
     """Сохранить ход. Игрок закончил — ход переходит; закончили оба — вскрытие."""
     data = snapshot.data
     if data[f"{side}_done"] and data[f"{_other(side)}_done"]:
-        if await _finish(cb, store, snapshot, score_repo, stats_repo, p):
+        if await _finish(cb, store, snapshot, stakes, stats_repo, p):
             await safe_callback_answer(cb, alert, show_alert=True)
         return
 
@@ -258,7 +249,7 @@ async def _end_turn(
 async def cb_bj_hit(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
@@ -281,7 +272,7 @@ async def cb_bj_hit(
         data[f"{side}_done"] = True  # автоматически «Хватит»
 
     alert = f"\U0001f0cf Взял {_format_hand_from_dicts([data[f'{side}_hand'][-1]])}.\n" + _hand_alert(data, side)
-    await _end_turn(cb, store, snapshot, side, score_repo, stats_repo, pluralizer, alert)
+    await _end_turn(cb, store, snapshot, side, stakes, stats_repo, pluralizer, alert)
 
 
 # ── Callback: Stand ────────────────────────────────────────────────────
@@ -292,7 +283,7 @@ async def cb_bj_hit(
 async def cb_bj_stand(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
-    score_repo: FromDishka[IScoreRepository],
+    stakes: FromDishka[StakeService],
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
@@ -301,7 +292,7 @@ async def cb_bj_stand(
         return
     snapshot, side = loaded
     snapshot.data[f"{side}_done"] = True
-    await _end_turn(cb, store, snapshot, side, score_repo, stats_repo, pluralizer, _hand_alert(snapshot.data, side))
+    await _end_turn(cb, store, snapshot, side, stakes, stats_repo, pluralizer, _hand_alert(snapshot.data, side))
 
 
 # ── Callback: свои карты ───────────────────────────────────────────────
