@@ -9,7 +9,6 @@ import time
 
 from aiogram import Bot, Router
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import ChatMemberAdministrator, ChatMemberOwner, ChatPermissions, Message
 from dishka.integrations.aiogram import FromDishka, inject
@@ -25,7 +24,6 @@ from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import (
     _ADMIN_PERM_FIELDS,
-    _extract_admin_permissions,
 )
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 

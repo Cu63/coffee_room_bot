@@ -8,7 +8,7 @@ from bot.application.interfaces.daily_leaderboard_repository import (
     DailyLeaderboard,
     IDailyLeaderboardRepository,
 )
-from bot.application.score_service import ScoreService, SPECIAL_EMOJI
+from bot.application.score_service import ScoreService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 

@@ -14,27 +14,36 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW
-
-# Импортируем внутренние утилиты из игровых хендлеров
-from bot.presentation.handlers.tictactoe import (
-    _TTT_GAME_TTL,
-    _game_kb as _ttt_game_kb,
-    _render_board as _ttt_render_board,
-    _ttt_key,
-)
 from bot.presentation.handlers.blackjack import (
     _BJ_GAME_TTL,
     _BJ_REDIS_BUFFER,
     _bj_key,
-    _is_natural as _bj_is_natural,
+)
+from bot.presentation.handlers.blackjack import (
     _hand_score_from_dicts as _bj_hand_score,
+)
+from bot.presentation.handlers.blackjack import (
+    _is_natural as _bj_is_natural,
+)
+from bot.presentation.handlers.blackjack import (
     _play_kb as _bj_play_kb,
+)
+from bot.presentation.handlers.blackjack import (
     _turn_text as _bj_turn_text,
 )
 
-from bot.presentation.handlers.duel.helpers import _make_invite_id
-
+# Импортируем внутренние утилиты из игровых хендлеров
+from bot.presentation.handlers.tictactoe import (
+    _TTT_GAME_TTL,
+    _ttt_key,
+)
+from bot.presentation.handlers.tictactoe import (
+    _game_kb as _ttt_game_kb,
+)
+from bot.presentation.handlers.tictactoe import (
+    _render_board as _ttt_render_board,
+)
+from bot.presentation.utils import NO_PREVIEW
 
 # ── Запуск TTT из дуэли ──────────────────────────────────────────────────
 
@@ -48,7 +57,6 @@ async def _start_ttt_from_duel(
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует TTT игру, в которой оба игрока уже известны."""
-    from bot.infrastructure.message_formatter import user_link
 
     challenger_id = invite["challenger_id"]
     challenger_name = invite["challenger_name"]
@@ -124,7 +132,6 @@ async def _start_bj_from_duel(
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует BJ игру, в которой оба игрока уже известны."""
-    from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 
     challenger_id = invite["challenger_id"]
     challenger_name = invite["challenger_name"]
@@ -185,7 +192,6 @@ async def _start_bj_from_duel(
         # Получаем stats_repo из dishka через cb (нет прямого доступа, используем заглушку)
         # Поскольку natural BJ — редкий случай, логируем и продолжаем без stats
         try:
-            from bot.application.interfaces.user_stats_repository import IUserStatsRepository as _IUS
             # stats недоступны напрямую здесь, передаём фиктивный объект-заглушку
             class _NoStats:
                 async def add_win(self, *a, **kw): pass

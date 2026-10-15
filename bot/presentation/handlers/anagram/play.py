@@ -17,9 +17,8 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import schedule_delete, schedule_delete_id
-
 from bot.presentation.handlers.anagram.helpers import _game_text
+from bot.presentation.utils import schedule_delete, schedule_delete_id
 
 router = Router(name="anagram_play")
 

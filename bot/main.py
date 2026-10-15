@@ -113,8 +113,8 @@ async def main() -> None:
     from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
-    from bot.infrastructure.unmute_loop import unmute_loop
     from bot.infrastructure.tax_loop import tax_loop
+    from bot.infrastructure.unmute_loop import unmute_loop
     from bot.infrastructure.wordgame_loop import wordgame_loop
     from bot.presentation.utils import delete_loop
 

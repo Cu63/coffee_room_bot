@@ -27,9 +27,9 @@ from bot.application.interfaces.per_target_limits_repository import IPerTargetLi
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.interfaces.xp_repository import IXpRepository
+from bot.application.iq_service import IqService
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
-from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.application.xp_service import XpService

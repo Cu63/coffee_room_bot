@@ -14,7 +14,6 @@ import logging
 import random
 
 from aiogram import F, Router
-from dishka.integrations.aiogram import FromDishka, inject
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
@@ -22,6 +21,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
+from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.score_service import ScoreService

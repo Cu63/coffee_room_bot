@@ -225,13 +225,13 @@ async def on_private_text(
     if state is None or state.get("step") != "write_message":
         # Не в режиме ввода — игнорируем
         return
-    
+
 
     chat_id: int = state["chat_id"]
     chat_title: str = state.get("chat_title", str(chat_id))
 
     if (await score_service.get_score(user_id, chat_id)).value < ANON_MESSAGE_PAYMENT:
-        await message.answer(f"❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
+        await message.answer("❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
         return
 
 

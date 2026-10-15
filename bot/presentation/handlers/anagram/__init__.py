@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from aiogram import Router
 
-from bot.presentation.handlers.anagram.start import router as start_router
-from bot.presentation.handlers.anagram.play import router as play_router
 from bot.presentation.handlers.anagram.create import create_anagram_game
+from bot.presentation.handlers.anagram.play import router as play_router
+from bot.presentation.handlers.anagram.start import router as start_router
 
 router = Router(name="anagram")
 router.include_router(start_router)

@@ -246,7 +246,6 @@ class ScoreService:
         return ApplyResult(applied=True, delta=reverse_delta, new_value=new_value)
 
     async def get_stats(self, user_id: int, chat_id: int):
-        from bot.domain.entities import UserStats  # локальный импорт во избежание цикла
         return await self._stats_repo.get(user_id, chat_id)
 
     async def get_score(self, user_id: int, chat_id: int) -> Score:
@@ -296,7 +295,7 @@ class ScoreService:
         emoji = SPECIAL_EMOJI["add"] if delta >= 0 else SPECIAL_EMOJI["sub"]
         await self._save_special_event(admin_id, user_id, chat_id, delta, emoji)
         return new_value
-    
+
     async def add_score_quiet(
         self,
         user_id: int,

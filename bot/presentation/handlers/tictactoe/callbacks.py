@@ -30,7 +30,6 @@ from bot.presentation.handlers.tictactoe.game_logic import (
     _DELETE_DELAY,
     _MAX_PIECES,
     _TTT_GAME_TTL,
-    _TTT_LOBBY_TTL,
     _check_winner,
     _game_kb,
     _is_draw,

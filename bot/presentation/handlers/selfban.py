@@ -15,7 +15,7 @@ from bot.domain.bot_utils import format_duration, parse_duration
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete
+from bot.presentation.utils import reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="selfban")

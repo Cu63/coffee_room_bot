@@ -17,19 +17,18 @@ from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import (
-    NO_PREVIEW,
-    check_gameban,
-    safe_callback_answer,
+from bot.presentation.handlers.duel.game_launchers import (
+    _start_bj_from_duel,
+    _start_ttt_from_duel,
 )
-
 from bot.presentation.handlers.duel.helpers import (
     _duel_key,
     _make_invite_id,
 )
-from bot.presentation.handlers.duel.game_launchers import (
-    _start_bj_from_duel,
-    _start_ttt_from_duel,
+from bot.presentation.utils import (
+    NO_PREVIEW,
+    check_gameban,
+    safe_callback_answer,
 )
 
 logger = logging.getLogger(__name__)

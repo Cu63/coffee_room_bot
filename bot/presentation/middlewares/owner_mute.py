@@ -10,7 +10,6 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, TelegramObject
 from dishka import AsyncContainer
 
-from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 
 logger = logging.getLogger(__name__)

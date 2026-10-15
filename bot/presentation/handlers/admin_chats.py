@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.types.chat import Chat
 from dishka.integrations.aiogram import FromDishka, inject
-from aiogram import F
 
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.domain.bot_utils import is_admin

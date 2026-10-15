@@ -25,7 +25,7 @@ from bot.application.xp_service import XpService
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer, schedule_delete
+from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
 
 router = Router(name="commands")
 

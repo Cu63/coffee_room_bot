@@ -19,13 +19,6 @@ from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import (
-    NO_PREVIEW,
-    check_gameban,
-    reply_and_delete,
-    schedule_delete_id,
-)
-
 from bot.presentation.handlers.duel.helpers import (
     _DUEL_INVITE_TTL,
     _DUEL_TIMEOUT,
@@ -33,6 +26,12 @@ from bot.presentation.handlers.duel.helpers import (
     _duel_key,
     _invite_kb,
     _make_invite_id,
+)
+from bot.presentation.utils import (
+    NO_PREVIEW,
+    check_gameban,
+    reply_and_delete,
+    schedule_delete_id,
 )
 
 logger = logging.getLogger(__name__)

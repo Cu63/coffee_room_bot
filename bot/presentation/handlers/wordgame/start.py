@@ -24,7 +24,7 @@ from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
-from bot.presentation.handlers.wordgame.helpers import game_text, open_dm_kb
+from bot.presentation.handlers.wordgame.helpers import open_dm_kb
 from bot.presentation.utils import check_gameban, reply_and_delete, schedule_delete
 
 router = Router(name="wordgame_start")

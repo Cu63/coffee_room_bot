@@ -49,7 +49,6 @@ def _parse_args(args: str | None) -> tuple[int, datetime | None, list[str]]:
 
 def _rate_limit_text(used: int, limit: int) -> str:
     """Сообщение о превышении лимита токенов."""
-    from datetime import date
     tomorrow = "завтра в 00:00 МСК"
     return (
         f"⛔ Дневной лимит токенов исчерпан.\n\n"

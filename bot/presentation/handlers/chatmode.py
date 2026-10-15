@@ -27,8 +27,9 @@ _MODE_LABEL = {
 
 def _format_remaining(entry) -> str:
     from datetime import datetime
-    from bot.domain.tz import TZ_MSK
+
     from bot.domain.bot_utils import format_duration
+    from bot.domain.tz import TZ_MSK
     secs = max(0, int((entry.expires_at - datetime.now(TZ_MSK)).total_seconds()))
     return format_duration(secs)
 

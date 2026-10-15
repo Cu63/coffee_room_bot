@@ -62,9 +62,9 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.admin_score import router as admin_score_router
     from bot.presentation.handlers.admin_user import router as admin_user_router
     from bot.presentation.handlers.anagram import router as anagram_router
+    from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.anon import router as anon_router
     from bot.presentation.handlers.blackjack import router as blackjack_router
-    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.buyop import router as buyop_router
     from bot.presentation.handlers.chatmode import router as chatmode_router
     from bot.presentation.handlers.commands import router as commands_router
@@ -79,17 +79,17 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.idea import router as idea_router
     from bot.presentation.handlers.iq import router as iq_router
     from bot.presentation.handlers.llm_commands import router as llm_router
-    from bot.presentation.handlers.analyze import router as analyze_router
     from bot.presentation.handlers.lot import router as lot_router
     from bot.presentation.handlers.mute import router as mute_router
+    from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.poker import router as poker_router
     from bot.presentation.handlers.protect import router as protect_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
     from bot.presentation.handlers.selfban import router as selfban_router
     from bot.presentation.handlers.sixtyseven import router as sixtyseven_router
-    from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.slots import router as slots_router
+    from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.tag import router as tag_router
     from bot.presentation.handlers.tictactoe import router as ttt_router
     from bot.presentation.handlers.tracker import router as tracker_router

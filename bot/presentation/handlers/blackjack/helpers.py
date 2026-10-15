@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import random
 import time
 
-from aiogram.enums import ParseMode
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 
 from bot.application.blackjack_service import (
-    build_deck,
-    cards_to_dicts,
     dicts_to_cards,
     format_hand,
     hand_score,
@@ -25,7 +21,6 @@ from bot.application.interfaces.user_stats_repository import IUserStatsRepositor
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, schedule_delete
 
 logger = logging.getLogger(__name__)
 

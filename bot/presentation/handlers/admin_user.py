@@ -12,7 +12,6 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.saved_permissions_repository import ISavedPermissionsRepository
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.bot_utils import is_admin
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link

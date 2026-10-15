@@ -14,8 +14,8 @@
 
 from aiogram import Router
 
-from bot.presentation.handlers.duel.start import router as start_router
 from bot.presentation.handlers.duel.callbacks import router as callbacks_router
+from bot.presentation.handlers.duel.start import router as start_router
 
 router = Router(name="duel")
 router.include_router(start_router)

@@ -12,7 +12,6 @@
 from aiogram import Router
 
 from bot.presentation.handlers.tictactoe.callbacks import router as callbacks_router
-from bot.presentation.handlers.tictactoe.start import router as start_router
 
 # Re-export internal symbols used by other modules (e.g. duel.py)
 from bot.presentation.handlers.tictactoe.game_logic import (  # noqa: F401
@@ -21,6 +20,7 @@ from bot.presentation.handlers.tictactoe.game_logic import (  # noqa: F401
     _render_board,
     _ttt_key,
 )
+from bot.presentation.handlers.tictactoe.start import router as start_router
 
 router = Router(name="tictactoe")
 router.include_router(start_router)

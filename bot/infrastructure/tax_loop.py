@@ -96,7 +96,7 @@ async def _run_once(bot: Bot, container) -> None:
                     continue
 
             text = (
-                f"🏛 <b>Ежедневный налог</b>\n\n"
+                "🏛 <b>Ежедневный налог</b>\n\n"
                 + "\n".join(lines)
                 + f"\n\nВсего собрано: <b>{total_tax}</b> {p.pluralize(total_tax)}"
             )

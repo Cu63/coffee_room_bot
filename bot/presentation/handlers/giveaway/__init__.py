@@ -10,6 +10,8 @@ from bot.presentation.handlers.giveaway.helpers import (
 )
 from bot.presentation.handlers.giveaway.mute_roulette import (
     _finish_mute_roulette,
+)
+from bot.presentation.handlers.giveaway.mute_roulette import (
     router as mute_roulette_router,
 )
 
