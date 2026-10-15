@@ -25,7 +25,7 @@ from bot.presentation.handlers.tictactoe.game_logic import (
     _make_game_id,
     _ttt_key,
 )
-from bot.presentation.utils import NO_PREVIEW, check_gameban, reply_and_delete
+from bot.presentation.utils import NO_PREVIEW, check_bet, check_gameban, reply_and_delete
 
 router = Router(name="ttt_start")
 
@@ -68,23 +68,9 @@ async def cmd_ttt(
         )
         return
 
-    # Парсим ставку
-    try:
-        bet = int(args[0])
-        if bet <= 0:
-            raise ValueError
-    except ValueError:
-        await reply_and_delete(message, "❌ Ставка должна быть положительным числом.")
-        return
-
-    if bet < cfg.min_bet:
-        sw = p.pluralize(cfg.min_bet)
-        await reply_and_delete(message, f"❌ Минимальная ставка: {cfg.min_bet} {sw}.")
-        return
-
-    if bet > cfg.max_bet:
-        sw = p.pluralize(cfg.max_bet)
-        await reply_and_delete(message, f"❌ Максимальная ставка: {cfg.max_bet} {sw}.")
+    bet, bet_error = check_bet(args[0], cfg.min_bet, cfg.max_bet, formatter)
+    if bet_error:
+        await reply_and_delete(message, bet_error)
         return
 
     user_id = message.from_user.id

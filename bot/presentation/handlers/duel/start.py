@@ -28,6 +28,7 @@ from bot.presentation.handlers.duel.helpers import (
 )
 from bot.presentation.utils import (
     NO_PREVIEW,
+    check_bet,
     check_gameban,
     reply_and_delete,
     schedule_delete_id,
@@ -84,16 +85,7 @@ async def cmd_duel(
         )
         return
 
-    # Парсим ставку
-    try:
-        bet = int(bet_raw)
-        if bet <= 0:
-            raise ValueError
-    except ValueError:
-        await reply_and_delete(message, "❌ Ставка должна быть положительным числом.")
-        return
-
-    # Проверяем лимиты ставки
+    # Игра включена и ставка в её пределах
     p = pluralizer
     if game == "ttt":
         cfg = config.tictactoe
@@ -106,13 +98,9 @@ async def cmd_duel(
             await reply_and_delete(message, "❌ Блекджек отключён.")
             return
 
-    if bet < cfg.min_bet:
-        sw = p.pluralize(cfg.min_bet)
-        await reply_and_delete(message, f"❌ Минимальная ставка: {cfg.min_bet} {sw}.")
-        return
-    if bet > cfg.max_bet:
-        sw = p.pluralize(cfg.max_bet)
-        await reply_and_delete(message, f"❌ Максимальная ставка: {cfg.max_bet} {sw}.")
+    bet, bet_error = check_bet(bet_raw, cfg.min_bet, cfg.max_bet, formatter)
+    if bet_error:
+        await reply_and_delete(message, bet_error)
         return
 
     user_id = message.from_user.id

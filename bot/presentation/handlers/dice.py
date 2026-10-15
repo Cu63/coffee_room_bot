@@ -21,7 +21,7 @@ from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import check_gameban, reply_and_delete, safe_callback_answer
+from bot.presentation.utils import check_bet, check_gameban, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 
@@ -80,23 +80,9 @@ async def cmd_dice(
         )
         return
 
-    # Парсим ставку
-    try:
-        bet = int(args[0])
-        if bet <= 0:
-            raise ValueError
-    except ValueError:
-        await reply_and_delete(message, "❌ Ставка должна быть положительным числом.")
-        return
-
-    if bet < config.dice.min_bet:
-        sw = pluralizer.pluralize(config.dice.min_bet)
-        await reply_and_delete(message, f"❌ Минимальная ставка: {config.dice.min_bet} {sw}.")
-        return
-
-    if bet > config.dice.max_bet:
-        sw = pluralizer.pluralize(config.dice.max_bet)
-        await reply_and_delete(message, f"❌ Максимальная ставка: {config.dice.max_bet} {sw}.")
+    bet, bet_error = check_bet(args[0], config.dice.min_bet, config.dice.max_bet, formatter)
+    if bet_error:
+        await reply_and_delete(message, bet_error)
         return
 
     # Парсим время ожидания

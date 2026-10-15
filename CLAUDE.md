@@ -50,6 +50,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 - LLM commands allow one request in flight per user (`OneLlmRequestPerUserMiddleware` on their routers); otherwise parallel requests slip past the daily limits.
 - Handlers are never re-run on network errors: only idempotent Bot API requests are retried (`RetryIdempotentRequestsMiddleware`).
 - Redis writes are not part of the transaction. Order the steps so that a rollback cannot leave Redis ahead of Postgres.
+- An optional write after money has moved (stats, leaderboard, IQ) goes inside `async with tx.savepoint():` with its own `try/except` that logs. Without a savepoint a failed query aborts the whole transaction, and the prize rolls back together with it.
 
 ### Money and game state
 
@@ -87,7 +88,7 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 
 ### Background Tasks
 
-About 17 loops in `bot/infrastructure/*_loop.py`, started in `bot/main.py`: event cleanup, unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax.
+19 loops in `bot/infrastructure/*_loop.py`, started in `bot/main.py` through `BackgroundTasks` (`bot/infrastructure/background.py`): a loop that crashes or returns is logged and restarted after 30 s. They cover event cleanup, unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax and the ledger audit.
 
 ### Tests
 
@@ -99,6 +100,7 @@ About 17 loops in `bot/infrastructure/*_loop.py`, started in `bot/main.py`: even
 ## Conventions
 
 - Python 3.12+, async throughout, uv, ruff (line length 120). Formatting-only commits go to `.git-blame-ignore-revs`.
-- Messages are sent with HTML parse mode: escape anything user-provided (names, chat titles, free text) with `html.escape` or `user_link()`.
+- Messages are sent with HTML parse mode: escape anything user-provided (names, chat titles, free text, RSS fields) with `html.escape` or `user_link()`. Forward a user's own text with `message.html_text`. Text you don't control but want to keep formatted (LLM answers) goes through `sanitize_html` / `send_html_parts` (`bot/presentation/html.py`): only Telegram tags survive, tags are balanced, and long text is split without cutting a tag.
+- Bets in game commands are validated with `check_bet()` (`bot/presentation/utils.py`).
 - Don't silently swallow exceptions around money or game state — log them.
 - Commit messages in Russian with `fix:` / `feat:` / `chore:` / `style:` prefixes.

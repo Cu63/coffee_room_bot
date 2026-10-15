@@ -5,8 +5,6 @@ import re
 from urllib.parse import urlparse
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, LinkPreviewOptions, Message
 from dishka.integrations.aiogram import FromDishka, inject
@@ -14,7 +12,9 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.llm_service import LlmResult, LlmService, RateLimitExceeded
 from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.presentation.html import sanitize_html
 from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
+from bot.presentation.utils import send_html_parts
 
 logger = logging.getLogger(__name__)
 router = Router(name="llm_commands")
@@ -23,7 +23,6 @@ router.message.middleware(OneLlmRequestPerUserMiddleware())
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
-_TAG_RE = re.compile(r"<[^>]+>")
 _LINK_RE = re.compile(r"(<a\s[^>]*>)(.*?)(</a>)", re.DOTALL)
 _MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _MD_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
@@ -74,11 +73,6 @@ def _bold_underline_links(text: str) -> str:
     return _LINK_RE.sub(r"<b><u>\1\2\3</u></b>", text)
 
 
-def _strip_html(text: str) -> str:
-    """Убирает все HTML-теги для fallback-отправки без parse_mode."""
-    return _TAG_RE.sub("", text)
-
-
 def _usage_footer(result: LlmResult) -> str:
     if result.is_admin:
         return f"\n\n<i>Запросов сегодня: {result.used_today} (админ, без лимита)</i>"
@@ -87,20 +81,12 @@ def _usage_footer(result: LlmResult) -> str:
 
 
 async def _send_llm_response(msg: Message, result: LlmResult) -> None:
-    """Отправляет ответ LLM, с fallback на plain text при невалидном HTML."""
-    text = _bold_underline_links(_shorten_bare_urls(_md_to_html(result.text))) + _usage_footer(result)
-    try:
-        await msg.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-        )
-    except TelegramBadRequest:
-        logger.warning("HTML parse failed, falling back to plain text")
-        await msg.edit_text(
-            _strip_html(text),
-            link_preview_options=NO_PREVIEW,
-        )
+    """Ответ LLM: Markdown → HTML Telegram, чистка недоверенного HTML, длинный — частями.
+
+    Чистим до подписи о лимите: незакрытый тег модели не должен её проглотить.
+    """
+    answer = sanitize_html(_bold_underline_links(_shorten_bare_urls(_md_to_html(result.text))))
+    await send_html_parts(msg, msg, answer + _usage_footer(result))
 
 
 @router.message(Command("llm"), F.chat.type != "private")

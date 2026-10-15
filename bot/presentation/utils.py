@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import re
 import time
@@ -13,6 +14,9 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, LinkPreviewOptions, Message
+
+from bot.infrastructure.message_formatter import MessageFormatter
+from bot.presentation.html import sanitize_html, split_html
 
 logger = logging.getLogger(__name__)
 
@@ -162,42 +166,45 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = "", show_ale
 TG_MESSAGE_LIMIT = 4096
 
 
-def split_text(text: str, limit: int = TG_MESSAGE_LIMIT) -> list[str]:
-    """Режет длинный текст на куски по границе слова (лимит Telegram — 4096)."""
-    if len(text) <= limit:
-        return [text]
-    parts: list[str] = []
-    while text:
-        if len(text) <= limit:
-            parts.append(text)
-            break
-        cut = text.rfind(" ", 0, limit)
-        if cut <= 0:
-            cut = limit
-        parts.append(text[:cut])
-        text = text[cut:].lstrip()
-    return parts
+def check_bet(raw: str, min_bet: int, max_bet: int, formatter: MessageFormatter) -> tuple[int | None, str | None]:
+    """Ставка из аргумента команды: (ставка, None) или (None, текст отказа для ответа)."""
+    try:
+        bet = int(raw)
+    except ValueError:
+        bet = 0
+    p = formatter._p
+    if bet <= 0:
+        return None, formatter._t["bet_not_positive"]
+    if bet < min_bet:
+        return None, formatter._t["bet_too_small"].format(min_bet=min_bet, score_word=p.pluralize(min_bet))
+    if bet > max_bet:
+        return None, formatter._t["bet_too_large"].format(max_bet=max_bet, score_word=p.pluralize(max_bet))
+    return bet, None
 
 
 async def send_html_parts(message: Message, thinking: Message, text: str) -> None:
-    """Отправляет длинный HTML-ответ: первый кусок правкой ``thinking``, остальные — новыми
-    сообщениями. При невалидном HTML откатывается на текст без тегов."""
+    """Отправляет длинный ответ модели: первый кусок правкой ``thinking``, остальные — новыми
+    сообщениями.
+
+    Текст модели — недоверенный HTML: sanitize_html оставляет только теги Telegram и
+    закрывает открытые, split_html режет на части, не разрывая теги. Если Telegram всё же
+    откажет, кусок уходит обычным текстом.
+    """
     first = True
-    for part in split_text(text):
+    for part in split_html(sanitize_html(text), TG_MESSAGE_LIMIT):
         try:
             if first:
-                await thinking.edit_text(part, parse_mode=ParseMode.HTML)
-                first = False
+                await thinking.edit_text(part, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
             else:
-                await message.answer(part, parse_mode=ParseMode.HTML)
-        except TelegramBadRequest:
-            logger.warning("HTML parse failed, falling back to plain text")
-            stripped = re.sub(r"<[^>]+>", "", part)
+                await message.answer(part, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
+        except TelegramBadRequest as e:
+            logger.warning("Ответ модели не принят как HTML (%s), отправляю текстом", e)
+            plain = html.unescape(re.sub(r"<[^>]+>", "", part))
             if first:
-                await thinking.edit_text(stripped)
-                first = False
+                await thinking.edit_text(plain, link_preview_options=NO_PREVIEW)
             else:
-                await message.answer(stripped)
+                await message.answer(plain, link_preview_options=NO_PREVIEW)
+        first = False
 
 
 async def reply_and_delete(message: Message, *args: Any, delay: int = AUTO_DELETE_DELAY, **kwargs: Any) -> Message:

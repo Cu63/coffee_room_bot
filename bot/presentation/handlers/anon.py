@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from aiogram import Bot, F, Router
@@ -74,7 +75,7 @@ def _chat_keyboard(chats: list[tuple[int, str]]) -> InlineKeyboardMarkup:
 async def _ask_for_text(target: Message | CallbackQuery, chat_title: str) -> None:
     """Просит пользователя написать текст анонимного сообщения."""
     text = (
-        f"✏️ Отправь мне текст, который я перешлю анонимно в <b>{chat_title}</b>.\n\n"
+        f"✏️ Отправь мне текст, который я перешлю анонимно в <b>{html.escape(chat_title)}</b>.\n\n"
         "<i>Напиши /cancel, чтобы отменить.</i>"
     )
     if isinstance(target, CallbackQuery) and target.message:
@@ -243,11 +244,15 @@ async def on_private_text(
     try:
         await bot.send_message(
             chat_id=chat_id,
-            text=f"😶 <b>{_ANON_LABEL}</b>\n\n{message.text}",
+            # html_text: форматирование автора сохраняется, а «<» и «&» в тексте экранированы.
+            # Раньше текст шёл в HTML как есть: «a < b» ломало отправку, а теги проходили в чат
+            text=f"😶 <b>{_ANON_LABEL}</b>\n\n{message.html_text}",
             parse_mode=ParseMode.HTML,
         )
         message_sent = True
-        await message.answer(f"✅ Сообщение анонимно отправлено в <b>{chat_title}</b>.", parse_mode=ParseMode.HTML)
+        await message.answer(
+            f"✅ Сообщение анонимно отправлено в <b>{html.escape(chat_title)}</b>.", parse_mode=ParseMode.HTML
+        )
         logger.info("anon: user %d sent anonymous message to chat %d", user_id, chat_id)
     except Exception:
         logger.exception("anon: failed to send message to chat %d", chat_id)
