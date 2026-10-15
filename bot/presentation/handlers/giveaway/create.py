@@ -117,8 +117,10 @@ async def cmd_giveaway_period(
     if len(args) < 2:
         await reply_and_delete(
             message,
-            "Использование: <code>/giveaway_period &lt;период&gt; &lt;приз1&gt; [приз2 ...] [длительность]</code>\n\n"
-            "Периоды: <code>hourly</code>, <code>daily</code>, <code>weekly</code>, <code>6h</code>, <code>30m</code> и т.д.\n"
+            "Использование: <code>/giveaway_period &lt;период&gt; &lt;приз1&gt; "
+            "[приз2 ...] [длительность]</code>\n\n"
+            "Периоды: <code>hourly</code>, <code>daily</code>, <code>weekly</code>, "
+            "<code>6h</code>, <code>30m</code> и т.д.\n"
             "Длительность раунда (опционально): <code>30m</code>, <code>2h</code>\n\n"
             "Пример: <code>/giveaway_period daily 500 100 2h</code>",
             parse_mode="HTML",
@@ -130,7 +132,8 @@ async def cmd_giveaway_period(
         await reply_and_delete(
             message,
             f"❌ Неверный период: <code>{args[0]}</code>\n"
-            "Используй: <code>hourly</code>, <code>daily</code>, <code>weekly</code> или формат <code>Xm/Xh/Xd/Xw</code>",
+            "Используй: <code>hourly</code>, <code>daily</code>, <code>weekly</code> "
+            "или формат <code>Xm/Xh/Xd/Xw</code>",
             parse_mode="HTML",
         )
         return
