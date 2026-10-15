@@ -16,7 +16,8 @@ just migrate
 ## Команды
 
 ```bash
-just lint        # ruff format + ruff check --fix
+just lint        # ruff check + ruff format --check, как в CI
+just fmt         # ruff check --fix + ruff format
 just test        # pytest
 just docs        # mkdocs dev-сервер на http://localhost:8000
 just docs-build  # собрать статику в site/
@@ -35,11 +36,26 @@ uv run ruff check --fix     # исправление lint-ошибок
 ## Тесты
 
 ```bash
-uv run pytest               # запустить все тесты
-uv run pytest tests/unit/   # только unit-тесты
+uv run pytest tests/unit/          # unit-тесты: чистая логика, без сервисов
+uv run pytest tests/integration/   # интеграционные и e2e: настоящие PostgreSQL и Redis
 ```
 
-Тесты находятся в `tests/unit/`. Интеграционные тесты — запланированы (см. [бэклог](backlog.md)).
+Интеграционные тесты берут адреса из `TEST_DATABASE_URL` и `TEST_REDIS_URL`, без них они пропускаются.
+Перед каждым тестом все таблицы очищаются, а Redis — `FLUSHDB`, поэтому нужны отдельная БД и отдельный
+номер Redis. Миграции применяются автоматически. Например:
+
+```bash
+docker run -d --rm -p 5433:5432 -e POSTGRES_USER=scorebot -e POSTGRES_PASSWORD=scorebot \
+    -e POSTGRES_DB=scorebot_test postgres:16-alpine
+docker run -d --rm -p 6380:6379 redis:7-alpine
+export TEST_DATABASE_URL=postgresql://scorebot:scorebot@localhost:5433/scorebot_test
+export TEST_REDIS_URL=redis://localhost:6380/0
+uv run pytest tests/integration/
+```
+
+E2E-тесты (`tests/integration/test_e2e.py`) прогоняют апдейт через настоящий Dispatcher со всеми
+middleware и роутерами, а вместо Telegram подставляют `FakeTelegramSession`: она отвечает как Bot API
+и записывает каждый запрос бота. В CI интеграционные тесты идут отдельным джобом `integration`.
 
 ## Добавить новую реакцию
 
