@@ -14,6 +14,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
@@ -141,7 +142,8 @@ async def cmd_anagram(
         )
         return
 
-    await score_service.add_score(message.bot.id, chat_id, -bet, admin_id=user_id)
+    # Банк анаграммы ставит касса бота
+    await score_service.add_score(message.bot.id, chat_id, -bet, admin_id=user_id, kind=LedgerKind.STAKE, ref="anagram")
 
     # Создаём игру
     game_id = _make_game_id()

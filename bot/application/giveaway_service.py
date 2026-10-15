@@ -8,6 +8,7 @@ from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.domain.giveaway_entities import Giveaway, GiveawayStatus, GiveawayWinner
+from bot.domain.ledger import LedgerKind
 
 
 @dataclass
@@ -96,7 +97,9 @@ class GiveawayService:
 
         # Начисляем баллы победителям и записываем победы
         for user_id, prize in winners_with_prizes:
-            await self._score_repo.add_delta(user_id, giveaway.chat_id, prize)
+            await self._score_repo.add_delta(
+                user_id, giveaway.chat_id, prize, kind=LedgerKind.BONUS, ref=f"giveaway:{giveaway_id}"
+            )
             await self._stats_repo.add_win(user_id, giveaway.chat_id, "giveaway")
 
         await self._giveaway_repo.save_winners(winner_entities)

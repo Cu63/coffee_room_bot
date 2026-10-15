@@ -13,6 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
 from bot.domain.bot_utils import is_admin
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.handlers._admin_utils import (
@@ -109,7 +110,9 @@ async def cmd_add(
     if amount <= 0:
         await reply_and_delete(message, formatter._t["admin_negative_amount"])
         return
-    new_value = await score_service.add_score(target.id, message.chat.id, amount, admin_id=message.from_user.id)
+    new_value = await score_service.add_score(
+        target.id, message.chat.id, amount, admin_id=message.from_user.id, kind=LedgerKind.ADMIN
+    )
     await reply_and_delete(
         message, _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
@@ -141,7 +144,9 @@ async def cmd_sub(
     if amount <= 0:
         await reply_and_delete(message, formatter._t["admin_negative_amount"])
         return
-    new_value = await score_service.add_score(target.id, message.chat.id, -amount, admin_id=message.from_user.id)
+    new_value = await score_service.add_score(
+        target.id, message.chat.id, -amount, admin_id=message.from_user.id, kind=LedgerKind.ADMIN
+    )
     await reply_and_delete(
         message, _admin_reply(formatter, target, new_value), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )

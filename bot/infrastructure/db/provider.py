@@ -15,6 +15,7 @@ from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.iq_repository import IIqRepository
+from bot.application.interfaces.ledger_repository import ILedgerRepository
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
@@ -34,6 +35,7 @@ from bot.infrastructure.db.postgres_dice_repository import PostgresDiceRepositor
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
 from bot.infrastructure.db.postgres_giveaway_repository import PostgresGiveawayRepository
 from bot.infrastructure.db.postgres_iq_repository import PostgresIqRepository
+from bot.infrastructure.db.postgres_ledger_repository import PostgresLedgerRepository
 from bot.infrastructure.db.postgres_llm_repository import PostgresLlmRepository
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
 from bot.infrastructure.db.postgres_mute_protection_repository import PostgresMuteProtectionRepository
@@ -118,6 +120,10 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_chatmode_repo(self, tm: ITransactionManager) -> IChatmodeRepository:
         return PostgresChatmodeRepository(tm.get_connection())
+
+    @provide(scope=Scope.REQUEST)
+    def get_ledger_repo(self, tm: ITransactionManager) -> ILedgerRepository:
+        return PostgresLedgerRepository(tm.get_connection())
 
     @provide(scope=Scope.REQUEST)
     def get_per_target_limits_repo(self, tm: ITransactionManager) -> IPerTargetLimitsRepository:

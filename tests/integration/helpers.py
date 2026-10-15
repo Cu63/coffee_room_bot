@@ -7,6 +7,7 @@ import os
 import asyncpg
 
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
 from bot.infrastructure.db.postgres_user_repository import PostgresUserRepository
 
@@ -25,7 +26,7 @@ async def seed_users(
     for uid in user_ids:
         await users.upsert(User(id=uid, username=f"user{uid}", full_name=f"User {uid}", is_bot=is_bot))
         if balance is not None:
-            await PostgresScoreRepository(c).set_value(uid, chat_id, balance)
+            await PostgresScoreRepository(c).set_value(uid, chat_id, balance, kind=LedgerKind.OPENING)
 
 
 async def balance(c: asyncpg.Connection, user_id: int, chat_id: int = CHAT) -> int:

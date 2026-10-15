@@ -18,6 +18,7 @@ from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import now_msk
 from bot.domain.wordgame_entities import (
@@ -151,7 +152,9 @@ async def msg_reply_guess(
         if is_penalty_winner:
             # Приз не начисляем; возвращаем ставку боту (её списали при создании игры)
             if game.bet > 0:
-                await score_service.add_score_quiet(bot.id, chat_id, game.bet)
+                await score_service.add_score_quiet(
+                    bot.id, chat_id, game.bet, kind=LedgerKind.REFUND, ref=f"wordgame:{game.game_id}"
+                )
             until = now_msk() + timedelta(minutes=rwg.loss_mute_minutes)
             await apply_mute(
                 bot,
@@ -162,7 +165,9 @@ async def msg_reply_guess(
                 until=until,
             )
         else:
-            await score_service.add_score(user_id, chat_id, game.bet, admin_id=user_id)
+            await score_service.add_score(
+                user_id, chat_id, game.bet, admin_id=user_id, kind=LedgerKind.PRIZE, ref=f"wordgame:{game.game_id}"
+            )
 
         # Записываем победу в дневной лидерборд
         game_type = "rword" if game.is_random else "word"
@@ -219,12 +224,17 @@ async def msg_reply_guess(
         hint_parts = [f"❌ {user_mention}: «{guess}» — не то ({matched_count}/{len(game.word)} на месте)"]
 
         if game.bet > 0 and cost > 0 and had_revealed:
-            if game.is_random:
-                await score_service.add_score(bot.id, chat_id, cost, admin_id=bot.id)
-            else:
-                await score_service.add_score(game.creator_id, chat_id, cost, admin_id=user_id)
-            await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
-            hint_parts.append(f"<i>−{cost} балл за попытку</i>")
+            # Плата за попытку: атомарно и не в минус; получатель — касса или автор слова
+            ref = f"wordgame:{game.game_id}"
+            paid = await score_service.debit_up_to(
+                user_id, chat_id, cost, admin_id=user_id, kind=LedgerKind.PURCHASE, ref=ref
+            )
+            if paid > 0:
+                recipient = bot.id if game.is_random else game.creator_id
+                await score_service.add_score(
+                    recipient, chat_id, paid, admin_id=user_id, kind=LedgerKind.PURCHASE, ref=ref
+                )
+                hint_parts.append(f"<i>−{paid} балл за попытку</i>")
 
         hint = await message.answer("\n".join(hint_parts), parse_mode=ParseMode.HTML)
         schedule_delete(bot, hint, delay=15)

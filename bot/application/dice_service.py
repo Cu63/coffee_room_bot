@@ -7,6 +7,7 @@ from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.domain.dice_entities import DiceGame, DiceGameStatus
+from bot.domain.ledger import LedgerKind
 
 
 @dataclass
@@ -61,7 +62,7 @@ class DiceService:
             return CreateResult(game=None, user_already_in_game=True)
 
         # Проверка баланса и списание — один атомарный запрос
-        if await self._score_repo.try_debit(created_by, chat_id, bet) is None:
+        if await self._score_repo.try_debit(created_by, chat_id, bet, kind=LedgerKind.STAKE, ref="dice") is None:
             return CreateResult(game=None, not_enough=True)
 
         game = DiceGame(chat_id=chat_id, bet=bet, ends_at=ends_at, created_by=created_by)
@@ -96,14 +97,19 @@ class DiceService:
             return JoinResult(success=False, already_in_other_game=True)
 
         # Проверка баланса и списание — один атомарный запрос
-        if await self._score_repo.try_debit(user_id, game.chat_id, game.bet) is None:
+        stake = await self._score_repo.try_debit(
+            user_id, game.chat_id, game.bet, kind=LedgerKind.STAKE, ref=f"dice:{game_id}"
+        )
+        if stake is None:
             score = await self._score_repo.get(user_id, game.chat_id)
             balance = score.value if score else 0
             return JoinResult(success=False, not_enough=True, balance=balance, bet=game.bet)
 
         if not await self._dice_repo.add_participant(game_id, user_id):
             # Параллельное нажатие того же игрока уже добавило его — возвращаем ставку
-            await self._score_repo.add_delta(user_id, game.chat_id, game.bet)
+            await self._score_repo.add_delta(
+                user_id, game.chat_id, game.bet, kind=LedgerKind.REFUND, ref=f"dice:{game_id}"
+            )
             return JoinResult(success=False, already_joined=True)
         return JoinResult(success=True)
 
@@ -124,7 +130,9 @@ class DiceService:
         if not participants or not dice_results:
             # Нет участников — возврат ставок (не должно случаться)
             for uid in participants:
-                await self._score_repo.add_delta(uid, game.chat_id, game.bet)
+                await self._score_repo.add_delta(
+                    uid, game.chat_id, game.bet, kind=LedgerKind.REFUND, ref=f"dice:{game_id}"
+                )
             await self._dice_repo.finish(game_id)
             return FinishResult(
                 game=game,
@@ -140,14 +148,15 @@ class DiceService:
         prize_per_winner = total_pot // len(winners)
         remainder = total_pot - prize_per_winner * len(winners)
 
+        ref = f"dice:{game_id}"
         for winner_id in winners:
-            await self._score_repo.add_delta(winner_id, game.chat_id, prize_per_winner)
+            await self._score_repo.add_delta(winner_id, game.chat_id, prize_per_winner, kind=LedgerKind.PRIZE, ref=ref)
         # Остаток (при нечётном делении) — боту, если bot_id передан; иначе первому победителю
         if remainder > 0:
             if bot_id is not None:
-                await self._score_repo.add_delta(bot_id, game.chat_id, remainder)
+                await self._score_repo.add_delta(bot_id, game.chat_id, remainder, kind=LedgerKind.PRIZE, ref=ref)
             else:
-                await self._score_repo.add_delta(winners[0], game.chat_id, remainder)
+                await self._score_repo.add_delta(winners[0], game.chat_id, remainder, kind=LedgerKind.PRIZE, ref=ref)
 
         # Победа засчитывается только в многопользовательской игре
         if len(participants) > 1:

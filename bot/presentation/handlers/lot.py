@@ -44,6 +44,7 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
 from bot.domain.bot_utils import is_admin, parse_duration
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
@@ -317,6 +318,8 @@ async def cb_lot_bid(
             target_id=user_id,
             chat_id=chat_id,
             cost=charge,
+            kind=LedgerKind.STAKE,
+            ref=f"lot:{lot_id}",
             bot_id=cb.bot.id,
         )
         if not result.success:
@@ -329,8 +332,13 @@ async def cb_lot_bid(
 
         # Бот отдаёт ставку перебитому лидеру
         if prev_leader_id and not is_self_raise:
-            await score_repo.add_delta(prev_leader_id, chat_id, prev_price)
-            await score_repo.add_delta(cb.bot.id, chat_id, -prev_price)
+            ref = f"lot:{lot_id}"
+            await score_repo.add_delta(
+                prev_leader_id, chat_id, prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=cb.bot.id
+            )
+            await score_repo.add_delta(
+                cb.bot.id, chat_id, -prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=prev_leader_id
+            )
 
         display = user_link(
             cb.from_user.username,

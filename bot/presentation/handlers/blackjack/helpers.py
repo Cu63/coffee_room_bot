@@ -18,6 +18,7 @@ from bot.application.blackjack_service import (
 )
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
@@ -213,8 +214,8 @@ async def _resolve_game(
 
     if p1_busted and p2_busted:
         # Оба перебрали — ничья
-        await score_repo.add_delta(p1_id, chat_id, bet)
-        await score_repo.add_delta(p2_id, chat_id, bet)
+        await score_repo.add_delta(p1_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
+        await score_repo.add_delta(p2_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
         sw = p.pluralize(bet)
         result_line = f"\U0001f91d Оба перебрали! Ставки возвращены: по <b>{bet} {sw}</b>."
     elif p1_busted:
@@ -239,13 +240,15 @@ async def _resolve_game(
         winner_display = p2_display
     else:
         # Равный счёт — ничья
-        await score_repo.add_delta(p1_id, chat_id, bet)
-        await score_repo.add_delta(p2_id, chat_id, bet)
+        await score_repo.add_delta(p1_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
+        await score_repo.add_delta(p2_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
         sw = p.pluralize(bet)
         result_line = f"\U0001f91d Ничья ({p1_score}:{p2_score})! Ставки возвращены: по <b>{bet} {sw}</b>."
 
     if winner_id and not result_line:
-        new_balance = await score_repo.add_delta(winner_id, chat_id, total_pot)
+        new_balance = await score_repo.add_delta(
+            winner_id, chat_id, total_pot, kind=LedgerKind.PRIZE, ref=f"bj:{game_id}"
+        )
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: winner %d awarded %d, new balance %d",
@@ -258,7 +261,9 @@ async def _resolve_game(
         result_line = f"\U0001f3c6 {winner_display} выигрывает <b>{total_pot} {sw}</b>!"
     elif winner_id and result_line:
         # Blackjack case — already set result_line
-        new_balance = await score_repo.add_delta(winner_id, chat_id, total_pot)
+        new_balance = await score_repo.add_delta(
+            winner_id, chat_id, total_pot, kind=LedgerKind.PRIZE, ref=f"bj:{game_id}"
+        )
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: natural BJ winner %d awarded %d, new balance %d",

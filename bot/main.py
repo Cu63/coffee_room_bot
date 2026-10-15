@@ -121,6 +121,7 @@ async def main() -> None:
     from bot.infrastructure.dice_loop import dice_loop
     from bot.infrastructure.duel_cleanup_loop import duel_cleanup_loop
     from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
+    from bot.infrastructure.ledger_audit_loop import ledger_audit_loop
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
     from bot.infrastructure.tax_loop import tax_loop
@@ -149,6 +150,7 @@ async def main() -> None:
         asyncio.create_task(daily_leaderboard_loop(bot, container)),
         asyncio.create_task(chatmode_loop(bot, container)),
         asyncio.create_task(tax_loop(bot, container)),
+        asyncio.create_task(ledger_audit_loop(container)),
     ]
 
     logger.info("Bot starting…")

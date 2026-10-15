@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.domain.ledger import LedgerKind
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,12 +47,16 @@ async def _settle_expired(container, bot: Bot, data: dict) -> None:
         if state == "lobby":
             creator_id = data.get("player_x")
             if bet > 0 and creator_id:
-                await score_repo.add_delta(creator_id, chat_id, bet)
+                await score_repo.add_delta(
+                    creator_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"ttt:{data.get('game_id', '')}"
+                )
                 logger.info("TTT lobby expired: refunded %d to %d", bet, creator_id)
             text = "⏰ Время вышло. Никто не принял вызов. Ставка возвращена."
         elif state == "playing":
             if bet > 0:
-                await score_repo.add_delta(bot.id, chat_id, bet * 2)
+                await score_repo.add_delta(
+                    bot.id, chat_id, bet * 2, kind=LedgerKind.PRIZE, ref=f"ttt:{data.get('game_id', '')}"
+                )
                 logger.info(
                     "TTT game expired: both bets (%d each) of %s and %s go to the bot",
                     bet,

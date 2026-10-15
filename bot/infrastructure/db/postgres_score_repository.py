@@ -2,6 +2,16 @@ import asyncpg
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.domain.entities import Score
+from bot.domain.ledger import LedgerKind
+
+# Тип операции для триггера журнала (V017__ledger.sql). Ставится в той же команде,
+# что и изменение баланса, поэтому работает и в транзакции, и в autocommit.
+# Параметры $4–$6: kind, ref, counterparty_id.
+_LEDGER_CTX = """ctx AS MATERIALIZED (
+                SELECT set_config('ledger.kind', $4, true) AS kind,
+                       set_config('ledger.ref', $5, true) AS ref,
+                       set_config('ledger.counterparty', $6, true) AS counterparty
+            )"""
 
 
 class PostgresScoreRepository(IScoreRepository):
@@ -18,11 +28,25 @@ class PostgresScoreRepository(IScoreRepository):
             return None
         return Score(user_id=row["user_id"], chat_id=row["chat_id"], value=row["value"])
 
-    async def add_delta(self, user_id: int, chat_id: int, delta: int) -> int:
+    @staticmethod
+    def _ledger_args(kind: LedgerKind, ref: str | None, counterparty_id: int | None) -> tuple[str, str, str]:
+        return str(kind), ref or "", "" if counterparty_id is None else str(counterparty_id)
+
+    async def add_delta(
+        self,
+        user_id: int,
+        chat_id: int,
+        delta: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         row = await self._conn.fetchrow(
-            """
+            f"""
+            WITH {_LEDGER_CTX}
             INSERT INTO scores (user_id, chat_id, value)
-            VALUES ($1, $2, $3)
+            SELECT $1::bigint, $2::bigint, $3::int FROM ctx
             ON CONFLICT (user_id, chat_id) DO UPDATE
                 SET value = scores.value + EXCLUDED.value
             RETURNING value
@@ -30,27 +54,49 @@ class PostgresScoreRepository(IScoreRepository):
             user_id,
             chat_id,
             delta,
+            *self._ledger_args(kind, ref, counterparty_id),
         )
         return row["value"]  # type: ignore[index]
 
-    async def try_debit(self, user_id: int, chat_id: int, amount: int) -> int | None:
+    async def try_debit(
+        self,
+        user_id: int,
+        chat_id: int,
+        amount: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int | None:
         if amount < 0:
             raise ValueError(f"debit amount must be non-negative, got {amount}")
         if amount == 0:
             score = await self.get(user_id, chat_id)
             return score.value if score else 0
         return await self._conn.fetchval(
-            """
-            UPDATE scores SET value = value - $3
-            WHERE user_id = $1 AND chat_id = $2 AND value >= $3
+            f"""
+            WITH {_LEDGER_CTX}
+            UPDATE scores SET value = value - $3::int
+            FROM ctx
+            WHERE user_id = $1 AND chat_id = $2 AND value >= $3::int
             RETURNING value
             """,
             user_id,
             chat_id,
             amount,
+            *self._ledger_args(kind, ref, counterparty_id),
         )
 
-    async def debit_up_to(self, user_id: int, chat_id: int, amount: int) -> int:
+    async def debit_up_to(
+        self,
+        user_id: int,
+        chat_id: int,
+        amount: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         if amount < 0:
             raise ValueError(f"debit amount must be non-negative, got {amount}")
         if amount == 0:
@@ -58,29 +104,41 @@ class PostgresScoreRepository(IScoreRepository):
         # FOR UPDATE блокирует строку до UPDATE: списываемая сумма считается
         # от актуального баланса, а не от прочитанного раньше.
         taken = await self._conn.fetchval(
-            """
-            WITH cur AS (
-                SELECT LEAST($3, GREATEST(value, 0)) AS taken
+            f"""
+            WITH {_LEDGER_CTX},
+            cur AS (
+                SELECT LEAST($3::int, GREATEST(value, 0)) AS taken
                 FROM scores
                 WHERE user_id = $1 AND chat_id = $2
                 FOR UPDATE
             )
             UPDATE scores s SET value = s.value - cur.taken
-            FROM cur
+            FROM cur, ctx
             WHERE s.user_id = $1 AND s.chat_id = $2
             RETURNING cur.taken
             """,
             user_id,
             chat_id,
             amount,
+            *self._ledger_args(kind, ref, counterparty_id),
         )
         return taken or 0
 
-    async def set_value(self, user_id: int, chat_id: int, value: int) -> int:
+    async def set_value(
+        self,
+        user_id: int,
+        chat_id: int,
+        value: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         row = await self._conn.fetchrow(
-            """
+            f"""
+            WITH {_LEDGER_CTX}
             INSERT INTO scores (user_id, chat_id, value)
-            VALUES ($1, $2, $3)
+            SELECT $1::bigint, $2::bigint, $3::int FROM ctx
             ON CONFLICT (user_id, chat_id) DO UPDATE
                 SET value = EXCLUDED.value
             RETURNING value
@@ -88,6 +146,7 @@ class PostgresScoreRepository(IScoreRepository):
             user_id,
             chat_id,
             value,
+            *self._ledger_args(kind, ref, counterparty_id),
         )
         return row["value"]  # type: ignore[index]
 

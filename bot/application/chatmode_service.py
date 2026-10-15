@@ -10,6 +10,7 @@ from aiogram.types import ChatPermissions
 
 from bot.application.interfaces.chatmode_repository import ChatmodeEntry, IChatmodeRepository
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 
 # Права для каждого режима
@@ -129,6 +130,7 @@ class ChatmodeService:
             chat_id=chat_id,
             cost=total_cost,
             emoji=SPECIAL_EMOJI.get("chatmode", "🔒"),
+            kind=LedgerKind.PURCHASE,
             bot_id=bot_id,
         )
         if not spend.success:

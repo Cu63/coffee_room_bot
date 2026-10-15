@@ -14,6 +14,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -99,12 +100,15 @@ async def cmd_blackjack(
     )
 
     # Проверяем баланс и списываем ставку
+    game_id = _make_game_id()
     result = await score_service.spend_score(
         actor_id=user_id,
         target_id=user_id,
         chat_id=chat_id,
         cost=bet,
         emoji=SPECIAL_EMOJI.get("bj", "\U0001f0cf"),
+        kind=LedgerKind.STAKE,
+        ref=f"bj:{game_id}",
     )
     if not result.success:
         sw = p.pluralize(bet)
@@ -121,7 +125,6 @@ async def cmd_blackjack(
         return
 
     # Создаём лобби
-    game_id = _make_game_id()
     display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
     sw_bet = p.pluralize(bet)
 

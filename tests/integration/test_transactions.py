@@ -16,6 +16,7 @@ from dishka.integrations.aiogram import FromDishka, inject, setup_dishka
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import DatabaseConfig
 from bot.infrastructure.db.provider import DatabaseProvider
 from bot.presentation.errors import AbortUpdate
@@ -53,7 +54,7 @@ async def test_commit_or_rollback_by_exception(container, conn, exc, committed):
     await seed_users(conn, A, balance=100)
     with pytest.raises(type(exc)) if exc else contextlib.nullcontext():
         async with container() as request:
-            await (await request.get(IScoreRepository)).add_delta(A, CHAT, -10)
+            await (await request.get(IScoreRepository)).add_delta(A, CHAT, -10, kind=LedgerKind.ADMIN)
             if exc is not None:
                 raise exc
     assert await balance(conn, A) == (90 if committed else 100)
@@ -69,7 +70,7 @@ async def test_handler_runs_once_and_errors_are_absorbed(container, conn, text, 
     @inject
     async def handler(message: Message, repo: FromDishka[IScoreRepository]) -> None:
         calls.append(message.text)
-        await repo.add_delta(A, CHAT, -10)
+        await repo.add_delta(A, CHAT, -10, kind=LedgerKind.ADMIN)
         if message.text == "network":
             raise TelegramNetworkError(method=METHOD, message="Request timeout error")
         if message.text == "abort":
@@ -118,9 +119,9 @@ async def test_checkpoint_commits_and_lets_the_connection_go(container, conn):
     with pytest.raises(ValueError):
         async with container() as request:
             repo = await request.get(IScoreRepository)
-            await repo.add_delta(A, CHAT, -10)
+            await repo.add_delta(A, CHAT, -10, kind=LedgerKind.ADMIN)
             await (await request.get(ITransactionManager)).checkpoint()
             assert in_use(db_pool) == 0  # пока ждём LLM, соединение в пуле
-            await repo.add_delta(A, CHAT, -1)  # тот же репозиторий открывает новую транзакцию
+            await repo.add_delta(A, CHAT, -1, kind=LedgerKind.ADMIN)  # тот же репозиторий открывает новую транзакцию
             raise ValueError
     assert await balance(conn, A) == 90  # до checkpoint — зафиксировано, после — откачено

@@ -18,6 +18,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -116,6 +117,7 @@ async def cb_protect(
         chat_id=chat_id,
         cost=cost,
         emoji=SPECIAL_EMOJI["protect"],
+        kind=LedgerKind.PURCHASE,
         bot_id=callback.bot.id,
     )
     if not result.success:

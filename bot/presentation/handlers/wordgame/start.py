@@ -18,6 +18,7 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import ScoreService
 from bot.domain.bot_utils import parse_duration
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import TZ_MSK
 from bot.domain.wordgame_entities import WordGame
@@ -310,7 +311,10 @@ async def cmd_random_wordgame(
 
     # Ставка в банк, лимит и кулдаун — только когда игра действительно опубликована
     if bet > 0:
-        await score_service.add_score(bot.id, chat_id, -bet, admin_id=user_id)
+        # Банк случайного слова ставит касса бота
+        await score_service.add_score(
+            bot.id, chat_id, -bet, admin_id=user_id, kind=LedgerKind.STAKE, ref=f"wordgame:{game_id}"
+        )
     await store.wg_rate_record_rword(user_id, window_secs)
     await store.wg_rword_cooldown_set(chat_id, rwg.cooldown_minutes * 60)
 

@@ -19,6 +19,7 @@ from bot.application.interfaces.user_stats_repository import IUserStatsRepositor
 from bot.application.iq_service import IqService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.tz import now_msk
 from bot.infrastructure.config_loader import AppConfig
@@ -121,6 +122,8 @@ async def cb_ttt_accept(
         chat_id=chat_id,
         cost=bet,
         emoji=SPECIAL_EMOJI.get("ttt", "🎮"),
+        kind=LedgerKind.STAKE,
+        ref=f"ttt:{game_id}",
     )
     if not result.success:
         await store._r.delete(accept_lock)
@@ -154,7 +157,9 @@ async def cb_ttt_accept(
     # XX: если лобби уже забрал цикл истечения (и вернул ставку создателю) —
     # игру не воскрешаем, а ставку принимающего возвращаем
     if not await store._r.set(key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER, xx=True):
-        await score_service.add_score(user_id, chat_id, bet, admin_id=user_id)
+        await score_service.add_score(
+            user_id, chat_id, bet, admin_id=user_id, kind=LedgerKind.REFUND, ref=f"ttt:{game_id}"
+        )
         await safe_callback_answer(cb, formatter._t["ttt_expired"], show_alert=True)
         return
 
@@ -335,8 +340,9 @@ async def cb_ttt_move(
 
             if draw:
                 # Возврат ставок
-                await score_repo.add_delta(data["player_x"], chat_id, bet)
-                await score_repo.add_delta(data["player_o"], chat_id, bet)
+                ref = f"ttt:{game_id}"
+                await score_repo.add_delta(data["player_x"], chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+                await score_repo.add_delta(data["player_o"], chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
 
                 text = formatter._t["ttt_draw"].format(
                     player_x=x_display,
@@ -351,7 +357,7 @@ async def cb_ttt_move(
                 winner_symbol = _CELL_X if winner == 1 else _CELL_O
 
                 # Выплата победителю
-                await score_repo.add_delta(winner_id, chat_id, total_pot)
+                await score_repo.add_delta(winner_id, chat_id, total_pot, kind=LedgerKind.PRIZE, ref=f"ttt:{game_id}")
 
                 # Записываем победу
                 await stats_repo.add_win(winner_id, chat_id, "ttt")

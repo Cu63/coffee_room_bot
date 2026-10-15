@@ -13,6 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import user_link
@@ -110,7 +111,7 @@ async def msg_reply_guess(
             return
 
         bet = data["bet"]
-        await score_service.add_score(user_id, chat_id, bet, admin_id=user_id)
+        await score_service.add_score(user_id, chat_id, bet, admin_id=user_id, kind=LedgerKind.PRIZE, ref="anagram")
 
         sw_bet = p.pluralize(bet)
         tries_total = len(data["tries"]) + 1
@@ -159,6 +160,8 @@ async def msg_reply_guess(
                 chat_id,
                 cost,
                 SPECIAL_EMOJI["sub"],
+                kind=LedgerKind.PURCHASE,
+                ref="anagram",
                 bot_id=message.bot.id,
             )
 

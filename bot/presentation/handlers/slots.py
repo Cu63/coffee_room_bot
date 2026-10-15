@@ -15,6 +15,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
@@ -167,7 +168,9 @@ async def cmd_slots(
             return
 
     # ── Списываем ставку (проверка баланса и списание — один атомарный запрос) ──
-    spend = await score_service.spend_score(user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"])
+    spend = await score_service.spend_score(
+        user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"], kind=LedgerKind.STAKE, ref="slots"
+    )
     if not spend.success:
         balance = spend.current_balance
         await reply_and_delete(
@@ -199,15 +202,20 @@ async def cmd_slots(
         net_gain = raw_payout - bet
         # Выигрыш сверх ставки платит бот — не больше, чем у него есть.
         # Списание атомарное: два одновременных выигрыша не уведут баланс бота в минус.
-        actual_gain = await score_service.debit_up_to(bot_id, chat_id, net_gain, admin_id=bot_id)
+        actual_gain = await score_service.debit_up_to(
+            bot_id, chat_id, net_gain, admin_id=bot_id, kind=LedgerKind.PRIZE, ref="slots"
+        )
         actual_payout = bet + actual_gain
         payout_capped = actual_gain < net_gain
 
-        await score_service.add_score(user_id, chat_id, actual_payout, admin_id=user_id)
+        await score_service.add_score(
+            user_id, chat_id, actual_payout, admin_id=user_id, kind=LedgerKind.PRIZE, ref="slots"
+        )
 
     else:  # loss
         actual_payout = 0
-        await score_service.add_score(bot_id, chat_id, bet, admin_id=bot_id)
+        # Проигранная ставка уходит в кассу
+        await score_service.add_score(bot_id, chat_id, bet, admin_id=bot_id, kind=LedgerKind.PRIZE, ref="slots")
 
     # ── Статистика ────────────────────────────────────────────────
     if outcome in ("jackpot", "win"):
