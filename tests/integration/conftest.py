@@ -35,6 +35,7 @@ from bot.infrastructure.bootstrap import (
 from bot.infrastructure.config_loader import AppConfig, BotSettings, load_config
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
+from bot.infrastructure.db.postgres_ledger_repository import PostgresLedgerRepository
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
 from bot.infrastructure.db.postgres_per_target_limits_repository import PostgresPerTargetLimitsRepository
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
@@ -51,20 +52,29 @@ def _migration_version(path: Path) -> int:
 
 @pytest.fixture(scope="session", autouse=True)
 def _schema() -> None:
-    """Применить миграции к пустой тестовой БД (один раз за сессию)."""
+    """Применить миграции к тестовой БД с нуля (один раз за сессию)."""
     if not (DB_URL and REDIS_URL):
         return
 
     async def apply() -> None:
         conn = await asyncpg.connect(DB_URL)
         try:
-            if await conn.fetchval("SELECT to_regclass('public.scores')") is None:
-                for path in sorted(MIGRATIONS_DIR.glob("V*__*.sql"), key=_migration_version):
+            # Схему пересоздаём на каждый прогон, чтобы локальная БД не отставала от новых
+            # миграций. Каждая миграция — в своей транзакции, как у Flyway.
+            await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+            for path in sorted(MIGRATIONS_DIR.glob("V*__*.sql"), key=_migration_version):
+                async with conn.transaction():
                     await conn.execute(path.read_text(encoding="utf-8"))
         finally:
             await conn.close()
 
     asyncio.run(apply())
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers", "ledger_tampering: тест сам ломает журнал операций — общая проверка журнала после него не нужна"
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -84,6 +94,19 @@ async def pool():
         await conn.execute(f"TRUNCATE {', '.join(t['tablename'] for t in tables)} RESTART IDENTITY CASCADE")
     yield pool
     await pool.close()
+
+
+@pytest.fixture(autouse=True)
+async def _ledger_is_consistent(request, _require_services, pool):
+    """После каждого теста: всё, что меняло баланс, записано в журнал с типом операции."""
+    yield
+    if request.node.get_closest_marker("ledger_tampering"):
+        return
+    async with pool.acquire() as c:
+        unknown = await c.fetch("SELECT chat_id, user_id, delta FROM ledger WHERE kind = 'unknown'")
+        assert not unknown, f"баланс менялся мимо репозитория, без типа операции: {[dict(r) for r in unknown]}"
+        mismatches = await PostgresLedgerRepository(c).mismatches()
+        assert not mismatches, f"баланс не сходится с журналом: {mismatches}"
 
 
 @pytest.fixture

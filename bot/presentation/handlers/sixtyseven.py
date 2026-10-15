@@ -17,6 +17,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import now_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -54,7 +55,9 @@ async def on_sixtyseven(
     if count == 1:
         # Первый «67» за день — награда только в день награды (6-е число МСК)
         if now.day == cfg.reward_day:
-            await score_service.add_score(user_id, chat_id, cfg.reward, admin_id=bot.id)
+            await score_service.add_score(
+                user_id, chat_id, cfg.reward, admin_id=bot.id, kind=LedgerKind.BONUS, ref="sixtyseven"
+            )
             link = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
             await message.reply(
                 formatter._t["sixtyseven_reward"].format(user=link, amount=cfg.reward),

@@ -15,6 +15,8 @@ import time
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 
+from bot.domain.ledger import LedgerKind
+
 logger = logging.getLogger(__name__)
 
 _RESULT_DELETE_DELAY = 60  # секунд до удаления итогового сообщения
@@ -61,7 +63,9 @@ async def _expire_tick(bot: Bot, container) -> None:
 
             # Возвращаем деньги боту (если никто не угадал, банк вернуть)
             if bet > 0:
-                await score_service.add_score(bot.id, chat_id, bet, admin_id=bot.id)
+                await score_service.add_score(
+                    bot.id, chat_id, bet, admin_id=bot.id, kind=LedgerKind.REFUND, ref="anagram"
+                )
 
             logger.info(
                 "anagram_expire: игра %s в чате %d истекла (слово: %s)",

@@ -14,6 +14,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -86,7 +87,14 @@ async def cmd_unmute(
 
     # Списываем баллы с актора: проверка баланса и списание — один атомарный запрос
     spend = await score_service.spend_score(
-        actor_id, actor_id, chat_id, cost, SPECIAL_EMOJI["sub"], bot_id=message.bot.id
+        actor_id,
+        target_id,
+        chat_id,
+        cost,
+        SPECIAL_EMOJI["sub"],
+        kind=LedgerKind.PURCHASE,
+        ref="unmute",
+        bot_id=message.bot.id,
     )
     if not spend.success:
         await reply_and_delete(

@@ -9,6 +9,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
@@ -64,6 +65,8 @@ async def cmd_renew(
         target_id=user_id,
         chat_id=chat_id,
         cost=rc.cost,
+        kind=LedgerKind.PURCHASE,
+        ref="renew",
         bot_id=message.bot.id,
     )
     if not result.success:

@@ -12,6 +12,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.wordgame_entities import WordGame, is_valid_word, normalize_word
 from bot.infrastructure.config_loader import AppConfig
@@ -95,7 +96,9 @@ async def msg_private_word(
     # Ставка списывается сейчас, когда игра действительно начинается.
     # Без флага — игра создана до этого изменения, и ставку уже списали при /word.
     if bet > 0 and pending.get("charge_on_submit"):
-        spend = await score_service.spend_score(user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"])
+        spend = await score_service.spend_score(
+            user_id, user_id, chat_id, bet, SPECIAL_EMOJI["sub"], kind=LedgerKind.STAKE, ref="wordgame"
+        )
         if not spend.success:
             await message.answer(
                 f"❌ Недостаточно баллов для ставки {bet}: у тебя {spend.current_balance}. Игра отменена."

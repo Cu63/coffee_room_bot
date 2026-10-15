@@ -25,6 +25,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
@@ -106,10 +107,14 @@ async def cb_donotbuy_hit(
 
     # Случайная цена и списание без ухода в минус (атомарно)
     price = random.randint(0, cfg.max_price)
-    charged = await score_repo.debit_up_to(user_id, chat_id, price)
+    charged = await score_repo.debit_up_to(
+        user_id, chat_id, price, kind=LedgerKind.PURCHASE, ref="donotbuy", counterparty_id=callback.bot.id
+    )
 
     if charged > 0:
-        await score_repo.add_delta(callback.bot.id, chat_id, charged)
+        await score_repo.add_delta(
+            callback.bot.id, chat_id, charged, kind=LedgerKind.PURCHASE, ref="donotbuy", counterparty_id=user_id
+        )
 
     # Кнопка меняет цвет — обновляем только клавиатуру (текст сообщения не трогаем)
     try:

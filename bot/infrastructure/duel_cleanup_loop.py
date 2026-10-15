@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.domain.ledger import LedgerKind
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +43,7 @@ async def _refund_expired(container, bot: Bot, data: dict) -> None:
     async with container() as scope:
         score_repo = await scope.get(IScoreRepository)
         if bet > 0 and challenger_id:
-            await score_repo.add_delta(challenger_id, chat_id, bet)
+            await score_repo.add_delta(challenger_id, chat_id, bet, kind=LedgerKind.REFUND, ref="duel")
             logger.info("Duel invite expired: refunded %d to challenger %d", bet, challenger_id)
 
     if message_id:

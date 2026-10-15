@@ -11,6 +11,7 @@ from aiogram.types import ChatMemberAdministrator, ChatMemberOwner, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
@@ -116,6 +117,7 @@ async def cmd_buyop(
         chat_id=chat_id,
         cost=cost,
         emoji=SPECIAL_EMOJI.get("buyop", "🎖"),
+        kind=LedgerKind.PURCHASE,
         bot_id=message.bot.id,
     )
 

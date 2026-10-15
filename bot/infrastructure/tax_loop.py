@@ -11,6 +11,7 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import TaxConfig
 
@@ -81,8 +82,13 @@ async def _run_once(bot: Bot, container) -> None:
                     tax = _compute_tax(score.value, cfg)
                     if tax <= 0:
                         continue
-                    await score_repo.add_delta(score.user_id, chat_id, -tax)
-                    await score_repo.add_delta(bot.id, chat_id, tax)
+                    # Атомарно и не в минус: баланс мог измениться после выборки богатых
+                    tax = await score_repo.debit_up_to(
+                        score.user_id, chat_id, tax, kind=LedgerKind.TAX, counterparty_id=bot.id
+                    )
+                    if tax <= 0:
+                        continue
+                    await score_repo.add_delta(bot.id, chat_id, tax, kind=LedgerKind.TAX, counterparty_id=score.user_id)
                     new_balance = score.value - tax
                     total_tax += tax
 

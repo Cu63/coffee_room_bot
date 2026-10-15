@@ -14,6 +14,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.bot_utils import is_admin
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
@@ -143,6 +144,7 @@ async def cmd_tag(
         chat_id=chat_id,
         cost=cost,
         emoji=SPECIAL_EMOJI["tag"],
+        kind=LedgerKind.PURCHASE,
         bot_id=message.bot.id,
     )
     if not result.success:

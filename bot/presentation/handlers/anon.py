@@ -26,6 +26,7 @@ from dishka import AsyncContainer
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.redis_store import RedisStore
 
 ANON_MESSAGE_PAYMENT = 100
@@ -228,7 +229,9 @@ async def on_private_text(
     chat_title: str = state.get("chat_title", str(chat_id))
 
     # Списываем до отправки: проверка баланса и списание — один атомарный запрос
-    spend = await score_service.spend_score(user_id, user_id, chat_id, ANON_MESSAGE_PAYMENT, quiet=True)
+    spend = await score_service.spend_score(
+        user_id, user_id, chat_id, ANON_MESSAGE_PAYMENT, kind=LedgerKind.PURCHASE, ref="anon", quiet=True
+    )
     if not spend.success:
         await message.answer("❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
         return
@@ -254,4 +257,6 @@ async def on_private_text(
     finally:
         if not message_sent:
             # Сообщение не ушло в чат — возвращаем оплату
-            await score_service.add_score_quiet(user_id, chat_id, ANON_MESSAGE_PAYMENT)
+            await score_service.add_score_quiet(
+                user_id, chat_id, ANON_MESSAGE_PAYMENT, kind=LedgerKind.REFUND, ref="anon"
+            )

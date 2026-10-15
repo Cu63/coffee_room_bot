@@ -1,19 +1,44 @@
 from abc import ABC, abstractmethod
 
 from bot.domain.entities import Score
+from bot.domain.ledger import LedgerKind
 
 
 class IScoreRepository(ABC):
+    """Балансы. Каждое изменение попадает в журнал ledger с типом ``kind``.
+
+    ``ref`` — что именно (``msg:<id>``, ``mute``, ``bj:<game_id>``…),
+    ``counterparty_id`` — вторая сторона операции (кто поставил реакцию, кому перевод…).
+    """
+
     @abstractmethod
     async def get(self, user_id: int, chat_id: int) -> Score | None: ...
 
     @abstractmethod
-    async def add_delta(self, user_id: int, chat_id: int, delta: int) -> int:
+    async def add_delta(
+        self,
+        user_id: int,
+        chat_id: int,
+        delta: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         """Атомарно изменяет счёт на delta. Возвращает новое значение."""
         ...
 
     @abstractmethod
-    async def try_debit(self, user_id: int, chat_id: int, amount: int) -> int | None:
+    async def try_debit(
+        self,
+        user_id: int,
+        chat_id: int,
+        amount: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int | None:
         """Атомарно списывает amount, только если баланс >= amount.
 
         Возвращает новый баланс или None, если баллов не хватило.
@@ -23,7 +48,16 @@ class IScoreRepository(ABC):
         ...
 
     @abstractmethod
-    async def debit_up_to(self, user_id: int, chat_id: int, amount: int) -> int:
+    async def debit_up_to(
+        self,
+        user_id: int,
+        chat_id: int,
+        amount: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         """Атомарно списывает min(amount, баланс), не уводя баланс в минус.
 
         Возвращает фактически списанную сумму (0, если списывать нечего).
@@ -32,7 +66,16 @@ class IScoreRepository(ABC):
         ...
 
     @abstractmethod
-    async def set_value(self, user_id: int, chat_id: int, value: int) -> int:
+    async def set_value(
+        self,
+        user_id: int,
+        chat_id: int,
+        value: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
+    ) -> int:
         """Устанавливает счёт в конкретное значение. Возвращает установленное значение."""
         ...
 

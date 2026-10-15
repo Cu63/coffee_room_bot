@@ -8,6 +8,7 @@ import time
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.application.score_service import ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.redis_store import RedisStore
 from bot.infrastructure.word_loader import pick_random_word
@@ -46,7 +47,8 @@ async def create_anagram_game(
         logger.warning("anagram_loop: у бота нет баллов в чате %d (%d < %d)", chat_id, bot_balance, bet)
         return False
 
-    await score_service.add_score(bot.id, chat_id, -bet, admin_id=bot.id)
+    # Банк анаграммы ставит касса бота
+    await score_service.add_score(bot.id, chat_id, -bet, admin_id=bot.id, kind=LedgerKind.STAKE, ref="anagram")
 
     game_id = _make_game_id()
     shuffled = _shuffle_word(word)
@@ -58,7 +60,7 @@ async def create_anagram_game(
         sent = await bot.send_message(chat_id, game_text, parse_mode="HTML")
     except Exception as e:
         # Не смогли отправить — возвращаем деньги боту
-        await score_service.add_score(bot.id, chat_id, bet, admin_id=bot.id)
+        await score_service.add_score(bot.id, chat_id, bet, admin_id=bot.id, kind=LedgerKind.REFUND, ref="anagram")
         logger.error("anagram_loop: не удалось отправить сообщение в чат %d: %s", chat_id, e)
         return False
 

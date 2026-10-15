@@ -15,6 +15,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.iq_service import IqService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
@@ -161,6 +162,7 @@ async def cmd_buyiq(
         chat_id=chat_id,
         cost=cost,
         emoji=SPECIAL_EMOJI["iq"],
+        kind=LedgerKind.PURCHASE,
     )
     if not result.success:
         await reply_and_delete(

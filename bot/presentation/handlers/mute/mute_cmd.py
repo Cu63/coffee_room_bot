@@ -28,6 +28,7 @@ from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.domain.bot_utils import parse_duration
 from bot.domain.entities import MuteEntry, User
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -180,7 +181,13 @@ async def cmd_mute(
     if isinstance(member, ChatMemberOwner):
         # ── Owner soft-mute: удаляем сообщения через middleware ──
         result = await score_service.spend_score(
-            actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, bot_id=bot.id
+            actor_id=message.from_user.id,
+            target_id=target.id,
+            chat_id=chat_id,
+            cost=cost,
+            kind=LedgerKind.PURCHASE,
+            ref="mute",
+            bot_id=bot.id,
         )
         if not result.success:
             await reply_and_delete(
@@ -260,7 +267,13 @@ async def cmd_mute(
         )
     )
     result = await score_service.spend_score(
-        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, bot_id=bot.id
+        actor_id=message.from_user.id,
+        target_id=target.id,
+        chat_id=chat_id,
+        cost=cost,
+        kind=LedgerKind.PURCHASE,
+        ref="mute",
+        bot_id=bot.id,
     )
     if not result.success:
         await _unmute_user(

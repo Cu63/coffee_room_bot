@@ -8,6 +8,8 @@ import logging
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 
+from bot.domain.ledger import LedgerKind
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +44,14 @@ async def wordgame_loop(bot: Bot, container) -> None:
 
                             score_service: ScoreService = await scope.get(ScoreService)
                             refund_target = bot.id if is_random else creator_id
-                            await score_service.add_score(refund_target, chat_id, bet, admin_id=refund_target)
+                            await score_service.add_score(
+                                refund_target,
+                                chat_id,
+                                bet,
+                                admin_id=refund_target,
+                                kind=LedgerKind.REFUND,
+                                ref="wordgame",
+                            )
                             logger.info(
                                 "wordgame: refunded %d to %s (%d) in chat %d",
                                 bet,

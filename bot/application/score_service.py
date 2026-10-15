@@ -16,6 +16,7 @@ from bot.domain.entities import (
     Score,
     ScoreEvent,
 )
+from bot.domain.ledger import LedgerKind
 from bot.domain.reaction_registry import ReactionRegistry
 from bot.domain.tz import TZ_MSK
 
@@ -42,6 +43,9 @@ SPECIAL_EMOJI = {
     "genai": "🎨",
     "unsound": "🔕",
 }
+
+# Эмодзи истории → ref в журнале операций (ledger), если вызывающий не передал свой
+_EMOJI_REF = {emoji: name for name, emoji in SPECIAL_EMOJI.items()}
 
 _last_pseudo_message_id = 0
 
@@ -169,7 +173,9 @@ class ScoreService:
 
         # 9. Применить
         delta = reaction.weight
-        new_value = await self._score_repo.add_delta(target_id, chat_id, delta)
+        new_value = await self._score_repo.add_delta(
+            target_id, chat_id, delta, kind=LedgerKind.REACTION, ref=f"msg:{message_id}", counterparty_id=actor_id
+        )
 
         await self._event_repo.save(
             ScoreEvent(
@@ -219,7 +225,9 @@ class ScoreService:
             return ApplyResult(applied=False, reason=IgnoreReason.DUPLICATE)
 
         delta = reaction.weight
-        new_value = await self._score_repo.add_delta(target_id, chat_id, delta)
+        new_value = await self._score_repo.add_delta(
+            target_id, chat_id, delta, kind=LedgerKind.REACTION, ref=f"msg:{message_id}", counterparty_id=actor_id
+        )
 
         await self._event_repo.save(
             ScoreEvent(
@@ -249,7 +257,14 @@ class ScoreService:
 
         # Обратное изменение счёта
         reverse_delta = -event.delta
-        new_value = await self._score_repo.add_delta(event.target_id, chat_id, reverse_delta)
+        new_value = await self._score_repo.add_delta(
+            event.target_id,
+            chat_id,
+            reverse_delta,
+            kind=LedgerKind.REACTION,
+            ref=f"msg:{message_id}",
+            counterparty_id=actor_id,
+        )
 
         # Откат лимитов
         today = date.today()
@@ -286,7 +301,9 @@ class ScoreService:
         """Админская установка счёта в конкретное значение."""
         old = await self._score_repo.get(user_id, chat_id)
         old_value = old.value if old else 0
-        new_value = await self._score_repo.set_value(user_id, chat_id, value)
+        new_value = await self._score_repo.set_value(
+            user_id, chat_id, value, kind=LedgerKind.ADMIN, counterparty_id=admin_id
+        )
         delta = new_value - old_value
         if delta != 0:
             await self._save_special_event(
@@ -305,9 +322,18 @@ class ScoreService:
         delta: int,
         *,
         admin_id: int,
+        kind: LedgerKind,
+        ref: str | None = None,
     ) -> int:
-        """Админское изменение счёта на delta."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, delta)
+        """Изменение счёта на delta с записью в историю (actor — admin_id)."""
+        new_value = await self._score_repo.add_delta(
+            user_id,
+            chat_id,
+            delta,
+            kind=kind,
+            ref=ref,
+            counterparty_id=admin_id if admin_id != user_id else None,
+        )
         emoji = SPECIAL_EMOJI["add"] if delta >= 0 else SPECIAL_EMOJI["sub"]
         await self._save_special_event(admin_id, user_id, chat_id, delta, emoji)
         return new_value
@@ -319,12 +345,21 @@ class ScoreService:
         amount: int,
         *,
         admin_id: int,
+        kind: LedgerKind,
+        ref: str | None = None,
     ) -> int:
         """Атомарно списать до amount, не уводя баланс в минус. Возвращает списанное.
 
         В историю пишется так же, как add_score с отрицательной дельтой.
         """
-        taken = await self._score_repo.debit_up_to(user_id, chat_id, amount)
+        taken = await self._score_repo.debit_up_to(
+            user_id,
+            chat_id,
+            amount,
+            kind=kind,
+            ref=ref,
+            counterparty_id=admin_id if admin_id != user_id else None,
+        )
         if taken > 0:
             await self._save_special_event(admin_id, user_id, chat_id, -taken, SPECIAL_EMOJI["sub"])
         return taken
@@ -334,10 +369,15 @@ class ScoreService:
         user_id: int,
         chat_id: int,
         delta: int,
+        *,
+        kind: LedgerKind,
+        ref: str | None = None,
+        counterparty_id: int | None = None,
     ) -> int:
-        """Админское тихое изменение счёта на delta. Используется чтобы без истории списать или добавить баллы."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, delta)
-        return new_value
+        """Изменение счёта на delta без записи в историю (журнал операций пишется всегда)."""
+        return await self._score_repo.add_delta(
+            user_id, chat_id, delta, kind=kind, ref=ref, counterparty_id=counterparty_id
+        )
 
     async def spend_score(
         self,
@@ -347,8 +387,10 @@ class ScoreService:
         cost: int,
         emoji: str = "",
         *,
+        kind: LedgerKind,
         bot_id: int | None = None,
         quiet: bool = False,
+        ref: str | None = None,
     ) -> SpendResult:
         """Списать баллы у actor за действие над target.
 
@@ -356,15 +398,24 @@ class ScoreService:
         Проверка и списание атомарны, поэтому параллельные траты не уводят баланс в минус.
         Если передан bot_id — списанные баллы начисляются боту.
         quiet=True — не записывать событие в историю.
+        kind — тип операции в журнале: PURCHASE за покупку, STAKE за ставку.
         """
-        new_balance = await self._score_repo.try_debit(actor_id, chat_id, cost)
+        ref = ref or _EMOJI_REF.get(emoji)
+        new_balance = await self._score_repo.try_debit(
+            actor_id,
+            chat_id,
+            cost,
+            kind=kind,
+            ref=ref,
+            counterparty_id=target_id if target_id != actor_id else bot_id,
+        )
         if new_balance is None:
             balance = (await self.get_score(actor_id, chat_id)).value
             return SpendResult(success=False, cost=cost, current_balance=balance)
 
         # Начислить списанные баллы боту
         if bot_id is not None:
-            await self._score_repo.add_delta(bot_id, chat_id, cost)
+            await self._score_repo.add_delta(bot_id, chat_id, cost, kind=kind, ref=ref, counterparty_id=actor_id)
 
         if not quiet:
             await self._save_special_event(
@@ -396,12 +447,16 @@ class ScoreService:
             balance = score.value if score else 0
             return TransferResult(success=False, amount=amount, current_balance=balance)
 
-        sender_new = await self._score_repo.try_debit(sender_id, chat_id, amount)
+        sender_new = await self._score_repo.try_debit(
+            sender_id, chat_id, amount, kind=LedgerKind.TRANSFER, counterparty_id=receiver_id
+        )
         if sender_new is None:
             balance = (await self.get_score(sender_id, chat_id)).value
             return TransferResult(success=False, amount=amount, current_balance=balance)
 
-        receiver_new = await self._score_repo.add_delta(receiver_id, chat_id, amount)
+        receiver_new = await self._score_repo.add_delta(
+            receiver_id, chat_id, amount, kind=LedgerKind.TRANSFER, counterparty_id=sender_id
+        )
 
         # Записываем два события в историю: списание у отправителя и зачисление получателю
         await self._save_special_event(sender_id, receiver_id, chat_id, -amount, SPECIAL_EMOJI["transfer"])
@@ -416,7 +471,7 @@ class ScoreService:
 
     async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="burst")
         await self._save_special_event(
             user_id,
             user_id,
@@ -428,7 +483,7 @@ class ScoreService:
 
     async def award_spark(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за разжигание дискуссии."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="spark")
         await self._save_special_event(
             user_id,
             user_id,
@@ -440,7 +495,7 @@ class ScoreService:
 
     async def award_chain(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за цепочку реплаев."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="chain")
         await self._save_special_event(
             user_id,
             user_id,
@@ -452,7 +507,9 @@ class ScoreService:
 
     async def award_daily_leader(self, user_id: int, chat_id: int, reward: int) -> int:
         """Начисление бонуса лидеру дня."""
-        new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
+        new_value = await self._score_repo.add_delta(
+            user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="daily_leader"
+        )
         await self._save_special_event(
             user_id,
             user_id,

@@ -18,6 +18,7 @@ from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import MuteEntry
+from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -174,6 +175,7 @@ async def cmd_poker(
         chat_id=chat_id,
         cost=cfg.cost,
         emoji=SPECIAL_EMOJI["poker"],
+        kind=LedgerKind.PURCHASE,
         bot_id=bot.id,
     )
     if not result.success:
@@ -243,9 +245,13 @@ async def cmd_poker(
             score = await score_service.get_score(actual_target_id, chat_id)
             amount = max(1, math.ceil(score.value * cfg.score_percent / 100))
             # Атомарно: не больше актуального баланса
-            amount = await score_repo.debit_up_to(actual_target_id, chat_id, amount)
+            amount = await score_repo.debit_up_to(
+                actual_target_id, chat_id, amount, kind=LedgerKind.PENALTY, ref="poker", counterparty_id=bot.id
+            )
             if amount > 0:
-                await score_repo.add_delta(bot.id, chat_id, amount)
+                await score_repo.add_delta(
+                    bot.id, chat_id, amount, kind=LedgerKind.PENALTY, ref="poker", counterparty_id=actual_target_id
+                )
                 text = formatter._t["poker_score"].format(
                     actor=actor_link,
                     target=actual_target_link,
@@ -265,11 +271,16 @@ async def cmd_poker(
             max_steal = min(max_steal, cfg.steal_cap)
 
             # Атомарно: не больше актуального баланса жертвы
-            amount = await score_repo.debit_up_to(actual_target_id, chat_id, max_steal)
+            gainer_id = bot.id if backfire else user_id
+            amount = await score_repo.debit_up_to(
+                actual_target_id, chat_id, max_steal, kind=LedgerKind.PENALTY, ref="poker", counterparty_id=gainer_id
+            )
             if amount > 0:
                 if backfire:
                     # При backfire деньги идут боту
-                    await score_repo.add_delta(bot.id, chat_id, amount)
+                    await score_repo.add_delta(
+                        bot.id, chat_id, amount, kind=LedgerKind.PENALTY, ref="poker", counterparty_id=actual_target_id
+                    )
                     text = formatter._t["poker_score"].format(
                         actor=actor_link,
                         target=actual_target_link,
@@ -278,7 +289,9 @@ async def cmd_poker(
                     )
                 else:
                     # Крадём деньги жертвы себе
-                    await score_repo.add_delta(user_id, chat_id, amount)
+                    await score_repo.add_delta(
+                        user_id, chat_id, amount, kind=LedgerKind.PENALTY, ref="poker", counterparty_id=actual_target_id
+                    )
                     text = formatter._t["poker_steal"].format(
                         actor=actor_link,
                         target=actual_target_link,

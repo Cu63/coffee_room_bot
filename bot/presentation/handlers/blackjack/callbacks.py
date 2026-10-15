@@ -21,6 +21,7 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
@@ -123,6 +124,8 @@ async def cb_bj_accept(
         chat_id=chat_id,
         cost=bet,
         emoji=SPECIAL_EMOJI.get("bj", "\U0001f0cf"),
+        kind=LedgerKind.STAKE,
+        ref=f"bj:{game_id}",
     )
     if not result.success:
         await store._r.delete(accept_lock)
@@ -174,7 +177,7 @@ async def cb_bj_accept(
     # XX: если лобби уже забрал cleanup-loop (и вернул ставку создателю) —
     # игру не воскрешаем, а ставку принимающего возвращаем
     if not await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER, xx=True):
-        await score_repo.add_delta(user_id, chat_id, bet)
+        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
         await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
         return
 

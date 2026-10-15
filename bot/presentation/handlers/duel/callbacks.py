@@ -14,6 +14,7 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
+from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
@@ -100,6 +101,8 @@ async def cb_duel_accept(
         chat_id=chat_id,
         cost=bet,
         emoji=emoji,
+        kind=LedgerKind.STAKE,
+        ref=f"duel:{invite_id}",
     )
     if not result.success:
         sw = p.pluralize(bet)
@@ -115,7 +118,7 @@ async def cb_duel_accept(
     deleted = await store._r.delete(key)
     if not deleted:
         # Кто-то успел раньше (race condition) — возвращаем ставку
-        await score_repo.add_delta(user_id, chat_id, bet)
+        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{invite_id}")
         await safe_callback_answer(cb, "⏰ Приглашение уже истекло.", show_alert=True)
         return
 
@@ -175,7 +178,7 @@ async def cb_duel_decline(
     # Возвращаем ставку создателю
     bet = data["bet"]
     challenger_id = data["challenger_id"]
-    await score_repo.add_delta(challenger_id, chat_id, bet)
+    await score_repo.add_delta(challenger_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{invite_id}")
 
     challenger_display = user_link(
         data["challenger_username"] or None,

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
+from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import GenaiConfig
 from bot.infrastructure.gigachat_client import GigaChatClient, GigaChatError, GigaChatNoImage
 
@@ -61,6 +62,7 @@ class GenAiService:
             chat_id=chat_id,
             cost=cost,
             emoji=SPECIAL_EMOJI["genai"],
+            kind=LedgerKind.PURCHASE,
             bot_id=bot_id,
         )
         if not spend.success:
@@ -103,8 +105,13 @@ class GenAiService:
         Публичный метод: хендлер вызывает его, если картинку не удалось
         отправить в чат — платить за то, чего никто не увидел, нечестно.
         """
-        await self._score.add_score_quiet(user_id, chat_id, cost or self._config.cost)
-        await self._score.add_score_quiet(bot_id, chat_id, -(cost or self._config.cost))
+        cost = cost or self._config.cost
+        await self._score.add_score_quiet(
+            user_id, chat_id, cost, kind=LedgerKind.REFUND, ref="genai", counterparty_id=bot_id
+        )
+        await self._score.add_score_quiet(
+            bot_id, chat_id, -cost, kind=LedgerKind.REFUND, ref="genai", counterparty_id=user_id
+        )
         # Списание уже зафиксировано — возврат тоже фиксируем сразу, чтобы его
         # не откатила ошибка дальше по хендлеру
         await self._tx.checkpoint()
