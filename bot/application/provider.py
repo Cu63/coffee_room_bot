@@ -25,6 +25,7 @@ from bot.application.interfaces.message_repository import IMessageRepository
 from bot.application.interfaces.mute_repository import IMuteRepository
 from bot.application.interfaces.per_target_limits_repository import IPerTargetLimitsRepository
 from bot.application.interfaces.score_repository import IScoreRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.interfaces.xp_repository import IXpRepository
 from bot.application.iq_service import IqService
@@ -126,6 +127,7 @@ class AppServiceProvider(Provider):
         llm_repo: ILlmRepository,
         config: AppConfig,
         formatter: MessageFormatter,
+        tx: ITransactionManager,
     ) -> AnalyzeService:
         return AnalyzeService(
             client=client,
@@ -134,6 +136,7 @@ class AppServiceProvider(Provider):
             config=config.analyze,
             formatter=formatter,
             admin_users=config.admin.users,
+            tx=tx,
         )
 
     @provide(scope=Scope.REQUEST)
@@ -144,6 +147,7 @@ class AppServiceProvider(Provider):
         llm_repo: ILlmRepository,
         config: AppConfig,
         formatter: MessageFormatter,
+        tx: ITransactionManager,
     ) -> FanficService:
         return FanficService(
             client=client,
@@ -151,6 +155,8 @@ class AppServiceProvider(Provider):
             llm_repo=llm_repo,
             config=config.fanfic,
             formatter=formatter,
+            tx=tx,
+            admin_users=config.admin.users,
         )
 
     @provide(scope=Scope.REQUEST)
@@ -160,12 +166,14 @@ class AppServiceProvider(Provider):
         score_service: ScoreService,
         config: AppConfig,
         formatter: MessageFormatter,
+        tx: ITransactionManager,
     ) -> GenAiService:
         return GenAiService(
             client=client,
             score_service=score_service,
             config=config.genai,
             system_prompt=formatter._t["genai_system_prompt"],
+            tx=tx,
         )
 
     @provide(scope=Scope.REQUEST)
@@ -175,11 +183,13 @@ class AppServiceProvider(Provider):
         client: AiTunnelClient,
         config: AppConfig,
         settings: BotSettings,
+        tx: ITransactionManager,
     ) -> LlmService:
         return LlmService(
             client=client,
             search_engine=SearchEngine(settings.openserp_url),
             llm_repo=llm_repo,
+            tx=tx,
             system_prompt=config.llm.system_prompt,
             search_system_prompt=config.llm.search_system_prompt,
             daily_limit=config.llm.daily_limit_per_user,

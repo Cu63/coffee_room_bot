@@ -42,13 +42,14 @@ Handlers get dependencies via `FromDishka[T]`, middlewares via `data["dishka_con
 
 ### Transactions
 
-One Postgres transaction per update (or per loop scope): `DatabaseProvider.get_tx_manager` begins it on the first repository request and finishes it when the scope closes. dishka hands the handler's exception to the generator as the value of `yield` (`asend(exc)`), not by raising it inside.
+One Postgres transaction per update (or per loop scope), opened lazily by the first query: repositories get a `LazyConnection` from `PostgresTransactionManager`, and `DatabaseProvider.get_tx_manager` finishes the transaction when the scope closes. dishka hands the handler's exception to the generator as the value of `yield` (`asend(exc)`), not by raising it inside.
 
 - Any exception except `TelegramAPIError` → rollback. Success or a Telegram API error → commit (an external effect such as a sent message or a mute may already have happened).
 - To roll back on purpose, answer the user and raise `AbortUpdate` (`bot/presentation/errors.py`).
+- `ITransactionManager.checkpoint()` commits what has been done and returns the connection to the pool; the next query opens a new transaction. The pool has 5 connections, so call it before every slow external call (LLM, web search) — the LLM services and `TrackMessageMiddleware` already do. Work before a checkpoint survives a later rollback: a debit made before it needs an explicit refund on failure that is itself committed (`GenAiService.refund`).
+- LLM commands allow one request in flight per user (`OneLlmRequestPerUserMiddleware` on their routers); otherwise parallel requests slip past the daily limits.
 - Handlers are never re-run on network errors: only idempotent Bot API requests are retried (`RetryIdempotentRequestsMiddleware`).
 - Redis writes are not part of the transaction. Order the steps so that a rollback cannot leave Redis ahead of Postgres.
-- The transaction stays open while the handler awaits Telegram or an LLM, and the pool has 5 connections — keep slow I/O out of money paths.
 
 ### Money and game state
 

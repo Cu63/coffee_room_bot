@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from bot.application.interfaces.llm_repository import ILlmRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.search_engine import SearchEngine
 
@@ -25,6 +26,11 @@ class RateLimitExceeded(Exception):
     pass
 
 
+# Дневной лимит config.llm.daily_limit_per_user — на /llm и /search (и /searchd);
+# /ff, /analyze и /wir считаются отдельно.
+_LIMITED_COMMANDS: tuple[str, ...] = ("llm", "search")
+
+
 class LlmService:
     """Оркестрирует LLM-запросы и поиск."""
 
@@ -33,6 +39,7 @@ class LlmService:
         client: AiTunnelClient,
         search_engine: SearchEngine,
         llm_repo: ILlmRepository,
+        tx: ITransactionManager,
         system_prompt: str,
         search_system_prompt: str,
         daily_limit: int,
@@ -42,6 +49,7 @@ class LlmService:
         self._client = client
         self._search = search_engine
         self._repo = llm_repo
+        self._tx = tx
         self._system_prompt = system_prompt
         self._search_system_prompt = search_system_prompt
         self._daily_limit = daily_limit
@@ -54,14 +62,14 @@ class LlmService:
     async def _check_limit(self, user_id: int, username: str | None) -> None:
         if self._is_admin(username):
             return
-        count = await self._repo.count_today(user_id)
+        count = await self._repo.count_today(user_id, _LIMITED_COMMANDS)
         if count >= self._daily_limit:
             raise RateLimitExceeded
 
     async def _make_result(
         self, text: str, user_id: int, username: str | None, input_tokens: int, output_tokens: int
     ) -> LlmResult:
-        used = await self._repo.count_today(user_id)
+        used = await self._repo.count_today(user_id, _LIMITED_COMMANDS)
         return LlmResult(
             text=text,
             used_today=used,
@@ -73,6 +81,7 @@ class LlmService:
 
     async def ask(self, user_id: int, chat_id: int, username: str | None, question: str) -> LlmResult:
         await self._check_limit(user_id, username)
+        await self._tx.checkpoint()  # не держим соединение из пула, пока ждём LLM
         messages = [
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": question},
@@ -118,6 +127,7 @@ class LlmService:
         debug: bool = False,
     ) -> LlmResult:
         await self._check_limit(user_id, username)
+        await self._tx.checkpoint()  # дальше поиск и LLM — соединение из пула не держим
 
         trace_parts: list[str] = []
 

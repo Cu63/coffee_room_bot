@@ -11,6 +11,7 @@ from aiogram.types import Message, TelegramObject
 from dishka import AsyncContainer
 
 from bot.application.interfaces.message_repository import IMessageRepository, MessageInfo
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.entities import User
 from bot.domain.tz import TZ_MSK
@@ -82,6 +83,10 @@ class TrackMessageMiddleware(BaseMiddleware):
                     ),
                 )
             )
+
+            # Трекинг фиксируем сразу: он не зависит от исхода хендлера, а соединение
+            # не должно висеть, пока дальше по цепочке ждут Redis, Telegram или LLM
+            await (await container.get(ITransactionManager)).checkpoint()
 
             # Авто-регистрация чата для /anon
             if event.chat.type in ("group", "supergroup") and event.chat.title:

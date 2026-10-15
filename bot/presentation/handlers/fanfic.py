@@ -13,15 +13,17 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.fanfic_service import FanficService
+from bot.application.fanfic_service import FanficRateLimitExceeded, FanficService
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.entities import User
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 from bot.presentation.utils import reply_and_delete, send_html_parts
 
 logger = logging.getLogger(__name__)
 router = Router(name="fanfic")
+router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 
 def _parse_args(args: str | None) -> tuple[list[str], str]:
@@ -102,7 +104,11 @@ async def cmd_fanfic(
             user_id=message.from_user.id,
             heroes=heroes,
             prompt=prompt,
+            username=message.from_user.username,
         )
+    except FanficRateLimitExceeded as e:
+        await thinking.edit_text(formatter._t["ff_rate_limit"].format(used=e.used, limit=e.limit))
+        return
     except Exception:
         logger.exception("ff: запрос к LLM не удался")
         await thinking.edit_text(formatter._t["ff_error"])

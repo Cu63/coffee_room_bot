@@ -22,9 +22,11 @@ from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.news_fetcher import NewsItem, fetch_random_news
 from bot.infrastructure.openai_client import OpenAiClient
 from bot.infrastructure.redis.store import RedisStore
+from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 
 logger = logging.getLogger(__name__)
 router = Router(name="news")
+router.message.middleware(OneLlmRequestPerUserMiddleware())
 
 
 def _format_news_item(item: NewsItem, template: str) -> str:

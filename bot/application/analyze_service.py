@@ -6,6 +6,7 @@ from datetime import datetime
 
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import ChatMessage, IMessageRepository
+from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.infrastructure.config_loader import AnalyzeConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.openai_client import OpenAiClient
@@ -62,10 +63,12 @@ class AnalyzeService:
         config: AnalyzeConfig,
         formatter: MessageFormatter,
         admin_users: list[str],
+        tx: ITransactionManager,
     ) -> None:
         self._client = client
         self._repo = message_repo
         self._llm_repo = llm_repo
+        self._tx = tx
         self._config = config
         self._fmt = formatter
         self._admin_users: set[str] = {u.lower() for u in admin_users}
@@ -146,6 +149,7 @@ class AnalyzeService:
             actual=actual,
             messages=_format_messages(messages),
         )
+        await self._tx.checkpoint()  # не держим соединение из пула, пока ждём LLM
         resp = await self._client.chat(
             [
                 {"role": "system", "content": self._fmt._t["analyze_system_prompt"]},
@@ -207,6 +211,7 @@ class AnalyzeService:
             actual=actual,
             messages=_format_messages(messages),
         )
+        await self._tx.checkpoint()  # не держим соединение из пула, пока ждём LLM
         resp = await self._client.chat(
             [
                 {"role": "system", "content": self._fmt._t["wir_system_prompt"]},

@@ -7,13 +7,14 @@ class PostgresLlmRepository(ILlmRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
-    async def count_today(self, user_id: int) -> int:
+    async def count_today(self, user_id: int, commands: tuple[str, ...]) -> int:
         return await self._conn.fetchval(
             """
             SELECT COUNT(*) FROM llm_requests
-            WHERE user_id = $1 AND created_at >= CURRENT_DATE
+            WHERE user_id = $1 AND command = ANY($2) AND created_at >= CURRENT_DATE
             """,
             user_id,
+            list(commands),
         )
 
     async def log_request(

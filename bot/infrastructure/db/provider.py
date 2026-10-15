@@ -59,8 +59,9 @@ class DatabaseProvider(Provider):
 
     @provide(scope=Scope.REQUEST)
     async def get_tx_manager(self, pool: asyncpg.Pool) -> AsyncIterable[ITransactionManager]:
+        # Транзакция открывается первым запросом к БД (см. PostgresTransactionManager),
+        # поэтому запрос, не трогающий БД, не занимает соединение из пула.
         tm = PostgresTransactionManager(pool)
-        await tm.begin()
         # dishka закрывает генератор через asend(exc): исключение обработчика
         # приходит ЗНАЧЕНИЕМ yield, а не выбрасывается внутрь генератора, —
         # try/except вокруг yield здесь никогда бы не сработал.
