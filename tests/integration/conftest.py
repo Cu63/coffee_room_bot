@@ -21,17 +21,26 @@ from pathlib import Path
 import asyncpg
 import pytest
 import redis.asyncio as aioredis
+from aiogram import Bot, Dispatcher
+from dishka.integrations.aiogram import setup_dishka
 
 from bot.application.score_service import ScoreService
 from bot.domain.reaction_registry import ReactionRegistry
-from bot.infrastructure.config_loader import load_config
+from bot.infrastructure.bootstrap import (
+    register_bot_user,
+    register_middlewares,
+    register_post_dishka_middlewares,
+    register_routers,
+)
+from bot.infrastructure.config_loader import AppConfig, BotSettings, load_config
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
 from bot.infrastructure.db.postgres_per_target_limits_repository import PostgresPerTargetLimitsRepository
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
 from bot.infrastructure.db.postgres_user_stats_repository import PostgresUserStatsRepository
-from tests.integration.helpers import DB_URL, REDIS_URL
+from tests.integration.fake_telegram import BOT_USER, FakeTelegramSession, TelegramHarness
+from tests.integration.helpers import BOT_ID, DB_URL, REDIS_URL
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 
@@ -143,3 +152,24 @@ async def app_container(pool, redis, monkeypatch):
     )
     yield container
     await container.close()
+
+
+@pytest.fixture
+async def tg(app_container):
+    """Бот целиком: Dispatcher с middleware и роутерами, как в main.py; Telegram — фейковый."""
+    config = await app_container.get(AppConfig)
+    config.auto_react.enabled = False  # случайная реакция бота начисляла бы автору баллы
+    await register_bot_user(app_container, BOT_USER)
+
+    dp = Dispatcher()
+    register_middlewares(dp, BOT_USER)
+    register_routers(dp, config, BotSettings(_env_file=None))
+    setup_dishka(app_container, dp)
+    register_post_dishka_middlewares(dp, BOT_USER)
+    session = FakeTelegramSession()
+    yield TelegramHarness(dp, Bot(token=f"{BOT_ID}:TEST", session=session), session)
+
+    # Роутеры хендлеров — синглтоны модулей: отцепляем их, чтобы следующий тест собрал свой Dispatcher
+    for router in dp.sub_routers:
+        router._parent_router = None
+    dp.sub_routers.clear()
