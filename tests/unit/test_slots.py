@@ -1,45 +1,29 @@
-from bot.application.slots_service import SlotsConfig, SlotsMachine, SpinOutcome
+from fractions import Fraction
+
+from bot.presentation.handlers.slots import _get_outcome
+
+# Значения кубика 🎰 в Telegram: 1..64, 64 — «777»
+VALUES = range(1, 65)
 
 
-def test_spin_returns_result():
-    cfg = SlotsConfig(min_bet=1, max_bet=100)
-    machine = SlotsMachine(cfg)
-    result = machine.spin(10)
-    assert len(result.reels) == 3
-    assert result.bet == 10
-    assert result.outcome in SpinOutcome
+def test_jackpot_only_on_777():
+    jackpots = [v for v in VALUES if _get_outcome(v)[0] == "jackpot"]
+    assert jackpots == [64]
 
 
-def test_spin_loss_delta_negative():
-    cfg = SlotsConfig(min_bet=1, max_bet=100)
-    machine = SlotsMachine(cfg)
-    # Spin many times, at least some should be losses
-    losses = []
-    for _ in range(100):
-        r = machine.spin(10)
-        if r.outcome == SpinOutcome.LOSS:
-            losses.append(r)
-    assert len(losses) > 0
-    for r in losses:
-        assert r.delta == -10
+def test_three_of_a_kind():
+    wins = [v for v in VALUES if _get_outcome(v)[0] == "win"]
+    assert wins == [1, 22, 43]
 
 
-def test_spin_win_delta_positive():
-    cfg = SlotsConfig(min_bet=1, max_bet=100)
-    machine = SlotsMachine(cfg)
-    wins = []
-    for _ in range(1000):
-        r = machine.spin(10)
-        if r.outcome == SpinOutcome.WIN:
-            wins.append(r)
-    # With 1000 spins we should get at least one win
-    if wins:
-        for r in wins:
-            assert r.delta > 0
+def test_all_bet_uses_reduced_multipliers():
+    assert _get_outcome(64, is_all=True)[1] < _get_outcome(64)[1]
+    assert _get_outcome(1, is_all=True)[1] < _get_outcome(1)[1]
 
 
-def test_theoretical_rtp():
-    cfg = SlotsConfig()
-    machine = SlotsMachine(cfg)
-    rtp = machine.theoretical_rtp
-    assert 0.5 < rtp < 2.0  # sanity check
+def test_return_to_player():
+    # Ожидаемая выплата на единицу ставки (ставка уже списана): RTP < 1 — казино в плюсе
+    rtp = sum(Fraction(_get_outcome(v)[1]) for v in VALUES) / 64
+    rtp_all = sum(Fraction(_get_outcome(v, is_all=True)[1]) for v in VALUES) / 64
+    assert rtp == Fraction(54, 64)
+    assert rtp_all == Fraction(14, 64)

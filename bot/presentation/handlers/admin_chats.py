@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 from aiogram.types.chat import Chat
 from dishka.integrations.aiogram import FromDishka, inject
-from magic_filter import F
+from aiogram import F
 
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.domain.bot_utils import is_admin
