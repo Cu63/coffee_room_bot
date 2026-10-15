@@ -117,14 +117,12 @@ async def test_remove_reaction_reverses_exactly_once(conn, svc):
     assert (await svc.apply_reaction(FAN, CHAT, 1, "🔥")).applied
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="известный баг: UNIQUE (actor_id, message_id, emoji) в score_events не учитывает chat_id — "
-    "реакция на сообщение с тем же номером в другом чате считается дублем",
-)
 async def test_same_message_id_in_two_chats_counts_separately(conn, svc):
     other_chat = CHAT - 1
     await post(conn, 1)
     await post(conn, 1, chat_id=other_chat)
     assert (await svc.apply_reaction(FAN, CHAT, 1, "🔥")).applied
     assert (await svc.apply_reaction(FAN, other_chat, 1, "🔥")).applied
+    # Снятие реакции в одном чате не трогает реакцию в другом
+    assert (await svc.remove_reaction(FAN, other_chat, 1, "🔥")).applied
+    assert (await balance(conn, AUTHOR), await balance(conn, AUTHOR, chat_id=other_chat)) == (3, 0)

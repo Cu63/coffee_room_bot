@@ -63,12 +63,12 @@ async def test_transfer_conserves_total_and_records_both_sides(conn, score_servi
     await seed_users(conn, A, balance=1000)
     await seed_users(conn, B, balance=0)
     svc = score_service_factory(conn)
-    for _ in range(50):  # обе записи перевода в одну миллисекунду не должны упираться в UNIQUE
+    for _ in range(50):
         async with conn.transaction():
             assert (await svc.transfer_score(A, B, CHAT, 1)).success
     assert await balance(conn, A) + await balance(conn, B) == 1000
-    events = await conn.fetchval("SELECT count(*) FROM score_events WHERE chat_id = $1 AND emoji = '💸'", CHAT)
-    assert events == 100
+    legs = await conn.fetchval("SELECT count(*) FROM ledger WHERE chat_id = $1 AND kind = 'transfer'", CHAT)
+    assert legs == 100  # в журнале обе стороны каждого перевода
 
 
 async def test_transfer_rejects_insufficient_and_non_positive(conn, score_service_factory):

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 
+from bot.domain.ledger import LedgerEntry
+
 
 @dataclass(slots=True, frozen=True)
 class LedgerMismatch:
@@ -17,6 +19,16 @@ class ILedgerRepository(ABC):
     @abstractmethod
     async def mismatches(self, limit: int = 100) -> list[LedgerMismatch]:
         """Пары (чат, пользователь), у которых баланс не равен сумме журнала."""
+        ...
+
+    @abstractmethod
+    async def history(
+        self, chat_id: int, since: datetime, user_id: int | None = None, limit: int = 500
+    ) -> list[LedgerEntry]:
+        """Операции участников чата (без кассы бота и стартовых остатков), новые первыми.
+
+        С ``user_id`` — только операции, где он одна из сторон.
+        """
         ...
 
     @abstractmethod

@@ -20,8 +20,10 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.leaderboard_service import LeaderboardService
-from bot.application.score_service import ScoreService
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.application.xp_service import XpService
+from bot.domain.entities import User
+from bot.domain.ledger import LedgerEntry
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -31,6 +33,61 @@ router = Router(name="commands")
 
 # TTLCache: страницы истории живут 2 минуты, max 100 записей (chat_id, user_id)
 _history_pages: TTLCache = TTLCache(maxsize=100, ttl=120)
+
+# Эмодзи операции в истории: по ref (что именно), иначе по типу операции
+_REF_EMOJI = {
+    **SPECIAL_EMOJI,
+    "unmute": "🔊",
+    "renew": "🔁",
+    "anon": "🕵",
+    "donotbuy": "🚫",
+    "sixtyseven": "6️⃣",
+    "anagram": "🔤",
+    "wordgame": "📝",
+    "slots": "🎰",
+    "dice": "🎲",
+    "duel": "⚔️",
+    "lot": "🔨",
+    "giveaway": "🎁",
+}
+_KIND_EMOJI = {
+    "reaction": "👍",
+    "transfer": "💸",
+    "purchase": "🛒",
+    "stake": "🎲",
+    "prize": "🏆",
+    "refund": "↩️",
+    "bonus": "🎁",
+    "penalty": "🎰",
+    "tax": "🏛",
+    "admin": "⚙️",
+}
+
+
+def _history_emoji(entry: LedgerEntry) -> str:
+    if entry.reaction_emoji:
+        return entry.reaction_emoji
+    base = (entry.ref or "").split(":", 1)[0]
+    return _REF_EMOJI.get(base) or _KIND_EMOJI.get(entry.kind, "❔")
+
+
+def _history_rows(entries: list[LedgerEntry], users: dict[int, User]) -> list[dict]:
+    """Строки истории для history_row: кто → кому, эмодзи, изменение."""
+
+    def link(user_id: int) -> str:
+        user = users.get(user_id)
+        return user_link(user.username, user.full_name, user.id) if user else str(user_id)
+
+    return [
+        {
+            "date": to_msk(e.created_at).strftime("%d.%m %H:%M"),
+            "actor": link(e.actor_id),
+            "target": link(e.target_id),
+            "emoji": _history_emoji(e),
+            "delta": e.delta,
+        }
+        for e in entries
+    ]
 
 
 def _history_kb(page: int, total: int, chat_id: int, uid: int) -> InlineKeyboardMarkup | None:
@@ -271,21 +328,8 @@ async def cmd_history(
     chat_id = message.chat.id
     uid = message.from_user.id
     events = await history_service.get_history(chat_id)
-    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
-    users = await user_repo.get_by_ids(all_ids)
-    event_dicts: list[dict] = []
-    for e in events:
-        actor = users.get(e.actor_id)
-        target = users.get(e.target_id)
-        event_dicts.append(
-            {
-                "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
-                "actor": user_link(actor.username, actor.full_name, actor.id) if actor else str(e.actor_id),
-                "target": user_link(target.username, target.full_name, target.id) if target else str(e.target_id),
-                "emoji": e.emoji,
-                "delta": e.delta,
-            }
-        )
+    users = await user_repo.get_by_ids(list({e.actor_id for e in events} | {e.target_id for e in events}))
+    event_dicts = _history_rows(events, users)
     page_size = config.system.history_page_size
     pages = [event_dicts[i : i + page_size] for i in range(0, max(1, len(event_dicts)), page_size)]
     _history_pages[(chat_id, uid)] = pages
@@ -433,21 +477,8 @@ async def cmd_uhistory(
         )
         return
 
-    all_ids = list({e.actor_id for e in events} | {e.target_id for e in events})
-    users = await user_repo.get_by_ids(all_ids)
-    event_dicts: list[dict] = []
-    for e in events:
-        actor = users.get(e.actor_id)
-        tgt = users.get(e.target_id)
-        event_dicts.append(
-            {
-                "date": to_msk(e.created_at).strftime("%d.%m %H:%M") if e.created_at else "",
-                "actor": user_link(actor.username, actor.full_name, actor.id) if actor else str(e.actor_id),
-                "target": user_link(tgt.username, tgt.full_name, tgt.id) if tgt else str(e.target_id),
-                "emoji": e.emoji,
-                "delta": e.delta,
-            }
-        )
+    users = await user_repo.get_by_ids(list({e.actor_id for e in events} | {e.target_id for e in events}))
+    event_dicts = _history_rows(events, users)
 
     page_size = config.system.history_page_size
     pages = [event_dicts[i : i + page_size] for i in range(0, max(1, len(event_dicts)), page_size)]

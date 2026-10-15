@@ -230,7 +230,7 @@ async def on_private_text(
 
     # Списываем до отправки: проверка баланса и списание — один атомарный запрос
     spend = await score_service.spend_score(
-        user_id, user_id, chat_id, ANON_MESSAGE_PAYMENT, kind=LedgerKind.PURCHASE, ref="anon", quiet=True
+        user_id, user_id, chat_id, ANON_MESSAGE_PAYMENT, kind=LedgerKind.PURCHASE, ref="anon"
     )
     if not spend.success:
         await message.answer("❌ Не удалось отправить сообщение.", parse_mode=ParseMode.HTML)
