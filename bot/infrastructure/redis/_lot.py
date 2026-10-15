@@ -31,6 +31,36 @@ class LotStoreMixin:
             ex=ttl,
         )
 
+    # Обновляет лот, только если с момента чтения не было других ставок
+    # (bids_count не изменился) и лот ещё не завершён (ключ существует).
+    _LOT_CAS_SCRIPT = """
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local cur = cjson.decode(raw)
+if tonumber(cur['bids_count']) ~= tonumber(ARGV[1]) then return 0 end
+redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+return 1
+"""
+
+    async def lot_game_save_if_unchanged(
+        self,
+        chat_id: int,
+        lot_id: str,
+        expected_bids_count: int,
+        data: dict,
+        ttl: int,
+    ) -> bool:
+        return bool(
+            await self._r.eval(
+                self._LOT_CAS_SCRIPT,
+                1,
+                f"{self._LOT_GAME}{chat_id}:{lot_id}",
+                expected_bids_count,
+                json.dumps(data, ensure_ascii=False),
+                ttl,
+            )
+        )
+
     async def lot_game_delete(self, chat_id: int, lot_id: str) -> bool:
         return bool(await self._r.delete(f"{self._LOT_GAME}{chat_id}:{lot_id}"))
 

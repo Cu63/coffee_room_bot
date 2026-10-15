@@ -242,8 +242,9 @@ async def cmd_poker(
             # На себя: теряешь 5% своего баланса, деньги идут боту
             score = await score_service.get_score(actual_target_id, chat_id)
             amount = max(1, math.ceil(score.value * cfg.score_percent / 100))
-            if score.value > 0:
-                await score_repo.add_delta(actual_target_id, chat_id, -amount)
+            # Атомарно: не больше актуального баланса
+            amount = await score_repo.debit_up_to(actual_target_id, chat_id, amount)
+            if amount > 0:
                 await score_repo.add_delta(bot.id, chat_id, amount)
                 text = formatter._t["poker_score"].format(
                     actor=actor_link,
@@ -262,11 +263,10 @@ async def cmd_poker(
             max_steal = max(1, math.ceil(attacker_score.value * cfg.steal_percent / 100))
             # Жёсткий потолок: за один /poker нельзя украсть больше steal_cap
             max_steal = min(max_steal, cfg.steal_cap)
-            victim_score = await score_service.get_score(actual_target_id, chat_id)
 
-            if victim_score.value > 0:
-                amount = min(max_steal, victim_score.value)
-                await score_repo.add_delta(actual_target_id, chat_id, -amount)
+            # Атомарно: не больше актуального баланса жертвы
+            amount = await score_repo.debit_up_to(actual_target_id, chat_id, max_steal)
+            if amount > 0:
                 if backfire:
                     # При backfire деньги идут боту
                     await score_repo.add_delta(bot.id, chat_id, amount)

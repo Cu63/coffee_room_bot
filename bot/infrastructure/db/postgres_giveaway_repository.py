@@ -68,18 +68,19 @@ class PostgresGiveawayRepository(IGiveawayRepository):
         return [self._row_to_giveaway(r) for r in rows]
 
     async def add_participant(self, giveaway_id: int, user_id: int) -> bool:
-        try:
-            await self._conn.execute(
-                """
-                INSERT INTO giveaway_participants (giveaway_id, user_id)
-                VALUES ($1, $2)
-                """,
-                giveaway_id,
-                user_id,
-            )
-            return True
-        except asyncpg.UniqueViolationError:
-            return False
+        # ON CONFLICT вместо перехвата UniqueViolationError: ошибка внутри
+        # транзакции запроса прервала бы её, и все дальнейшие запросы упали бы.
+        inserted = await self._conn.fetchval(
+            """
+            INSERT INTO giveaway_participants (giveaway_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING user_id
+            """,
+            giveaway_id,
+            user_id,
+        )
+        return inserted is not None
 
     async def get_participants(self, giveaway_id: int) -> list[int]:
         rows = await self._conn.fetch(

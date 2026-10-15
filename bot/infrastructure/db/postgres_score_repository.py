@@ -33,6 +33,49 @@ class PostgresScoreRepository(IScoreRepository):
         )
         return row["value"]  # type: ignore[index]
 
+    async def try_debit(self, user_id: int, chat_id: int, amount: int) -> int | None:
+        if amount < 0:
+            raise ValueError(f"debit amount must be non-negative, got {amount}")
+        if amount == 0:
+            score = await self.get(user_id, chat_id)
+            return score.value if score else 0
+        return await self._conn.fetchval(
+            """
+            UPDATE scores SET value = value - $3
+            WHERE user_id = $1 AND chat_id = $2 AND value >= $3
+            RETURNING value
+            """,
+            user_id,
+            chat_id,
+            amount,
+        )
+
+    async def debit_up_to(self, user_id: int, chat_id: int, amount: int) -> int:
+        if amount < 0:
+            raise ValueError(f"debit amount must be non-negative, got {amount}")
+        if amount == 0:
+            return 0
+        # FOR UPDATE блокирует строку до UPDATE: списываемая сумма считается
+        # от актуального баланса, а не от прочитанного раньше.
+        taken = await self._conn.fetchval(
+            """
+            WITH cur AS (
+                SELECT LEAST($3, GREATEST(value, 0)) AS taken
+                FROM scores
+                WHERE user_id = $1 AND chat_id = $2
+                FOR UPDATE
+            )
+            UPDATE scores s SET value = s.value - cur.taken
+            FROM cur
+            WHERE s.user_id = $1 AND s.chat_id = $2
+            RETURNING cur.taken
+            """,
+            user_id,
+            chat_id,
+            amount,
+        )
+        return taken or 0
+
     async def set_value(self, user_id: int, chat_id: int, value: int) -> int:
         row = await self._conn.fetchrow(
             """
