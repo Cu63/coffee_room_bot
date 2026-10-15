@@ -8,6 +8,14 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+  # На PR — только сборка: битая ссылка в docs ловится до мержа
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -16,12 +24,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.pages.outputs.publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,13 +50,29 @@ jobs:
       - name: Build docs
         run: uv run mkdocs build --strict
 
+      # Публикуем, только если в Settings → Pages выбран источник «GitHub Actions».
+      # Иначе deploy-pages падает с 404, и у коммитов в master висит красный крест.
+      - name: Check that GitHub Pages are enabled
+        id: pages
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null)" = "workflow" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::GitHub Pages не включены (Settings → Pages → Source: GitHub Actions) — сайт не публикуется"
+          fi
+
       - name: Upload Pages artifact
+        if: steps.pages.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site/
 
   deploy:
     needs: build
+    if: needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
