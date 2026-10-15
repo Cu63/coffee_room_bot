@@ -49,6 +49,7 @@ from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.errors import AbortUpdate
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
@@ -291,47 +292,32 @@ async def cb_lot_bid(
             full_name=cb.from_user.full_name,
         ))
 
-        # Проверяем баланс с учётом возврата своей же ставки:
-        # если пользователь уже лидер, его баланс занижен на prev_price —
-        # учитываем это, чтобы не блокировать повышение своей ставки.
-        bal = await score_service.get_score(user_id, chat_id)
-        refund_to_self = prev_price if prev_leader_id == user_id else 0
-        effective_balance = bal.value + refund_to_self
-        if effective_balance < new_price:
-            sw = p.pluralize(new_price)
-            await cb.answer(
-                f"❌ Недостаточно баллов. Нужно {new_price} {sw}, у тебя {effective_balance}.",
-                show_alert=True,
-            )
-            return
+        # Лидер, повышающий свою ставку, доплачивает только разницу:
+        # prev_price уже лежит у бота.
+        is_self_raise = prev_leader_id == user_id
+        charge = new_price - prev_price if is_self_raise else new_price
 
-        # Порядок важен: сначала СПИСЫВАЕМ с нового участника, потом
-        # ВОЗВРАЩАЕМ предыдущему лидеру. Если spend упадёт — никто ничего
-        # лишнего не получит и состояние лота останется консистентным.
+        # Порядок важен: сначала СПИСЫВАЕМ с нового участника (атомарно),
+        # потом ВОЗВРАЩАЕМ предыдущему лидеру.
         result = await score_service.spend_score(
             actor_id=user_id,
             target_id=user_id,
             chat_id=chat_id,
-            cost=new_price,
-            bot_id=callback.bot.id,
+            cost=charge,
+            bot_id=cb.bot.id,
         )
         if not result.success:
-            sw = p.pluralize(new_price)
+            sw = p.pluralize(charge)
             await cb.answer(
-                f"❌ Недостаточно баллов. Нужно {new_price} {sw}.",
+                f"❌ Недостаточно баллов. Нужно {charge} {sw}, у тебя {result.current_balance}.",
                 show_alert=True,
             )
             return
 
-        # Только после успешного списания возвращаем деньги предыдущему лидеру
-        # Бот отдаёт обратно — списываем у бота
-        if prev_leader_id and prev_leader_id != user_id:
+        # Бот отдаёт ставку перебитому лидеру
+        if prev_leader_id and not is_self_raise:
             await score_repo.add_delta(prev_leader_id, chat_id, prev_price)
-            await score_repo.add_delta(callback.bot.id, chat_id, -prev_price)
-        elif prev_leader_id == user_id:
-            # Пользователь повышает свою же ставку — возвращаем старую
-            await score_repo.add_delta(user_id, chat_id, prev_price)
-            await score_repo.add_delta(callback.bot.id, chat_id, -prev_price)
+            await score_repo.add_delta(cb.bot.id, chat_id, -prev_price)
 
         display = user_link(
             cb.from_user.username,
@@ -339,13 +325,19 @@ async def cb_lot_bid(
             user_id,
         )
 
+        expected_bids = data["bids_count"]
         data["current_price"] = new_price
         data["leader_id"] = user_id
         data["leader_display"] = display
         data["bids_count"] += 1
 
         ttl_left = max(30, int(data["expires_at"] - time.time()))
-        await store.lot_game_save(chat_id, lot_id, data, ttl_left + 60)
+        saved = await store.lot_game_save_if_unchanged(chat_id, lot_id, expected_bids, data, ttl_left + 60)
+        if not saved:
+            # Пока ждали БД, лот перебили или завершили (лок на 5 с мог истечь).
+            # Откатываем списание и возврат: деньги двигаются только вместе с состоянием лота.
+            await cb.answer("⏳ Ставку уже перебили — попробуй ещё раз.", show_alert=True)
+            raise AbortUpdate
 
         # Обновляем сообщение
         new_text = _lot_text(data, p)
