@@ -14,6 +14,7 @@ import bot.presentation.handlers.blackjack.helpers as bj_helpers
 import bot.presentation.handlers.duel.game_launchers as duel_launchers
 import bot.presentation.handlers.tictactoe.callbacks as ttt_callbacks
 from bot.application.blackjack_service import Card
+from bot.application.stake_service import PotOverdraft
 from bot.infrastructure.redis_store import RedisStore
 from tests.integration.fake_telegram import member
 from tests.integration.helpers import CHAT, balance, seed_users
@@ -79,6 +80,10 @@ def last_edit(tg) -> str:
     return tg.requests(EditMessageText)[-1].text
 
 
+async def pot(conn, ref: str) -> int | None:
+    return await conn.fetchval("SELECT amount FROM game_pots WHERE chat_id = $1 AND ref = $2", CHAT, ref)
+
+
 # ── Блекджек ──────────────────────────────────────────────────────────
 
 
@@ -104,6 +109,28 @@ async def test_bj_hands_stay_hidden_until_showdown(tg, conn, deal):
     await tg.click(member(B), message_id, f"bj:stand:{game_id}")
     assert "10♠️" in last_edit(tg) and "💥" in last_edit(tg)  # вскрытие
     assert (await balance(conn, A), await balance(conn, B)) == (50, 150)
+    assert await pot(conn, f"bj:{game_id}") == 0  # банк выплачен целиком
+
+
+async def test_bj_second_settlement_is_refused_by_the_pot(tg, conn, deal, monkeypatch):
+    await seed_users(conn, A, B, balance=100)
+    deal("10♠", "7♥", "9♦", "8♣")
+    message_id, game_id = await open_lobby(tg, "/bj 50")
+    await tg.click(member(B), message_id, f"bj:accept:{game_id}")
+    await tg.click(member(A), message_id, f"bj:stand:{game_id}")
+
+    # Ошибка в Redis-логике: игра «забирается», но не удаляется — её можно рассчитать ещё раз
+    async def claim_without_delete(self, snapshot):
+        return True
+
+    monkeypatch.setattr(RedisStore, "game_claim", claim_without_delete)
+    await tg.click(member(B), message_id, f"bj:stand:{game_id}")  # 17:17 — ничья, ставки вернулись
+    assert (await balance(conn, A), await balance(conn, B)) == (100, 100)
+
+    # Второй расчёт той же игры упирается в пустой банк и откатывается
+    with pytest.raises(PotOverdraft):
+        await tg.click(member(B), message_id, f"bj:stand:{game_id}")
+    assert (await balance(conn, A), await balance(conn, B)) == (100, 100)
 
 
 async def test_bj_natural_on_accept_settles_at_once(tg, conn, deal, redis):
@@ -196,3 +223,4 @@ async def test_duel_natural_blackjack_counts_win_under_invite_ref(tg, conn, deal
         "SELECT kind, sum(delta) AS total FROM ledger WHERE ref = $1 GROUP BY kind", f"duel:{accept.split(':')[2]}"
     )
     assert {row["kind"]: row["total"] for row in rows} == {"stake": -100, "prize": 100}
+    assert await pot(conn, f"duel:{accept.split(':')[2]}") == 0

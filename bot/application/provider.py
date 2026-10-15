@@ -18,6 +18,7 @@ from bot.application.interfaces.daily_leaderboard_repository import IDailyLeader
 from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
+from bot.application.interfaces.game_pot_repository import IGamePotRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.iq_repository import IIqRepository
 from bot.application.interfaces.ledger_repository import ILedgerRepository
@@ -34,6 +35,7 @@ from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
+from bot.application.stake_service import StakeService
 from bot.application.xp_service import XpService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
@@ -89,6 +91,10 @@ class AppServiceProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_chatmode_service(self, repo: IChatmodeRepository, score_service: ScoreService) -> ChatmodeService:
         return ChatmodeService(repo, score_service)
+
+    @provide(scope=Scope.REQUEST)
+    def get_stake_service(self, score_repo: IScoreRepository, pot_repo: IGamePotRepository) -> StakeService:
+        return StakeService(score_repo, pot_repo)
 
     @provide(scope=Scope.REQUEST)
     def get_history_service(self, ledger_repo: ILedgerRepository, config: AppConfig) -> HistoryService:

@@ -12,6 +12,7 @@ from aiogram.methods import SendMessage
 import bot.infrastructure.dice_loop as dice_loop_module
 from bot.application.dice_service import DiceService
 from bot.application.interfaces.message_repository import MessageInfo
+from bot.application.stake_service import StakeService
 from bot.infrastructure import bj_cleanup_loop, duel_cleanup_loop, tax_loop, ttt_cleanup_loop
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
 from tests.integration.helpers import BOT_ID, CHAT, balance, seed_users
@@ -54,6 +55,18 @@ async def test_expired_game_settlement(app_container, conn, players, loop, data,
     await loop._settle_expired(app_container, bot, dict(data, chat_id=CHAT, message_id=7))
     assert {uid: await balance(conn, uid) for uid in expected} == expected
     assert len(bot.edits) == 1 and bot.edits[0][:2] == (CHAT, 7)
+
+
+async def test_expired_lobby_is_refunded_from_its_pot(app_container, conn, players):
+    await seed_users(conn, P1, balance=30)
+    async with app_container() as scope:
+        await (await scope.get(StakeService)).hold(P1, CHAT, "bj:g1", 30)
+    data = {"state": "lobby", "bet": 30, "p1_id": P1, "game_id": "g1", "pot": True, "chat_id": CHAT, "message_id": 7}
+
+    await bj_cleanup_loop._settle_expired(app_container, FakeBot(), data)
+
+    assert await balance(conn, P1) == 30
+    assert await conn.fetchval("SELECT amount FROM game_pots WHERE ref = 'bj:g1'") == 0
 
 
 async def test_expired_duel_game_settles_under_invite_ref(app_container, conn, players):

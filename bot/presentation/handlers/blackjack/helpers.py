@@ -18,8 +18,8 @@ from bot.application.blackjack_service import (
     format_hand,
     hand_score,
 )
-from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.stake_service import StakeService
 from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
@@ -226,25 +226,26 @@ def _hand_alert(data: dict, side: str) -> str:
 
 async def _settle_game(
     data: dict,
-    score_repo: IScoreRepository,
+    stakes: StakeService,
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
     chat_id: int,
 ) -> str:
-    """Выплатить по итогам и вернуть текст результата.
+    """Выплатить из банка игры по итогам и вернуть текст результата.
 
-    Вызывать только тому, кто забрал игру (store.game_claim / новая игра без сохранения):
-    иначе банк выплатят дважды.
+    Вызывать только тому, кто забрал игру (store.game_claim / новая игра без сохранения).
+    Второй расчёт упрётся в пустой банк (PotOverdraft) и откатится.
     """
     bet = data["bet"]
-    pot = bet * 2
+    prize = bet * 2
     ref = _game_ref(data)
+    in_pot = data.get("pot", False)
     table = _render_table(data, reveal=True)
     winner = _winner(data)
 
     if winner is None:
         for side in ("p1", "p2"):
-            await score_repo.add_delta(data[f"{side}_id"], chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+            await stakes.pay(data[f"{side}_id"], chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
         sw = p.pluralize(bet)
         if data["p1_busted"] and data["p2_busted"]:
             result_line = f"\U0001f91d Оба перебрали! Ставки возвращены: по <b>{bet} {sw}</b>."
@@ -253,15 +254,15 @@ async def _settle_game(
             result_line = f"\U0001f91d Ничья ({score}:{score})! Ставки возвращены: по <b>{bet} {sw}</b>."
     else:
         winner_id = data[f"{winner}_id"]
-        new_balance = await score_repo.add_delta(winner_id, chat_id, pot, kind=LedgerKind.PRIZE, ref=ref)
+        new_balance = await stakes.pay(winner_id, chat_id, ref, prize, kind=LedgerKind.PRIZE, pot=in_pot)
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
-        logger.info("BJ game %s: winner %d awarded %d, new balance %d", data["game_id"], winner_id, pot, new_balance)
-        sw = p.pluralize(pot)
+        logger.info("BJ game %s: winner %d awarded %d, new balance %d", data["game_id"], winner_id, prize, new_balance)
+        sw = p.pluralize(prize)
         winner_display = _player_display(data, winner)
         loser_natural = _is_natural(data[f"{_other(winner)}_hand"])
         if _is_natural(data[f"{winner}_hand"]) and not loser_natural:
-            result_line = f"\U0001f3b0 Блекджек! {winner_display} выигрывает <b>{pot} {sw}</b>!"
+            result_line = f"\U0001f3b0 Блекджек! {winner_display} выигрывает <b>{prize} {sw}</b>!"
         else:
-            result_line = f"\U0001f3c6 {winner_display} выигрывает <b>{pot} {sw}</b>!"
+            result_line = f"\U0001f3c6 {winner_display} выигрывает <b>{prize} {sw}</b>!"
 
     return f"\U0001f0cf <b>Блекджек — результат</b>\n\n{table}\n\n{result_line}"

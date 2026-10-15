@@ -13,6 +13,7 @@ from bot.application.interfaces.daily_leaderboard_repository import IDailyLeader
 from bot.application.interfaces.daily_limits_repository import IDailyLimitsRepository
 from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
+from bot.application.interfaces.game_pot_repository import IGamePotRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.iq_repository import IIqRepository
 from bot.application.interfaces.ledger_repository import ILedgerRepository
@@ -33,6 +34,7 @@ from bot.infrastructure.db.postgres_daily_leaderboard_repository import Postgres
 from bot.infrastructure.db.postgres_daily_limits_repository import PostgresDailyLimitsRepository
 from bot.infrastructure.db.postgres_dice_repository import PostgresDiceRepository
 from bot.infrastructure.db.postgres_event_repository import PostgresEventRepository
+from bot.infrastructure.db.postgres_game_pot_repository import PostgresGamePotRepository
 from bot.infrastructure.db.postgres_giveaway_repository import PostgresGiveawayRepository
 from bot.infrastructure.db.postgres_iq_repository import PostgresIqRepository
 from bot.infrastructure.db.postgres_ledger_repository import PostgresLedgerRepository
@@ -124,6 +126,10 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_ledger_repo(self, tm: ITransactionManager) -> ILedgerRepository:
         return PostgresLedgerRepository(tm.get_connection())
+
+    @provide(scope=Scope.REQUEST)
+    def get_game_pot_repo(self, tm: ITransactionManager) -> IGamePotRepository:
+        return PostgresGamePotRepository(tm.get_connection())
 
     @provide(scope=Scope.REQUEST)
     def get_per_target_limits_repo(self, tm: ITransactionManager) -> IPerTargetLimitsRepository:

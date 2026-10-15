@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
 
 from bot.domain.ledger import LedgerKind
 
@@ -32,7 +33,7 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
 
 
 async def _refund_expired(container, bot: Bot, data: dict) -> None:
-    from bot.application.interfaces.score_repository import IScoreRepository
+    from bot.application.stake_service import StakeService
 
     bet = data.get("bet", 0)
     chat_id = data.get("chat_id", 0)
@@ -41,11 +42,10 @@ async def _refund_expired(container, bot: Bot, data: dict) -> None:
 
     # Отдельная короткая транзакция на каждое приглашение
     async with container() as scope:
-        score_repo = await scope.get(IScoreRepository)
+        stakes = await scope.get(StakeService)
         if bet > 0 and challenger_id:
-            await score_repo.add_delta(
-                challenger_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{data.get('invite_id', '')}"
-            )
+            ref = f"duel:{data.get('invite_id', '')}"
+            await stakes.pay(challenger_id, chat_id, ref, bet, kind=LedgerKind.REFUND, pot=data.get("pot", False))
             logger.info("Duel invite expired: refunded %d to challenger %d", bet, challenger_id)
 
     if message_id:
@@ -56,5 +56,5 @@ async def _refund_expired(container, bot: Bot, data: dict) -> None:
                 message_id=message_id,
                 reply_markup=None,
             )
-        except Exception:
-            pass
+        except TelegramAPIError as e:
+            logger.warning("Duel cleanup: не удалось обновить сообщение %d в чате %d: %s", message_id, chat_id, e)

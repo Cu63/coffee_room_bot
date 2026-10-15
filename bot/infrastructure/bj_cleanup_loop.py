@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
 
 from bot.domain.ledger import LedgerKind
 
@@ -33,7 +34,7 @@ async def bj_cleanup_loop(container, bot: Bot) -> None:
 
 
 async def _settle_expired(container, bot: Bot, data: dict) -> None:
-    from bot.application.interfaces.score_repository import IScoreRepository
+    from bot.application.stake_service import StakeService
 
     state = data.get("state", "")
     bet = data.get("bet", 0)
@@ -42,19 +43,20 @@ async def _settle_expired(container, bot: Bot, data: dict) -> None:
 
     # У игры из /duel ставки списаны с меткой приглашения
     ref = data.get("ref") or f"bj:{data.get('game_id', '')}"
+    in_pot = data.get("pot", False)
     text = None
     # Отдельная короткая транзакция на каждую игру: ошибка одной не откатывает остальные
     async with container() as scope:
-        score_repo = await scope.get(IScoreRepository)
+        stakes = await scope.get(StakeService)
         if state == "lobby":
             p1_id = data.get("p1_id", 0)
             if bet > 0 and p1_id:
-                await score_repo.add_delta(p1_id, chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
+                await stakes.pay(p1_id, chat_id, ref, bet, kind=LedgerKind.REFUND, pot=in_pot)
                 logger.info("BJ lobby expired: refunded %d to %d", bet, p1_id)
             text = "⏰ Время вышло. Никто не принял вызов. Ставка возвращена."
         elif state == "playing":
             if bet > 0:
-                await score_repo.add_delta(bot.id, chat_id, bet * 2, kind=LedgerKind.PRIZE, ref=ref)
+                await stakes.pay(bot.id, chat_id, ref, bet * 2, kind=LedgerKind.PRIZE, pot=in_pot)
                 logger.info(
                     "BJ game expired: both bets (%d each) of %s and %s go to the bot",
                     bet,
@@ -66,5 +68,5 @@ async def _settle_expired(container, bot: Bot, data: dict) -> None:
     if message_id and text:
         try:
             await bot.edit_message_text(text, chat_id=chat_id, message_id=message_id, reply_markup=None)
-        except Exception:
-            pass
+        except TelegramAPIError as e:
+            logger.warning("BJ cleanup: не удалось обновить сообщение %d в чате %d: %s", message_id, chat_id, e)
