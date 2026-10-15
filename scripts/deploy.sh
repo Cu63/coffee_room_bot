@@ -7,7 +7,7 @@
 #
 # Необязательные переменные окружения:
 #   DEPLOY_REPO     — owner/repo на GitHub (по умолчанию Cu63/coffee_room_bot)
-#   DEPLOY_CHECKS   — обязательные проверки CI (по умолчанию "lint test")
+#   DEPLOY_CHECKS   — обязательные проверки CI (по умолчанию "lint test integration")
 #   DEPLOY_SKIP_CI  — 1: не ждать CI (аварийный режим)
 #   GITHUB_TOKEN    — токен GitHub API; для публичного репозитория не нужен
 set -euo pipefail
@@ -20,7 +20,7 @@ SCRIPT_PATH="${SCRIPT_DIR}/deploy.sh"
 cd "$PROJECT_DIR"
 
 DEPLOY_REPO="${DEPLOY_REPO:-Cu63/coffee_room_bot}"
-DEPLOY_CHECKS="${DEPLOY_CHECKS:-lint test}"
+DEPLOY_CHECKS="${DEPLOY_CHECKS:-lint test integration}"
 # Состояние — внутри .git, чтобы не попадать в рабочую копию
 STATE_FILE=".git/deploy-deployed"   # последний успешно задеплоенный коммит
 CI_FAILED_FILE=".git/deploy-ci-failed"  # коммит, у которого упал CI
