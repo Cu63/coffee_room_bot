@@ -1,4 +1,4 @@
-"""Фоновые циклы: расчёт истёкших игр и изоляция ошибок."""
+"""Фоновые циклы: расчёт истёкших игр, налог и изоляция ошибок."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from aiogram.methods import SendMessage
 
 import bot.infrastructure.dice_loop as dice_loop_module
 from bot.application.dice_service import DiceService
-from bot.infrastructure import bj_cleanup_loop, duel_cleanup_loop, ttt_cleanup_loop
+from bot.application.interfaces.message_repository import MessageInfo
+from bot.infrastructure import bj_cleanup_loop, duel_cleanup_loop, tax_loop, ttt_cleanup_loop
+from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
 from tests.integration.helpers import BOT_ID, CHAT, balance, seed_users
 
 P1, P2 = 301, 302
@@ -22,9 +24,13 @@ class FakeBot:
 
     def __init__(self) -> None:
         self.edits: list[tuple[int, int, str]] = []
+        self.sent: list[tuple[int, str]] = []
 
     async def edit_message_text(self, text, chat_id, message_id, reply_markup=None):
         self.edits.append((chat_id, message_id, text))
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.sent.append((chat_id, text))
 
 
 @pytest.fixture
@@ -100,3 +106,24 @@ async def test_dice_unreachable_chat_is_refunded_and_does_not_block_others(app_c
     assert (await balance(conn, P1), await balance(conn, P2)) == (100, 100)
     # Игра в другом чате при этом разыграна
     assert resolved == [healthy.id]
+
+
+async def test_daily_tax_goes_to_bot(app_container, conn, config):
+    rich, middle, poor = 311, 312, 313
+    start = {rich: 25000, middle: 10100, poor: 5000}
+    for uid, value in start.items():
+        await seed_users(conn, uid, balance=value)
+    await seed_users(conn, BOT_ID, balance=100000, is_bot=True)  # касса бота налогом не облагается
+    await PostgresMessageRepository(conn).save(
+        MessageInfo(message_id=1, chat_id=CHAT, user_id=poor, sent_at=datetime.now(timezone.utc), text="привет")
+    )
+
+    bot = FakeBot()
+    await tax_loop._run_once(bot, app_container)
+
+    tax = {uid: tax_loop._compute_tax(value, config.tax) for uid, value in start.items()}
+    assert tax[rich] > tax[middle] > 0 == tax[poor]
+    assert {uid: await balance(conn, uid) for uid in start} == {uid: start[uid] - tax[uid] for uid in start}
+    assert await balance(conn, BOT_ID) == 100000 + sum(tax.values())
+    [(chat_id, text)] = bot.sent
+    assert chat_id == CHAT and f"Всего собрано: <b>{sum(tax.values())}</b>" in text
