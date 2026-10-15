@@ -59,3 +59,17 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run pytest tests/integration -v
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Тот же образ, что соберёт деплой: если он не собирается, на сервер коммит не попадёт
+      - run: docker build -t coffee-room-bot:ci .
+      - name: Образ запускается не от root, код и зависимости импортируются
+        run: |
+          test "$(docker run --rm --entrypoint id coffee-room-bot:ci -u)" = "10001"
+          docker run --rm --entrypoint .venv/bin/python coffee-room-bot:ci -c "import bot.main"
+          docker run --rm --entrypoint sh coffee-room-bot:ci -c "ls bot/__pycache__/*.opt-2.pyc > /dev/null"
+      - name: Без пульса бота healthcheck не проходит
+        run: "! docker run --rm --entrypoint .venv/bin/python coffee-room-bot:ci -m bot.infrastructure.heartbeat"

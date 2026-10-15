@@ -93,6 +93,27 @@ services:
     volumes:
       - /var/backups/scorebot:/backups
 
+  # Копия бэкапов вне сервера: если диск сервера умрёт, локальные бэкапы умрут вместе с ним.
+  # Включается профилем: COMPOSE_PROFILES=offsite и BACKUP_REMOTE в .env, настройки rclone —
+  # в ./rclone/rclone.conf (см. docs/setup.md). copy, а не sync: удаление локальных файлов
+  # не стирает копии — срок хранения задаётся правилами хранилища.
+  backup-offsite:
+    image: rclone/rclone:1.68
+    profiles: ["offsite"]
+    restart: unless-stopped
+    depends_on:
+      - db-backup
+    environment:
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        test -n "$$BACKUP_REMOTE" || { echo "BACKUP_REMOTE не задан"; exit 1; };
+        while true; do rclone copy /backups "$$BACKUP_REMOTE" --log-level INFO; sleep 3600; done
+    volumes:
+      - /var/backups/scorebot:/backups:ro
+      - ./rclone:/config/rclone:ro
+
   # ── Мониторинг ────────────────────────────────────────────────
 
   loki:

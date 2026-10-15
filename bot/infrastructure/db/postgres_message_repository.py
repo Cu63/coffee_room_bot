@@ -15,6 +15,10 @@ class PostgresMessageRepository(IMessageRepository):
     def __init__(self, conn: asyncpg.Connection) -> None:
         self._conn = conn
 
+    async def delete_before(self, cutoff: datetime) -> int:
+        result = await self._conn.execute("DELETE FROM messages WHERE sent_at < $1", cutoff)
+        return int(result.split()[-1])
+
     async def save(self, info: MessageInfo) -> None:
         await self._conn.execute(
             """

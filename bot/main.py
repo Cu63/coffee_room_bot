@@ -3,6 +3,7 @@ import gc
 import logging
 import os
 
+import asyncpg
 import redis.asyncio as aioredis
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -17,8 +18,9 @@ from bot.infrastructure.di import (
     PresentationProvider,
     RedisProvider,
 )
-from bot.infrastructure.logger import setup_logger
+from bot.infrastructure.logger import mask_url_credentials, setup_logger
 from bot.infrastructure.telegram_retry import RetryIdempotentRequestsMiddleware
+from bot.infrastructure.word_loader import get_words
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,7 @@ async def main() -> None:
 
     proxy = os.getenv("TELEGRAM_PROXY") or None
     if proxy:
-        logger.info("Using Telegram proxy: %s", proxy)
+        logger.info("Using Telegram proxy: %s", mask_url_credentials(proxy))
 
     session = AiohttpSession(timeout=15, proxy=proxy)
     # Сетевые сбои повторяются точечно — только для идемпотентных запросов
@@ -87,6 +89,8 @@ async def main() -> None:
     )
 
     await register_bot_user(container, bot_me)
+    if not get_words():
+        logger.warning("Словарь configs/words_ru.txt не найден или пуст: /rword и анаграммы не смогут подобрать слово")
     await warn_about_username_admins(container, config.admin.users)
     register_middlewares(dp, bot_me)
     register_routers(dp, config, settings)
@@ -124,6 +128,7 @@ async def main() -> None:
     from bot.infrastructure.dice_loop import dice_loop
     from bot.infrastructure.duel_cleanup_loop import duel_cleanup_loop
     from bot.infrastructure.giveaway_loop import giveaway_loop, giveaway_period_loop
+    from bot.infrastructure.heartbeat import heartbeat_loop
     from bot.infrastructure.ledger_audit_loop import ledger_audit_loop
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
@@ -154,6 +159,8 @@ async def main() -> None:
     tasks.start("chatmode", lambda: chatmode_loop(bot, container))
     tasks.start("tax", lambda: tax_loop(bot, container))
     tasks.start("ledger_audit", lambda: ledger_audit_loop(container))
+    db_pool = await container.get(asyncpg.Pool)
+    tasks.start("heartbeat", lambda: heartbeat_loop(db_pool, redis))
 
     logger.info("Bot starting…")
     try:

@@ -133,7 +133,8 @@ auto_react:
 
 # Системные интервалы и параметры
 system:
-  cleanup_interval_hours: 6       # как часто удалять устаревшие события
+  cleanup_interval_hours: 6       # как часто удалять устаревшие события и сообщения
+  messages_retention_days: 30     # сколько дней хранить тексты сообщений (саммари, /analyze, /ff, реакции)
   unmute_check_interval_seconds: 60   # как часто проверять истёкшие муты
   auto_delete_seconds: 120        # через сколько секунд удалять служебные сообщения
   history_page_size: 30           # строк на страницу в /history

@@ -7,7 +7,7 @@
 #
 # Необязательные переменные окружения:
 #   DEPLOY_REPO     — owner/repo на GitHub (по умолчанию Cu63/coffee_room_bot)
-#   DEPLOY_CHECKS   — обязательные проверки CI (по умолчанию "lint test integration")
+#   DEPLOY_CHECKS   — обязательные проверки CI (по умолчанию "lint test integration docker")
 #   DEPLOY_SKIP_CI  — 1: не ждать CI (аварийный режим)
 #   GITHUB_TOKEN    — токен GitHub API; для публичного репозитория не нужен
 set -euo pipefail
@@ -20,7 +20,8 @@ SCRIPT_PATH="${SCRIPT_DIR}/deploy.sh"
 cd "$PROJECT_DIR"
 
 DEPLOY_REPO="${DEPLOY_REPO:-Cu63/coffee_room_bot}"
-DEPLOY_CHECKS="${DEPLOY_CHECKS:-lint test integration}"
+DEPLOY_CHECKS="${DEPLOY_CHECKS:-lint test integration docker}"
+HEALTH_TIMEOUT_SECONDS=180  # сколько ждать, пока новый контейнер бота станет healthy
 # Состояние — внутри .git, чтобы не попадать в рабочую копию
 STATE_FILE=".git/deploy-deployed"   # последний успешно задеплоенный коммит
 CI_FAILED_FILE=".git/deploy-ci-failed"  # коммит, у которого упал CI
@@ -134,11 +135,31 @@ if ! git diff --quiet "$HEAD_SHA" "$TARGET" -- scripts/deploy.sh; then
     exec bash "$SCRIPT_PATH" "$@"
 fi
 
+# Ждём, пока healthcheck контейнера бота (пульс из bot/infrastructure/heartbeat.py) станет healthy
+wait_bot_healthy() {
+    local container status deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+    container="$(docker compose ps -q bot)"
+    while (( $(date +%s) < deadline )); do
+        status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo missing)"
+        case "$status" in
+            healthy|none) return 0 ;;  # none — образ без HEALTHCHECK, проверять нечем
+        esac
+        sleep 5
+    done
+    log "bot container is '$status' after ${HEALTH_TIMEOUT_SECONDS}s — see: docker compose logs --tail 100 bot"
+    return 1
+}
+
 log "rebuilding all services..."
 if docker compose up -d --build; then
     echo "$TARGET" > "$STATE_FILE"
     rm -f "$BUILD_FAILED_FILE"
-    log "done: $TARGET"
+    if wait_bot_healthy; then
+        log "done: $TARGET"
+    else
+        log "deployed $TARGET, but the bot is not healthy"
+        exit 1
+    fi
 else
     echo "$TARGET $(date +%s)" > "$BUILD_FAILED_FILE"
     log "docker compose failed for $TARGET, retry in $((BUILD_RETRY_SECONDS / 60)) min"

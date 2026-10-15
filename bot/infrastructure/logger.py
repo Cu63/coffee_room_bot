@@ -58,3 +58,19 @@ def setup_logger(config: LoggingConfig) -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
+
+def mask_url_credentials(url: str) -> str:
+    """URL для лога без пароля: socks5://user:secret@host:1080 → socks5://user:***@host:1080.
+
+    Лог уходит в Loki и в Telegram-чат логов — пароль прокси туда попадать не должен.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    if parts.password is None:
+        return url
+    host = parts.hostname or ""
+    if parts.port is not None:
+        host = f"{host}:{parts.port}"
+    return urlunsplit(parts._replace(netloc=f"{parts.username}:***@{host}"))

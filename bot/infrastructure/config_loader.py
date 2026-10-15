@@ -193,6 +193,7 @@ class SystemConfig(_BaseConfig):
     """Системные интервалы и технические параметры."""
 
     cleanup_interval_hours: int = 6
+    messages_retention_days: int = 30
     unmute_check_interval_seconds: int = 60
     auto_delete_seconds: int = 120
     history_page_size: int = 30

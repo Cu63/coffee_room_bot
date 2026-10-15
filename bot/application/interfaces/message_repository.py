@@ -30,6 +30,11 @@ class IMessageRepository(ABC):
     async def save(self, info: MessageInfo) -> None: ...
 
     @abstractmethod
+    async def delete_before(self, cutoff: datetime) -> int:
+        """Удалить сообщения, отправленные раньше cutoff; вернуть, сколько удалено."""
+        ...
+
+    @abstractmethod
     async def get(self, chat_id: int, message_id: int) -> MessageInfo | None: ...
 
     @abstractmethod

@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramForbiddenError
 from aiogram.methods import SendMessage
 
 import bot.infrastructure.dice_loop as dice_loop_module
+from bot.application.cleanup_service import CleanupService
 from bot.application.dice_service import DiceService
 from bot.application.interfaces.message_repository import MessageInfo
 from bot.application.stake_service import StakeService
@@ -147,3 +148,17 @@ async def test_daily_tax_goes_to_bot(app_container, conn, config):
     assert await balance(conn, BOT_ID) == 100000 + sum(tax.values())
     [(chat_id, text)] = bot.sent
     assert chat_id == CHAT and f"Всего собрано: <b>{sum(tax.values())}</b>" in text
+
+
+async def test_old_messages_are_deleted(app_container, conn, players):
+    now = datetime.now(timezone.utc)
+    repo = PostgresMessageRepository(conn)
+    await repo.save(
+        MessageInfo(message_id=1, chat_id=CHAT, user_id=P1, sent_at=now - timedelta(days=40), text="старое")
+    )
+    await repo.save(MessageInfo(message_id=2, chat_id=CHAT, user_id=P1, sent_at=now - timedelta(days=2), text="свежее"))
+
+    async with app_container() as scope:
+        assert await (await scope.get(CleanupService)).delete_expired_messages() == 1
+
+    assert [r["message_id"] for r in await conn.fetch("SELECT message_id FROM messages")] == [2]
