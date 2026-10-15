@@ -23,14 +23,20 @@ cp .env.example .env
 
 Обязательно заполнить `BOT_TOKEN`. Остальное — по необходимости.
 
-### 3. Настроить бота в BotFather
+### 3. Положить словарь
+
+`/rword` и анаграммы берут слова из `configs/words_ru.txt` — по слову в строке, строки с `#`
+пропускаются. Файл не хранится в репозитории (он в `.gitignore`): положите его на сервер
+вручную. Без него бот при старте пишет предупреждение, а эти игры не могут подобрать слово.
+
+### 4. Настроить бота в BotFather
 
 ```
 /setprivacy → Disable
 /setjoingroups → Enable
 ```
 
-### 4. Запустить
+### 5. Запустить
 
 ```bash
 docker compose up -d --build
@@ -44,7 +50,32 @@ Docker Compose запустит:
 | `redis` | Redis 7 |
 | `flyway` | Применяет SQL-миграции |
 | `openserp` | Поисковый движок для `/search` |
-| `bot` | Telegram-бот |
+| `bot` | Telegram-бот (не от root; healthcheck по пульсу — см. ниже) |
+| `db-backup` | Бэкап PostgreSQL каждый час в `/var/backups/scorebot` |
+
+### Здоровье бота
+
+Раз в 30 секунд бот проверяет Postgres и Redis и обновляет файл-пульс. Docker считает контейнер
+`healthy`, пока пульс свежее двух минут (`docker compose ps` показывает статус). `scripts/deploy.sh`
+после пересборки ждёт `healthy` до трёх минут и пишет в лог, если бот так и не поднялся.
+
+### Бэкапы вне сервера
+
+`db-backup` хранит бэкапы на том же диске, что и база. Чтобы копия была и вне сервера:
+
+1. Настройте [rclone](https://rclone.org/docs/) для своего хранилища (S3, Backblaze, Яндекс Облако, SFTP…)
+   и положите конфиг в `./rclone/rclone.conf` (каталог в `.gitignore` — там ключи).
+2. Добавьте в `.env`:
+
+   ```bash
+   COMPOSE_PROFILES=offsite
+   BACKUP_REMOTE=remote:bucket/scorebot   # имя remote из rclone.conf и путь
+   ```
+
+3. `docker compose up -d` — сервис `backup-offsite` раз в час копирует новые бэкапы.
+
+Копирование идёт через `rclone copy`: удалённые на сервере старые бэкапы в хранилище остаются,
+срок хранения задайте правилами самого хранилища.
 
 ### Полезные команды
 

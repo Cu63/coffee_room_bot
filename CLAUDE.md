@@ -18,7 +18,7 @@ docker compose up --build -d               # full stack
 just migrate                               # Flyway migrations (see Justfile)
 ```
 
-CI (`.github/workflows/ci.yml`) runs three jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`) and `integration` (pytest `tests/integration` against Postgres 16 and Redis 7 service containers). Keep all three green: `scripts/deploy.sh` on the server deploys `master` only after they pass.
+CI (`.github/workflows/ci.yml`) runs four jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`), `integration` (pytest `tests/integration` against Postgres 16 and Redis 7 service containers) and `docker` (builds the image, checks it runs as non-root and imports). Keep all four green: `scripts/deploy.sh` on the server deploys `master` only after they pass, then waits up to 3 minutes for the bot container to become `healthy`.
 
 ## Architecture
 
@@ -79,7 +79,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 - `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Unknown keys are an error (`extra="forbid"`): a typo fails startup and `tests/unit/test_config.py`. Admins are `admin.users`: numeric Telegram ids (preferred: a username can be changed and taken by someone else) or usernames, matched by `is_admin()`; at startup the bot logs the id for every admin still listed by username. `admin.prefix` only filters admin messages out of chat summaries.
 - `configs/messages.yaml` — user-facing texts. New texts go here (plenty of older code still has hardcoded strings). `tests/unit/test_smoke.py` checks that every `_t["key"]` used in code exists.
 - `configs/help.yaml` — `/help` menu structure and texts.
-- `configs/words_ru.txt` — word list for `/rword` and `/anagram`. It is gitignored and has to be put on the server by hand.
+- `configs/words_ru.txt` — word list for `/rword` and `/anagram`. It is gitignored and has to be put on the server by hand; without it the bot logs a warning at startup.
 - `.env` — secrets and settings, see `.env.example`: `BOT_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `AITUNNEL_API_KEY`, `OPENAI_API_KEY`, `GIGACHAT_API_KEY`, `OPENSERP_URL`, `LOG_CHAT_ID`, `LOG_LEVEL`; optionally `TELEGRAM_PROXY`.
 
 ### Database
@@ -88,7 +88,7 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 
 ### Background Tasks
 
-19 loops in `bot/infrastructure/*_loop.py`, started in `bot/main.py` through `BackgroundTasks` (`bot/infrastructure/background.py`): a loop that crashes or returns is logged and restarted after 30 s. They cover event cleanup, unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax and the ledger audit.
+19 loops in `bot/infrastructure/*_loop.py` plus the heartbeat, started in `bot/main.py` through `BackgroundTasks` (`bot/infrastructure/background.py`): a loop that crashes or returns is logged and restarted after 30 s. They cover event and message cleanup (`system.messages_retention_days`), unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax and the ledger audit. The heartbeat (`heartbeat.py`) checks Postgres and Redis every 30 s and touches a file; the Docker `HEALTHCHECK` (`python -m bot.infrastructure.heartbeat`) reads its age.
 
 ### Tests
 

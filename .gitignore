@@ -6,6 +6,8 @@ __pycache__/
 # custom files
 backups/
 words*.txt
+# настройки rclone для бэкапов вне сервера — там ключи
+rclone/
 
 # C extensions
 *.so

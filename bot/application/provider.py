@@ -101,8 +101,12 @@ class AppServiceProvider(Provider):
         return HistoryService(ledger_repo, config.history.retention_days)
 
     @provide(scope=Scope.REQUEST)
-    def get_cleanup_service(self, event_repo: IEventRepository, config: AppConfig) -> CleanupService:
-        return CleanupService(event_repo, config.history.retention_days)
+    def get_cleanup_service(
+        self, event_repo: IEventRepository, message_repo: IMessageRepository, config: AppConfig
+    ) -> CleanupService:
+        return CleanupService(
+            event_repo, message_repo, config.history.retention_days, config.system.messages_retention_days
+        )
 
     @provide(scope=Scope.REQUEST)
     def get_mute_service(self, mute_repo: IMuteRepository) -> MuteService:

@@ -1,4 +1,4 @@
-"""Фоновая задача: удаление устаревших событий."""
+"""Фоновая задача: удаление устаревших событий реакций и сообщений."""
 
 from __future__ import annotations
 
@@ -17,5 +17,6 @@ async def cleanup_loop(container, interval_hours: int) -> None:
             async with container() as scope:
                 service = await scope.get(CleanupService)
                 await service.delete_expired_events()
+                await service.delete_expired_messages()
         except Exception:
             logger.exception("Cleanup task failed")
