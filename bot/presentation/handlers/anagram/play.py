@@ -11,7 +11,7 @@ from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_repository import IUserRepository
-from bot.application.score_service import ScoreService
+from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
@@ -148,16 +148,18 @@ async def msg_reply_guess(
     else:
         # ── НЕВЕРНО ──────────────────────────────────────────────────
         data["tries"].append({"user_id": user_id, "word": guess})
-        ttl_left = max(30, int(data["expires_at"] - time.time()))
 
-        # Снимаем балл за неверную попытку
+        # Сохраняем, только если игра ещё идёт: завершённую (победой или по
+        # времени) не воскрешаем, её сообщение не трогаем и плату не берём.
+        if not await store.anagram_game_save(game_id, data):
+            return
+
+        # Снимаем балл за неверную попытку (если хватает) — он уходит боту
         cost = cfg.attempt_cost
         if cost > 0:
-            bal = await score_service.get_score(user_id, chat_id)
-            if bal.value >= cost:
-                await score_service.add_score(user_id, chat_id, -cost, admin_id=user_id)
-                # Возвращаем на баланс бота
-                await score_service.add_score(message.bot.id, chat_id, cost, admin_id=message.bot.id)
+            await score_service.spend_score(
+                user_id, user_id, chat_id, cost, SPECIAL_EMOJI["sub"], bot_id=message.bot.id,
+            )
 
         # Обновляем игровое сообщение
         sw_bet = p.pluralize(data["bet"])
@@ -174,9 +176,6 @@ async def msg_reply_guess(
             )
         except Exception:
             pass
-
-        # Сохраняем обновлённые данные
-        await store.anagram_game_save(game_id, data, ttl_left)
 
         cost_note = f"\n<i>−{cost} балл за попытку</i>" if cost > 0 else ""
         hint = await message.reply(
