@@ -18,6 +18,8 @@ _TTT_LOBBY_TTL = 300  # 5 минут на принятие вызова
 # увидеть просроченную игру и рассчитать ставки до того, как Redis удалит ключ.
 _TTT_REDIS_BUFFER = 3600
 _MAX_PIECES = 3  # максимум фигур на поле у каждого игрока
+_MAX_MOVES = 50  # фигуры исчезают, и партия может идти бесконечно — после стольких ходов ничья
+_ACCEPT_LOCK_TTL = 30
 _DELETE_DELAY = 120  # задержка удаления результатов
 
 # Символы для поля
@@ -52,12 +54,18 @@ def _check_winner(board: list[int]) -> int:
     return 0
 
 
-def _is_draw(board: list[int], history_x: list[int], history_o: list[int]) -> bool:
-    """Ничья невозможна в исчезающих крестиках-ноликах — игра идёт бесконечно.
+def _is_draw(moves: int) -> bool:
+    """Ничья по лимиту ходов.
 
-    Однако добавим лимит ходов: если суммарно сделано 50 ходов — ничья.
+    Раньше ходы считались по history_x + history_o, а там хранятся только фигуры
+    на поле (не больше трёх у каждого), так что ничьей не бывало никогда.
     """
-    return (len(history_x) + len(history_o)) >= 50
+    return moves >= _MAX_MOVES
+
+
+def _game_ref(data: dict) -> str:
+    """Метка ставок и выплат в журнале: у игры из /duel — метка приглашения."""
+    return data.get("ref") or f"ttt:{data['game_id']}"
 
 
 def _render_board(

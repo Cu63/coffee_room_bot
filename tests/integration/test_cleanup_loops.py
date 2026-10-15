@@ -56,6 +56,13 @@ async def test_expired_game_settlement(app_container, conn, players, loop, data,
     assert len(bot.edits) == 1 and bot.edits[0][:2] == (CHAT, 7)
 
 
+async def test_expired_duel_game_settles_under_invite_ref(app_container, conn, players):
+    data = {"state": "playing", "bet": 20, "player_x": P1, "player_o": P2, "game_id": "g", "ref": "duel:42"}
+    await ttt_cleanup_loop._settle_expired(app_container, FakeBot(), dict(data, chat_id=CHAT, message_id=7))
+    # Ставки игры из /duel списаны с меткой приглашения — с ней же и расчёт
+    assert await conn.fetchval("SELECT ref FROM ledger WHERE user_id = $1 AND kind = 'prize'", BOT_ID) == "duel:42"
+
+
 async def test_expired_duel_invite_refunds_challenger(app_container, conn, players):
     bot = FakeBot()
     await duel_cleanup_loop._refund_expired(

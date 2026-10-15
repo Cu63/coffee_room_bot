@@ -1,12 +1,10 @@
-"""Просроченные игры (BJ, TTT, дуэльные приглашения) и безопасные обновления состояния."""
+"""Просроченные игры (BJ, TTT, дуэльные приглашения): цикл истечения забирает их по одной."""
 
 from __future__ import annotations
 
 import json
 import time
 from collections.abc import AsyncIterator
-
-from redis.exceptions import WatchError
 
 # Атомарно: удалить ключ и вернуть значение, только если в нём JSON с expires_at <= now.
 # Цикл не заберёт игру по устаревшему снимку, если ход только что продлил expires_at.
@@ -43,26 +41,3 @@ class ScanStoreMixin:
 
     def ttt_iter_expired(self) -> AsyncIterator[dict]:
         return self._iter_pop_expired("ttt:*", skip_prefix="ttt:lock:")
-
-    async def game_patch_if_state(self, key: str, state: str, updates: dict) -> bool:
-        """Дописать поля в JSON-состояние игры, только если игра всё ещё в state.
-
-        WATCH/MULTI: если состояние успели изменить (например, вызов приняли),
-        ничего не пишем и не затираем новую версию. Срок жизни ключа сохраняется.
-        """
-        async with self._r.pipeline(transaction=True) as pipe:
-            try:
-                await pipe.watch(key)
-                raw = await pipe.get(key)
-                if raw is None:
-                    return False
-                data = json.loads(raw)
-                if data.get("state") != state:
-                    return False
-                data.update(updates)
-                pipe.multi()
-                pipe.set(key, json.dumps(data), keepttl=True)
-                await pipe.execute()
-                return True
-            except WatchError:
-                return False

@@ -1,3 +1,5 @@
+import pytest
+
 from bot.application.blackjack_service import (
     Card,
     build_deck,
@@ -6,7 +8,7 @@ from bot.application.blackjack_service import (
     format_hand,
     hand_score,
 )
-from bot.presentation.handlers.blackjack.helpers import _is_natural, _render_table
+from bot.presentation.handlers.blackjack.helpers import _is_natural, _render_table, _winner
 
 
 def test_hand_score_simple():
@@ -90,3 +92,32 @@ def test_table_with_hidden_hand_is_encodable():
     table = _render_table(data)
     assert "🂠" in table
     table.encode("utf-8")
+
+
+def _hands(p1: list[Card], p2: list[Card], *, p1_busted: bool = False, p2_busted: bool = False) -> dict:
+    return {
+        "p1_hand": cards_to_dicts(p1),
+        "p2_hand": cards_to_dicts(p2),
+        "p1_busted": p1_busted,
+        "p2_busted": p2_busted,
+    }
+
+
+ACE, KING, NINE, SEVEN, FIVE = Card("A", "♠️"), Card("K", "♥️"), Card("9", "♦️"), Card("7", "♣️"), Card("5", "♠️")
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (_hands([ACE, KING], [SEVEN, NINE, FIVE]), "p1"),  # блекджек бьёт обычные 21
+        (_hands([SEVEN, NINE, FIVE], [ACE, KING]), "p2"),
+        (_hands([ACE, KING], [KING, ACE]), None),  # два блекджека — ничья
+        (_hands([KING, NINE], [KING, SEVEN]), "p1"),
+        (_hands([KING, SEVEN], [KING, SEVEN]), None),
+        (_hands([KING, NINE, FIVE], [FIVE, SEVEN], p1_busted=True), "p2"),  # перебор проигрывает меньшему
+        (_hands([KING, NINE, FIVE], [KING, SEVEN, FIVE], p1_busted=True, p2_busted=True), None),
+    ],
+    ids=["natural-beats-21", "natural-p2", "two-naturals", "more-points", "equal", "bust-loses", "both-bust"],
+)
+def test_winner(data, expected):
+    assert _winner(data) == expected

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 
@@ -190,6 +189,7 @@ async def cmd_duel(
 
     data = {
         "invite_id": invite_id,
+        "state": "invite",
         "game": game,
         "challenger_id": user_id,
         "challenger_name": message.from_user.full_name or "",
@@ -205,7 +205,7 @@ async def cmd_duel(
     }
 
     key = _duel_key(chat_id, invite_id)
-    await store._r.set(key, json.dumps(data), ex=_DUEL_INVITE_TTL)
+    await store.game_create(key, data, _DUEL_INVITE_TTL)
 
     sent = await message.answer(
         invite_text,
@@ -214,10 +214,8 @@ async def cmd_duel(
         reply_markup=_invite_kb(invite_id),
     )
 
-    # Сохраняем message_id и планируем удаление сообщения через таймаут.
-    # XX: если приглашение уже приняли или отклонили (ключ удалён), не воскрешаем его —
-    # иначе cleanup-loop вернул бы ставку второй раз.
-    data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), xx=True, keepttl=True)
+    # Сохраняем message_id, только пока приглашение ждёт ответа: принятое или отклонённое
+    # (ключ удалён) не воскрешаем — иначе cleanup-loop вернул бы ставку второй раз
+    await store.game_patch_if_state(key, "invite", {"message_id": sent.message_id})
 
     schedule_delete_id(message.bot, chat_id, message.message_id, delay=5)

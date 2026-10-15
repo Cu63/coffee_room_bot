@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from aiogram import F, Router
@@ -12,6 +11,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.entities import User
 from bot.domain.ledger import LedgerKind
@@ -46,6 +46,7 @@ async def cb_duel_accept(
     store: FromDishka[RedisStore],
     score_service: FromDishka[ScoreService],
     score_repo: FromDishka[IScoreRepository],
+    stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
@@ -60,12 +61,12 @@ async def cb_duel_accept(
     user_id = cb.from_user.id
 
     key = _duel_key(chat_id, invite_id)
-    raw = await store._r.get(key)
-    if raw is None:
+    snapshot = await store.game_load(key)
+    if snapshot is None:
         await safe_callback_answer(cb, "⏰ Время вышло или приглашение уже недействительно.", show_alert=True)
         return
 
-    data = json.loads(raw)
+    data = snapshot.data
 
     # Только целевой игрок может принять
     if user_id != data["target_id"]:
@@ -114,10 +115,9 @@ async def cb_duel_accept(
         )
         return
 
-    # Атомарно удаляем приглашение
-    deleted = await store._r.delete(key)
-    if not deleted:
-        # Кто-то успел раньше (race condition) — возвращаем ставку
+    # Забираем приглашение: если его уже забрал цикл истечения (и вернул ставку создателю)
+    # или второе нажатие — возвращаем ставку принимающего
+    if not await store.game_delete(key):
         await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"duel:{invite_id}")
         await safe_callback_answer(cb, "⏰ Приглашение уже истекло.", show_alert=True)
         return
@@ -127,9 +127,7 @@ async def cb_duel_accept(
     if game == "ttt":
         await _start_ttt_from_duel(cb, data, game_id, chat_id, bet, store, p)
     else:
-        await _start_bj_from_duel(cb, data, game_id, chat_id, bet, store, score_repo, p)
-
-    await safe_callback_answer(cb, "⚔️ Игра началась!")
+        await _start_bj_from_duel(cb, data, game_id, chat_id, bet, store, score_repo, stats_repo, p)
 
 
 # ── Callback: Отказаться от дуэли ───────────────────────────────────────
@@ -154,12 +152,12 @@ async def cb_duel_decline(
     user_id = cb.from_user.id
 
     key = _duel_key(chat_id, invite_id)
-    raw = await store._r.get(key)
-    if raw is None:
+    snapshot = await store.game_load(key)
+    if snapshot is None:
         await safe_callback_answer(cb, "⏰ Приглашение уже истекло.", show_alert=True)
         return
 
-    data = json.loads(raw)
+    data = snapshot.data
 
     # Отказаться может только целевой игрок
     if user_id != data["target_id"]:
@@ -169,9 +167,8 @@ async def cb_duel_decline(
             await safe_callback_answer(cb, "Этот вызов предназначен не тебе.", show_alert=True)
         return
 
-    # Атомарно удаляем приглашение
-    deleted = await store._r.delete(key)
-    if not deleted:
+    # Забираем приглашение: вернуть ставку должен ровно один — отказ или цикл истечения
+    if not await store.game_delete(key):
         await safe_callback_answer(cb, "⏰ Приглашение уже истекло.", show_alert=True)
         return
 

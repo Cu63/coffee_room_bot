@@ -40,6 +40,8 @@ async def _settle_expired(container, bot: Bot, data: dict) -> None:
     chat_id = data.get("chat_id", 0)
     message_id = data.get("message_id", 0)
 
+    # У игры из /duel ставки списаны с меткой приглашения
+    ref = data.get("ref") or f"bj:{data.get('game_id', '')}"
     text = None
     # Отдельная короткая транзакция на каждую игру: ошибка одной не откатывает остальные
     async with container() as scope:
@@ -47,16 +49,12 @@ async def _settle_expired(container, bot: Bot, data: dict) -> None:
         if state == "lobby":
             p1_id = data.get("p1_id", 0)
             if bet > 0 and p1_id:
-                await score_repo.add_delta(
-                    p1_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{data.get('game_id', '')}"
-                )
+                await score_repo.add_delta(p1_id, chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
                 logger.info("BJ lobby expired: refunded %d to %d", bet, p1_id)
             text = "⏰ Время вышло. Никто не принял вызов. Ставка возвращена."
         elif state == "playing":
             if bet > 0:
-                await score_repo.add_delta(
-                    bot.id, chat_id, bet * 2, kind=LedgerKind.PRIZE, ref=f"bj:{data.get('game_id', '')}"
-                )
+                await score_repo.add_delta(bot.id, chat_id, bet * 2, kind=LedgerKind.PRIZE, ref=ref)
                 logger.info(
                     "BJ game expired: both bets (%d each) of %s and %s go to the bot",
                     bet,
