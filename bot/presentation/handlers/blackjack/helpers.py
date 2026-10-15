@@ -181,16 +181,19 @@ async def _resolve_game(
     stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
     chat_id: int,
-) -> str:
-    """Определить победителя и выплатить. Возвращает текст результата."""
+) -> str | None:
+    """Определить победителя и выплатить. Возвращает текст результата.
+
+    None — игру уже рассчитал другой запрос или цикл истечения: ничего не платим
+    и не трогаем сообщение, чтобы не затереть настоящий итог.
+    """
     game_id = data["game_id"]
     key = _bj_key(chat_id, game_id)
 
-    # Атомарно забираем ключ, чтобы cleanup loop не смог его обработать параллельно
-    # Если ключ уже удалён (cleanup loop опередил) — значит рефунд уже выполнен
+    # Атомарно забираем ключ, чтобы cleanup loop и параллельный ход не обработали игру дважды
     if not await store._r.delete(key):
-        logger.warning("BJ game %s already cleaned up by loop, skipping resolve", game_id)
-        return "\u23f0 Игра была завершена по таймауту. Ставки возвращены."
+        logger.warning("BJ game %s already settled, skipping resolve", game_id)
+        return None
 
     bet = data["bet"]
     total_pot = bet * 2

@@ -166,6 +166,5 @@ async def cmd_blackjack(
         reply_markup=_lobby_kb(game_id),
     )
 
-    # Сохраняем message_id
-    data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_BJ_LOBBY_TTL + _BJ_REDIS_BUFFER)
+    # Сохраняем message_id — только пока это лобби: принятую игру не затираем
+    await store.game_patch_if_state(key, "lobby", {"message_id": sent.message_id})

@@ -93,6 +93,17 @@ async def cb_bj_accept(
         await safe_callback_answer(cb, "Нельзя играть с самим собой.", show_alert=True)
         return
 
+    # Лобби истекло: его вот-вот заберёт cleanup-loop и вернёт ставку создателю
+    if data.get("expires_at", 0) < time.time():
+        await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
+        return
+
+    # Одно принятие на лобби: второй нажавший (или двойное нажатие) не будет списан
+    accept_lock = f"bj:lock:accept:{chat_id}:{game_id}"
+    if not await store._r.set(accept_lock, "1", nx=True, ex=30):
+        await safe_callback_answer(cb, "Игра уже началась.", show_alert=True)
+        return
+
     # Upsert пользователя
     await user_repo.upsert(
         User(
@@ -114,6 +125,7 @@ async def cb_bj_accept(
         emoji=SPECIAL_EMOJI.get("bj", "\U0001f0cf"),
     )
     if not result.success:
+        await store._r.delete(accept_lock)
         sw = p.pluralize(bet)
         sw_bal = p.pluralize(result.current_balance)
         await safe_callback_answer(
@@ -147,41 +159,30 @@ async def cb_bj_accept(
     data["turn"] = "p1"  # p1 ходит первым
     data["expires_at"] = time.time() + _BJ_GAME_TTL
 
-    # Проверяем натуральные блекджеки
-    p1_natural = _is_natural(data["p1_hand"])
-    p2_natural = _is_natural(data["p2_hand"])
-
-    if p1_natural or p2_natural:
-        # Мгновенное завершение
+    # Натуральный блекджек — мгновенное завершение
+    is_natural = _is_natural(data["p1_hand"]) or _is_natural(data["p2_hand"])
+    if is_natural:
         data["p1_done"] = True
         data["p2_done"] = True
-
-        text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
-        try:
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=None,
-            )
-            if cb.message.bot:
-                schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
-        except Exception:
-            pass
-        await safe_callback_answer(cb, "\U0001f3b0 Блекджек!")
-        return
-
-    # Проверяем автостенд на 21 для первого игрока
-    if _hand_score_from_dicts(data["p1_hand"]) == 21:
+    elif _hand_score_from_dicts(data["p1_hand"]) == 21:
+        # Автостенд на 21 для первого игрока
         data["p1_done"] = True
         data["turn"] = "p2"
-        # Проверяем и для второго
         if _hand_score_from_dicts(data["p2_hand"]) == 21:
             data["p2_done"] = True
 
-    # Если оба уже закончили (обоим раздали по 21 не-натуральный — маловероятно)
+    # XX: если лобби уже забрал cleanup-loop (и вернул ставку создателю) —
+    # игру не воскрешаем, а ставку принимающего возвращаем
+    if not await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER, xx=True):
+        await score_repo.add_delta(user_id, chat_id, bet)
+        await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
+        return
+
     if data["p1_done"] and data["p2_done"]:
         text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
+        if text is None:
+            await safe_callback_answer(cb, "Игра уже завершена.")
+            return
         try:
             await cb.message.edit_text(
                 text,
@@ -193,11 +194,8 @@ async def cb_bj_accept(
                 schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
         except Exception:
             pass
-        await safe_callback_answer(cb, "\u2694\ufe0f Игра завершена!")
+        await safe_callback_answer(cb, "\U0001f3b0 Блекджек!" if is_natural else "\u2694\ufe0f Игра завершена!")
         return
-
-    # Сохраняем и показываем
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
     text = _turn_text(data, p)
     try:
@@ -211,6 +209,15 @@ async def cb_bj_accept(
         pass
 
     await safe_callback_answer(cb, "\u2694\ufe0f Игра началась!")
+
+
+async def _save_playing(store: RedisStore, key: str, data: dict) -> bool:
+    """Сохранить ход. XX: игру, которую уже рассчитали или забрал cleanup-loop, не воскрешаем.
+
+    Без XX параллельный «Ещё» после «Хватит» записывал игру обратно, и её можно
+    было рассчитать второй раз (или cleanup-loop забирал её повторно).
+    """
+    return bool(await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER, xx=True))
 
 
 # ── Callback: Hit ──────────────────────────────────────────────────────
@@ -281,9 +288,10 @@ async def cb_bj_hit(
         other = "p2" if turn == "p1" else "p1"
         if data[f"{other}_done"]:
             # Оба закончили — вскрытие и результат
-            text = await _resolve_game(
-                data, store, score_repo, stats_repo, p, chat_id
-            )
+            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
+            if text is None:
+                await safe_callback_answer(cb, "Игра уже завершена.")
+                return
             try:
                 await cb.message.edit_text(
                     text,
@@ -300,7 +308,9 @@ async def cb_bj_hit(
 
         # Тихий переход хода — соперник не знает о переборе
         data["turn"] = other
-        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+        if not await _save_playing(store, key, data):
+            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+            return
 
         text = _turn_text(data, p)
         try:
@@ -323,9 +333,10 @@ async def cb_bj_hit(
         other = "p2" if turn == "p1" else "p1"
         if data[f"{other}_done"]:
             # Оба закончили — результат
-            text = await _resolve_game(
-                data, store, score_repo, stats_repo, p, chat_id
-            )
+            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
+            if text is None:
+                await safe_callback_answer(cb, "Игра уже завершена.")
+                return
             try:
                 await cb.message.edit_text(
                     text,
@@ -342,7 +353,9 @@ async def cb_bj_hit(
 
         # Переход хода
         data["turn"] = other
-        await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+        if not await _save_playing(store, key, data):
+            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+            return
 
         text = _turn_text(data, p)
         try:
@@ -358,7 +371,9 @@ async def cb_bj_hit(
         return
 
     # Продолжаем — тот же игрок ходит
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+    if not await _save_playing(store, key, data):
+        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+        return
 
     text = _turn_text(data, p)
     try:
@@ -429,6 +444,9 @@ async def cb_bj_stand(
     if data[f"{other}_done"]:
         # Оба закончили — результат
         text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
+        if text is None:
+            await safe_callback_answer(cb, "Игра уже завершена.")
+            return
         try:
             await cb.message.edit_text(
                 text,
@@ -445,7 +463,9 @@ async def cb_bj_stand(
 
     # Переход хода к сопернику
     data["turn"] = other
-    await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+    if not await _save_playing(store, key, data):
+        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+        return
 
     text = _turn_text(data, p)
     try:

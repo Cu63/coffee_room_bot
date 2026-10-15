@@ -17,6 +17,7 @@ from bot.presentation.handlers.tictactoe.start import router as start_router
 # Re-export internal symbols used by other modules (e.g. duel.py)
 from bot.presentation.handlers.tictactoe.game_logic import (  # noqa: F401
     _TTT_GAME_TTL,
+    _TTT_REDIS_BUFFER,
     _game_kb,
     _render_board,
     _ttt_key,

@@ -211,8 +211,10 @@ async def cmd_duel(
         reply_markup=_invite_kb(invite_id),
     )
 
-    # Сохраняем message_id и планируем удаление сообщения через таймаут
+    # Сохраняем message_id и планируем удаление сообщения через таймаут.
+    # XX: если приглашение уже приняли или отклонили (ключ удалён), не воскрешаем его —
+    # иначе cleanup-loop вернул бы ставку второй раз.
     data["message_id"] = sent.message_id
-    await store._r.set(key, json.dumps(data), ex=_DUEL_INVITE_TTL)
+    await store._r.set(key, json.dumps(data), xx=True, keepttl=True)
 
     schedule_delete_id(message.bot, chat_id, message.message_id, delay=5)
