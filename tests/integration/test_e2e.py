@@ -8,18 +8,12 @@ from dataclasses import dataclass
 
 import pytest
 from aiogram.methods import AnswerCallbackQuery, EditMessageText, PinChatMessage, SendMessage, UnpinChatMessage
-from aiogram.types import User
 
 from bot.infrastructure import lot_loop
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
+from tests.integration.fake_telegram import member
 from tests.integration.helpers import BOT_ID, CHAT, balance, seed_users
-
-
-def member(uid: int, **fields) -> User:
-    """Участник чата; seed_users заводит его в БД с тем же username."""
-    return User(**{"id": uid, "is_bot": False, "first_name": f"User {uid}", "username": f"user{uid}", **fields})
-
 
 # ── /transfer ─────────────────────────────────────────────────────────
 

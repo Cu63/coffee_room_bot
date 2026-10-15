@@ -6,22 +6,28 @@ import logging
 import math
 from datetime import datetime
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     ChatMemberAdministrator,
+    ChatMemberBanned,
+    ChatMemberLeft,
     ChatMemberOwner,
+    ChatMemberRestricted,
     ChatPermissions,
     Message,
 )
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
+from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
-from bot.domain.entities import MuteEntry
+from bot.domain.bot_utils import parse_duration
+from bot.domain.entities import MuteEntry, User
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
@@ -38,6 +44,33 @@ from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 logger = logging.getLogger(__name__)
 router = Router(name="mute_cmd")
 
+_RANDOM_TARGETS = {"random", "@random"}
+_RANDOM_PICK_ATTEMPTS = 5
+
+
+async def _pick_random_member(bot: Bot, score_repo: IScoreRepository, chat_id: int, exclude_id: int) -> User | None:
+    """Случайный участник с ненулевым счётом в чате (не бот, не exclude_id), который ещё в чате.
+
+    Счёт остаётся и у тех, кто вышел: платить за мут отсутствующего незачем, поэтому
+    таких пропускаем и тянем ещё раз.
+    """
+    for _ in range(_RANDOM_PICK_ATTEMPTS):
+        row = await score_repo.get_random_user(chat_id, exclude_id)
+        if row is None:
+            return None
+        user_id, username, full_name = row
+        try:
+            member = await bot.get_chat_member(chat_id, user_id)
+        except TelegramAPIError:
+            logger.warning("mute random: не удалось проверить участника %d в чате %d", user_id, chat_id)
+            continue
+        if isinstance(member, ChatMemberLeft | ChatMemberBanned):
+            continue
+        if isinstance(member, ChatMemberRestricted) and not member.is_member:
+            continue
+        return User(id=user_id, username=username, full_name=full_name)
+    return None
+
 
 @router.message(Command("mute"))
 @inject
@@ -48,6 +81,7 @@ async def cmd_mute(
     mute_service: FromDishka[MuteService],
     protection_repo: FromDishka[IMuteProtectionRepository],
     user_repo: FromDishka[IUserRepository],
+    score_repo: FromDishka[IScoreRepository],
     store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
@@ -56,16 +90,29 @@ async def cmd_mute(
         return
     mute_cfg = config.mute
     p = formatter._p
-    parsed = await _resolve_mute_args(command.args, message, user_repo)
-    if parsed is None:
-        await reply_and_delete(
-            message, formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
-        )
-        return
-    target, minutes = parsed
-    if target is None:
-        await reply_and_delete(message, formatter._t["error_user_not_found"])
-        return
+    usage = formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
+    args = (command.args or "").split()
+    # /mute random <время> — цель выбирает бот
+    is_random = len(args) == 2 and args[0].lower() in _RANDOM_TARGETS
+    if is_random:
+        seconds = parse_duration(args[1])
+        if seconds is None:
+            await reply_and_delete(message, usage)
+            return
+        minutes = max(1, seconds // 60)
+        target = await _pick_random_member(message.bot, score_repo, message.chat.id, message.from_user.id)
+        if target is None:
+            await reply_and_delete(message, formatter._t["mute_random_no_candidates"])
+            return
+    else:
+        parsed = await _resolve_mute_args(command.args, message, user_repo)
+        if parsed is None:
+            await reply_and_delete(message, usage)
+            return
+        target, minutes = parsed
+        if target is None:
+            await reply_and_delete(message, formatter._t["error_user_not_found"])
+            return
     if target.id == message.from_user.id:
         await reply_and_delete(message, formatter._t["mute_self"])
         return
@@ -133,7 +180,7 @@ async def cmd_mute(
     if isinstance(member, ChatMemberOwner):
         # ── Owner soft-mute: удаляем сообщения через middleware ──
         result = await score_service.spend_score(
-            actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost
+            actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, bot_id=bot.id
         )
         if not result.success:
             await reply_and_delete(
@@ -158,9 +205,11 @@ async def cmd_mute(
         actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
         total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
         stack_note = f" (итого: {total_minutes} мин)" if mute_was_stacked else ""
+        random_note = formatter._t["mute_random_picked"].format(target=target_link) + "\n" if is_random else ""
         await reply_and_delete(
             message,
-            formatter._t["mute_success"].format(
+            random_note
+            + formatter._t["mute_success"].format(
                 actor=actor_link,
                 target=target_link,
                 minutes=minutes,
@@ -211,7 +260,7 @@ async def cmd_mute(
         )
     )
     result = await score_service.spend_score(
-        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost
+        actor_id=message.from_user.id, target_id=target.id, chat_id=chat_id, cost=cost, bot_id=bot.id
     )
     if not result.success:
         await _unmute_user(
@@ -245,9 +294,11 @@ async def cmd_mute(
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
     stack_note = f" (итого: {total_minutes} мин)" if mute_was_stacked else ""
+    random_note = formatter._t["mute_random_picked"].format(target=target_link) + "\n" if is_random else ""
     await reply_and_delete(
         message,
-        formatter._t["mute_success"].format(
+        random_note
+        + formatter._t["mute_success"].format(
             actor=actor_link,
             target=target_link,
             minutes=minutes,
