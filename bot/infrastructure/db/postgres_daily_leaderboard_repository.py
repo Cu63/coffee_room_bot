@@ -125,6 +125,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND se.created_at >= $2
               AND se.created_at < $3
               AND se.direction = 'ADD'
+              AND se.message_id > 0
               AND se.actor_id != se.target_id
               AND se.delta > 0
               AND NOT u.is_bot
@@ -153,6 +154,7 @@ class PostgresDailyLeaderboardRepository(IDailyLeaderboardRepository):
               AND se.created_at >= $2
               AND se.created_at < $3
               AND se.direction = 'ADD'
+              AND se.message_id > 0
               AND se.actor_id != se.target_id
               AND se.delta > 0
               AND NOT u.is_bot

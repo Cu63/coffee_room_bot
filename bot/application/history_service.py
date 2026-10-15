@@ -1,19 +1,22 @@
 from datetime import datetime, timedelta
 
-from bot.application.interfaces.event_repository import IEventRepository
-from bot.domain.entities import ScoreEvent
+from bot.application.interfaces.ledger_repository import ILedgerRepository
+from bot.domain.ledger import LedgerEntry
 from bot.domain.tz import TZ_MSK
 
 
 class HistoryService:
-    def __init__(self, event_repo: IEventRepository, retention_days: int) -> None:
-        self._event_repo = event_repo
+    """История операций с баллами по журналу ledger: реакции, переводы, покупки, игры, бонусы."""
+
+    def __init__(self, ledger_repo: ILedgerRepository, retention_days: int) -> None:
+        self._ledger = ledger_repo
         self._retention_days = retention_days
 
-    async def get_history(self, chat_id: int) -> list[ScoreEvent]:
-        since = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
-        return await self._event_repo.get_history(chat_id, since)
+    def _since(self) -> datetime:
+        return datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
 
-    async def get_user_history(self, chat_id: int, user_id: int) -> list[ScoreEvent]:
-        since = datetime.now(TZ_MSK) - timedelta(days=self._retention_days)
-        return await self._event_repo.get_history_by_user(chat_id, user_id, since)
+    async def get_history(self, chat_id: int) -> list[LedgerEntry]:
+        return await self._ledger.history(chat_id, self._since())
+
+    async def get_user_history(self, chat_id: int, user_id: int) -> list[LedgerEntry]:
+        return await self._ledger.history(chat_id, self._since(), user_id=user_id)

@@ -25,25 +25,27 @@ class PostgresEventRepository(IEventRepository):
             event.direction.value,
         )
 
-    async def exists(self, actor_id: int, message_id: int, emoji: str) -> bool:
+    async def exists(self, chat_id: int, actor_id: int, message_id: int, emoji: str) -> bool:
         row = await self._conn.fetchval(
             """
             SELECT 1 FROM score_events
-            WHERE actor_id = $1 AND message_id = $2 AND emoji = $3
+            WHERE chat_id = $1 AND actor_id = $2 AND message_id = $3 AND emoji = $4
             """,
+            chat_id,
             actor_id,
             message_id,
             emoji,
         )
         return row is not None
 
-    async def find_and_delete(self, actor_id: int, message_id: int, emoji: str) -> ScoreEvent | None:
+    async def find_and_delete(self, chat_id: int, actor_id: int, message_id: int, emoji: str) -> ScoreEvent | None:
         row = await self._conn.fetchrow(
             """
             DELETE FROM score_events
-            WHERE actor_id = $1 AND message_id = $2 AND emoji = $3
+            WHERE chat_id = $1 AND actor_id = $2 AND message_id = $3 AND emoji = $4
             RETURNING id, chat_id, actor_id, target_id, message_id, emoji, delta, direction, created_at
             """,
+            chat_id,
             actor_id,
             message_id,
             emoji,
@@ -51,37 +53,6 @@ class PostgresEventRepository(IEventRepository):
         if row is None:
             return None
         return self._to_entity(row)
-
-    async def get_history(self, chat_id: int, since: datetime) -> list[ScoreEvent]:
-        rows = await self._conn.fetch(
-            """
-            SELECT id, chat_id, actor_id, target_id, message_id, emoji, delta, direction, created_at
-            FROM score_events
-            WHERE chat_id = $1 AND created_at >= $2
-            ORDER BY created_at DESC
-            LIMIT 500
-            """,
-            chat_id,
-            since,
-        )
-        return [self._to_entity(r) for r in rows]
-
-    async def get_history_by_user(self, chat_id: int, user_id: int, since: datetime) -> list[ScoreEvent]:
-        rows = await self._conn.fetch(
-            """
-            SELECT id, chat_id, actor_id, target_id, message_id, emoji, delta, direction, created_at
-            FROM score_events
-            WHERE chat_id = $1
-              AND (actor_id = $2 OR target_id = $2)
-              AND created_at >= $3
-            ORDER BY created_at DESC
-            LIMIT 500
-            """,
-            chat_id,
-            user_id,
-            since,
-        )
-        return [self._to_entity(r) for r in rows]
 
     async def delete_before(self, cutoff: datetime) -> int:
         result = await self._conn.execute(

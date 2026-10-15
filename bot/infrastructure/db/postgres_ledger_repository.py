@@ -3,6 +3,7 @@ from datetime import datetime
 import asyncpg
 
 from bot.application.interfaces.ledger_repository import ILedgerRepository, LedgerMismatch
+from bot.domain.ledger import LedgerEntry
 
 
 class PostgresLedgerRepository(ILedgerRepository):
@@ -29,6 +30,40 @@ class PostgresLedgerRepository(ILedgerRepository):
         return [
             LedgerMismatch(
                 chat_id=r["chat_id"], user_id=r["user_id"], balance=r["balance"], ledger_total=r["ledger_total"]
+            )
+            for r in rows
+        ]
+
+    async def history(
+        self, chat_id: int, since: datetime, user_id: int | None = None, limit: int = 500
+    ) -> list[LedgerEntry]:
+        rows = await self._conn.fetch(
+            """
+            SELECT l.chat_id, l.user_id, l.delta, l.kind, l.ref, l.counterparty_id, l.created_at
+            FROM ledger l
+            JOIN users u ON u.id = l.user_id
+            WHERE l.chat_id = $1
+              AND l.created_at >= $2
+              AND l.kind <> 'opening'
+              AND NOT u.is_bot
+              AND ($3::bigint IS NULL OR l.user_id = $3 OR l.counterparty_id = $3)
+            ORDER BY l.id DESC
+            LIMIT $4
+            """,
+            chat_id,
+            since,
+            user_id,
+            limit,
+        )
+        return [
+            LedgerEntry(
+                chat_id=r["chat_id"],
+                user_id=r["user_id"],
+                delta=r["delta"],
+                kind=r["kind"],
+                ref=r["ref"],
+                counterparty_id=r["counterparty_id"],
+                created_at=r["created_at"],
             )
             for r in rows
         ]

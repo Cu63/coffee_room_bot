@@ -20,6 +20,7 @@ from bot.application.interfaces.dice_repository import IDiceRepository
 from bot.application.interfaces.event_repository import IEventRepository
 from bot.application.interfaces.giveaway_repository import IGiveawayRepository
 from bot.application.interfaces.iq_repository import IIqRepository
+from bot.application.interfaces.ledger_repository import ILedgerRepository
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import IMessageRepository
 from bot.application.interfaces.mute_repository import IMuteRepository
@@ -90,8 +91,8 @@ class AppServiceProvider(Provider):
         return ChatmodeService(repo, score_service)
 
     @provide(scope=Scope.REQUEST)
-    def get_history_service(self, event_repo: IEventRepository, config: AppConfig) -> HistoryService:
-        return HistoryService(event_repo, config.history.retention_days)
+    def get_history_service(self, ledger_repo: ILedgerRepository, config: AppConfig) -> HistoryService:
+        return HistoryService(ledger_repo, config.history.retention_days)
 
     @provide(scope=Scope.REQUEST)
     def get_cleanup_service(self, event_repo: IEventRepository, config: AppConfig) -> CleanupService:

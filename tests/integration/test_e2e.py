@@ -74,6 +74,16 @@ async def test_transfer_refusals_change_nothing(tg, conn, texts, accounts, args,
     assert (await balance(conn, ALICE), await balance(conn, BOB)) == (100, 0)
 
 
+async def test_history_shows_transfer_from_ledger(tg, accounts):
+    await tg.send(member(ALICE), "/transfer @user502 30")
+    await tg.send(member(ALICE), "/history")
+
+    history = tg.requests(SendMessage)[-1].text
+    # Обе стороны перевода: «кто → кому, эмодзи, изменение»
+    assert "<code>@user501</code> → <code>@user502</code> 💸 (-30)" in history
+    assert "<code>@user501</code> → <code>@user502</code> 💸 (+30)" in history
+
+
 # ── /lot ──────────────────────────────────────────────────────────────
 
 ADMIN, BORIS, VERA, GLEB = 601, 602, 603, 604

@@ -1,4 +1,3 @@
-import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -46,22 +45,6 @@ SPECIAL_EMOJI = {
 
 # Эмодзи истории → ref в журнале операций (ledger), если вызывающий не передал свой
 _EMOJI_REF = {emoji: name for name, emoji in SPECIAL_EMOJI.items()}
-
-_last_pseudo_message_id = 0
-
-
-def _next_pseudo_message_id() -> int:
-    """Отрицательный message_id для служебных событий (не пересекается с реальными сообщениями).
-
-    Строго убывает в пределах процесса: две записи подряд (например, обе стороны перевода)
-    не получат одинаковый id и не упрутся в UNIQUE (actor_id, message_id, emoji).
-    """
-    global _last_pseudo_message_id
-    candidate = -(time.time_ns() // 1000)
-    if candidate >= _last_pseudo_message_id:
-        candidate = _last_pseudo_message_id - 1
-    _last_pseudo_message_id = candidate
-    return candidate
 
 
 @dataclass(slots=True)
@@ -149,7 +132,7 @@ class ScoreService:
             return ApplyResult(applied=False, reason=IgnoreReason.MESSAGE_TOO_OLD)
 
         # 6. Уникальность
-        if await self._event_repo.exists(actor_id, message_id, emoji):
+        if await self._event_repo.exists(chat_id, actor_id, message_id, emoji):
             return ApplyResult(applied=False, reason=IgnoreReason.DUPLICATE)
 
         today = datetime.now(TZ_MSK).date()
@@ -226,7 +209,7 @@ class ScoreService:
 
         target_id = msg.user_id
 
-        if await self._event_repo.exists(actor_id, message_id, emoji):
+        if await self._event_repo.exists(chat_id, actor_id, message_id, emoji):
             return ApplyResult(applied=False, reason=IgnoreReason.DUPLICATE)
 
         delta = reaction.weight
@@ -261,7 +244,7 @@ class ScoreService:
     ) -> ApplyResult:
         emoji = normalize_emoji(emoji)
         # Найти и удалить оригинальное событие
-        event = await self._event_repo.find_and_delete(actor_id, message_id, emoji)
+        event = await self._event_repo.find_and_delete(chat_id, actor_id, message_id, emoji)
         if event is None:
             return ApplyResult(applied=False, reason=IgnoreReason.EVENT_NOT_FOUND)
 
@@ -309,21 +292,14 @@ class ScoreService:
         admin_id: int,
     ) -> int:
         """Админская установка счёта в конкретное значение."""
-        old = await self._score_repo.get(user_id, chat_id)
-        old_value = old.value if old else 0
-        new_value = await self._score_repo.set_value(
-            user_id, chat_id, value, kind=LedgerKind.ADMIN, counterparty_id=admin_id
+        return await self._score_repo.set_value(
+            user_id,
+            chat_id,
+            value,
+            kind=LedgerKind.ADMIN,
+            ref="reset" if value == 0 else "set",
+            counterparty_id=admin_id,
         )
-        delta = new_value - old_value
-        if delta != 0:
-            await self._save_special_event(
-                admin_id,
-                user_id,
-                chat_id,
-                delta,
-                SPECIAL_EMOJI["reset"] if value == 0 else SPECIAL_EMOJI["set"],
-            )
-        return new_value
 
     async def add_score(
         self,
@@ -335,8 +311,10 @@ class ScoreService:
         kind: LedgerKind,
         ref: str | None = None,
     ) -> int:
-        """Изменение счёта на delta с записью в историю (actor — admin_id)."""
-        new_value = await self._score_repo.add_delta(
+        """Изменение счёта на delta. admin_id — кто инициировал (вторая сторона в журнале)."""
+        if ref is None and kind == LedgerKind.ADMIN:
+            ref = "add" if delta >= 0 else "sub"
+        return await self._score_repo.add_delta(
             user_id,
             chat_id,
             delta,
@@ -344,9 +322,6 @@ class ScoreService:
             ref=ref,
             counterparty_id=admin_id if admin_id != user_id else None,
         )
-        emoji = SPECIAL_EMOJI["add"] if delta >= 0 else SPECIAL_EMOJI["sub"]
-        await self._save_special_event(admin_id, user_id, chat_id, delta, emoji)
-        return new_value
 
     async def debit_up_to(
         self,
@@ -358,11 +333,8 @@ class ScoreService:
         kind: LedgerKind,
         ref: str | None = None,
     ) -> int:
-        """Атомарно списать до amount, не уводя баланс в минус. Возвращает списанное.
-
-        В историю пишется так же, как add_score с отрицательной дельтой.
-        """
-        taken = await self._score_repo.debit_up_to(
+        """Атомарно списать до amount, не уводя баланс в минус. Возвращает списанное."""
+        return await self._score_repo.debit_up_to(
             user_id,
             chat_id,
             amount,
@@ -370,9 +342,6 @@ class ScoreService:
             ref=ref,
             counterparty_id=admin_id if admin_id != user_id else None,
         )
-        if taken > 0:
-            await self._save_special_event(admin_id, user_id, chat_id, -taken, SPECIAL_EMOJI["sub"])
-        return taken
 
     async def add_score_quiet(
         self,
@@ -384,7 +353,7 @@ class ScoreService:
         ref: str | None = None,
         counterparty_id: int | None = None,
     ) -> int:
-        """Изменение счёта на delta без записи в историю (журнал операций пишется всегда)."""
+        """Изменение счёта на delta от имени системы (без инициатора-админа)."""
         return await self._score_repo.add_delta(
             user_id, chat_id, delta, kind=kind, ref=ref, counterparty_id=counterparty_id
         )
@@ -399,7 +368,6 @@ class ScoreService:
         *,
         kind: LedgerKind,
         bot_id: int | None = None,
-        quiet: bool = False,
         ref: str | None = None,
     ) -> SpendResult:
         """Списать баллы у actor за действие над target.
@@ -407,8 +375,8 @@ class ScoreService:
         Возвращает SpendResult. В долг не даётся — если баланс < cost, отказ.
         Проверка и списание атомарны, поэтому параллельные траты не уводят баланс в минус.
         Если передан bot_id — списанные баллы начисляются боту.
-        quiet=True — не записывать событие в историю.
-        kind — тип операции в журнале: PURCHASE за покупку, STAKE за ставку.
+        kind — тип операции в журнале: PURCHASE за покупку, STAKE за ставку;
+        ref по умолчанию выводится из emoji (SPECIAL_EMOJI).
         """
         ref = ref or _EMOJI_REF.get(emoji)
         new_balance = await self._score_repo.try_debit(
@@ -426,15 +394,6 @@ class ScoreService:
         # Начислить списанные баллы боту
         if bot_id is not None:
             await self._score_repo.add_delta(bot_id, chat_id, cost, kind=kind, ref=ref, counterparty_id=actor_id)
-
-        if not quiet:
-            await self._save_special_event(
-                actor_id,
-                target_id,
-                chat_id,
-                -cost,
-                emoji or SPECIAL_EMOJI["mute"],
-            )
 
         return SpendResult(success=True, cost=cost, new_balance=new_balance)
 
@@ -468,10 +427,6 @@ class ScoreService:
             receiver_id, chat_id, amount, kind=LedgerKind.TRANSFER, counterparty_id=sender_id
         )
 
-        # Записываем два события в историю: списание у отправителя и зачисление получателю
-        await self._save_special_event(sender_id, receiver_id, chat_id, -amount, SPECIAL_EMOJI["transfer"])
-        await self._save_special_event(sender_id, receiver_id, chat_id, +amount, SPECIAL_EMOJI["transfer"])
-
         return TransferResult(
             success=True,
             amount=amount,
@@ -482,37 +437,16 @@ class ScoreService:
     async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="burst")
-        await self._save_special_event(
-            user_id,
-            user_id,
-            chat_id,
-            reward,
-            SPECIAL_EMOJI["burst"],
-        )
         return new_value
 
     async def award_spark(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за разжигание дискуссии."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="spark")
-        await self._save_special_event(
-            user_id,
-            user_id,
-            chat_id,
-            reward,
-            SPECIAL_EMOJI["spark"],
-        )
         return new_value
 
     async def award_chain(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за цепочку реплаев."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="chain")
-        await self._save_special_event(
-            user_id,
-            user_id,
-            chat_id,
-            reward,
-            SPECIAL_EMOJI["chain"],
-        )
         return new_value
 
     async def award_daily_leader(self, user_id: int, chat_id: int, reward: int) -> int:
@@ -520,32 +454,4 @@ class ScoreService:
         new_value = await self._score_repo.add_delta(
             user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="daily_leader"
         )
-        await self._save_special_event(
-            user_id,
-            user_id,
-            chat_id,
-            reward,
-            SPECIAL_EMOJI["daily_leader"],
-        )
         return new_value
-
-    async def _save_special_event(
-        self,
-        actor_id: int,
-        target_id: int,
-        chat_id: int,
-        delta: int,
-        emoji: str,
-    ) -> None:
-        pseudo_message_id = _next_pseudo_message_id()
-        await self._event_repo.save(
-            ScoreEvent(
-                chat_id=chat_id,
-                actor_id=actor_id,
-                target_id=target_id,
-                message_id=pseudo_message_id,
-                emoji=emoji,
-                delta=delta,
-                direction=Direction.ADD,
-            )
-        )

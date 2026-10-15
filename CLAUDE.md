@@ -55,6 +55,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 
 - Debit only through atomic primitives: `ScoreService.spend_score` / `transfer_score`, `IScoreRepository.try_debit` (`UPDATE … WHERE value >= amount`) or `debit_up_to`. Never "read the balance, then `add_delta(-x)`".
 - Every change to `scores.value` is journaled into `ledger` by a DB trigger (`V017__ledger.sql`). The operation kind (`LedgerKind`: reaction, transfer, purchase, stake, prize, refund, bonus, penalty, tax, admin, opening), `ref` (what exactly: `msg:<id>:<emoji>`, `mute`, `bj:<game_id>`…) and `counterparty_id` reach the trigger through transaction settings set by `PostgresScoreRepository` — that's why every balance-changing method of `IScoreRepository` and `ScoreService` requires `kind`. Both legs of one operation (buyer and house, sender and receiver) share the kind. A change made around the repository lands as kind `unknown`: the daily `ledger_audit_loop` reports it, and so does the teardown check after every integration test.
+- `score_events` holds only reactions (duplicate check and removal, unique per chat). The money history (`/history`, `/uhistory`) is read from `ledger`.
 - Game state lives in Redis as JSON with a logical `expires_at` and a Redis TTL with a buffer on top, so cleanup loops see expired games before Redis drops the key.
 - State transitions must be atomic:
   - finishing or claiming a game: `DEL`/`GETDEL` — only the caller whose delete succeeded pays out;
