@@ -1,4 +1,5 @@
 """Middleware: повтор запроса при сетевых ошибках Telegram API."""
+
 from __future__ import annotations
 
 import asyncio
@@ -54,12 +55,16 @@ class RetryNetworkMiddleware(BaseMiddleware):
                     delay = _DELAYS[attempt]
                     logger.warning(
                         "TelegramNetworkError (attempt %d/%d), retry in %.1fs: %s",
-                        attempt + 1, _MAX_ATTEMPTS, delay, e,
+                        attempt + 1,
+                        _MAX_ATTEMPTS,
+                        delay,
+                        e,
                     )
                     await asyncio.sleep(delay)
 
         logger.error(
             "TelegramNetworkError after %d attempts, dropping update: %s",
-            _MAX_ATTEMPTS, last_exc,
+            _MAX_ATTEMPTS,
+            last_exc,
         )
         return None

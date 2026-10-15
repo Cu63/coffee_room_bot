@@ -13,12 +13,14 @@ from bot.domain.wordgame_entities import WordGame
 
 def open_dm_kb(bot_username: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(
-                text="✏️ Написать слово в ЛС",
-                url=f"https://t.me/{bot_username}",
-            )
-        ]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✏️ Написать слово в ЛС",
+                    url=f"https://t.me/{bot_username}",
+                )
+            ]
+        ]
     )
 
 

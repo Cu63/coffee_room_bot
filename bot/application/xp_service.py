@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True)
 class XpResult:
     """Результат начисления XP."""
+
     new_xp: int
     old_level: int
     new_level: int
@@ -51,7 +52,12 @@ class XpService:
         if new_level > old_level:
             logger.info(
                 "xp: user %d in chat %d leveled up %d → %d (xp: %d → %d)",
-                user_id, chat_id, old_level, new_level, old_xp, new_xp,
+                user_id,
+                chat_id,
+                old_level,
+                new_level,
+                old_xp,
+                new_xp,
             )
         return XpResult(new_xp=new_xp, old_level=old_level, new_level=new_level)
 

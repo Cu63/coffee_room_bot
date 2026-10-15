@@ -27,6 +27,7 @@ def _game_text(shuffled: str, bet: int, tries_count: int, sw: str, ends_at: floa
     from datetime import datetime
 
     from bot.domain.tz import TZ_MSK
+
     ends_str = datetime.fromtimestamp(ends_at, tz=TZ_MSK).strftime("%H:%M:%S")
     return (
         f"🔤 <b>Анаграмма!</b>\n\n"

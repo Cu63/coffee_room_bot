@@ -68,9 +68,7 @@ async def _apply_mute_debuff(
         if member.custom_title:
             admin_perms["custom_title"] = member.custom_title
         try:
-            await bot.promote_chat_member(
-                chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS}
-            )
+            await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS})
         except Exception:
             return False
 
@@ -207,16 +205,24 @@ async def cmd_poker(
 
     if backfire:
         backfire_text = formatter._t["poker_backfire"].format(
-            actor=actor_link, target=target_link,
+            actor=actor_link,
+            target=target_link,
         )
 
     if debuff == DEBUFF_MUTE:
         success = await _apply_mute_debuff(
-            bot, actual_target_id, chat_id, cfg.mute_minutes, mute_service, user_id,
+            bot,
+            actual_target_id,
+            chat_id,
+            cfg.mute_minutes,
+            mute_service,
+            user_id,
         )
         if success:
             text = formatter._t["poker_mute"].format(
-                actor=actor_link, target=actual_target_link, minutes=cfg.mute_minutes,
+                actor=actor_link,
+                target=actual_target_link,
+                minutes=cfg.mute_minutes,
             )
         else:
             # Мут не удался — забираем баллы вместо мута
@@ -226,7 +232,9 @@ async def cmd_poker(
         until_ts = time.time() + cfg.gameban_minutes * 60
         await store.gameban_set(actual_target_id, chat_id, until_ts)
         text = formatter._t["poker_gameban"].format(
-            actor=actor_link, target=actual_target_link, minutes=cfg.gameban_minutes,
+            actor=actor_link,
+            target=actual_target_link,
+            minutes=cfg.gameban_minutes,
         )
 
     if debuff == DEBUFF_SCORE:
@@ -238,12 +246,15 @@ async def cmd_poker(
                 await score_repo.add_delta(actual_target_id, chat_id, -amount)
                 await score_repo.add_delta(bot.id, chat_id, amount)
                 text = formatter._t["poker_score"].format(
-                    actor=actor_link, target=actual_target_link,
-                    amount=amount, score_word=p.pluralize(amount),
+                    actor=actor_link,
+                    target=actual_target_link,
+                    amount=amount,
+                    score_word=p.pluralize(amount),
                 )
             else:
                 text = formatter._t["poker_score_zero"].format(
-                    actor=actor_link, target=actual_target_link,
+                    actor=actor_link,
+                    target=actual_target_link,
                 )
         else:
             # На другого (или backfire): крадём деньги (макс 5% от баланса атакующего)
@@ -260,27 +271,34 @@ async def cmd_poker(
                     # При backfire деньги идут боту
                     await score_repo.add_delta(bot.id, chat_id, amount)
                     text = formatter._t["poker_score"].format(
-                        actor=actor_link, target=actual_target_link,
-                        amount=amount, score_word=p.pluralize(amount),
+                        actor=actor_link,
+                        target=actual_target_link,
+                        amount=amount,
+                        score_word=p.pluralize(amount),
                     )
                 else:
                     # Крадём деньги жертвы себе
                     await score_repo.add_delta(user_id, chat_id, amount)
                     text = formatter._t["poker_steal"].format(
-                        actor=actor_link, target=actual_target_link,
-                        amount=amount, score_word=p.pluralize(amount),
+                        actor=actor_link,
+                        target=actual_target_link,
+                        amount=amount,
+                        score_word=p.pluralize(amount),
                     )
             else:
                 text = formatter._t["poker_score_zero"].format(
-                    actor=actor_link, target=actual_target_link,
+                    actor=actor_link,
+                    target=actual_target_link,
                 )
 
     if debuff == DEBUFF_IQ:
         iq_loss = cfg.iq_loss
         new_iq = await iq_service.add_iq(actual_target_id, chat_id, -iq_loss)
         text = formatter._t["poker_iq"].format(
-            actor=actor_link, target=actual_target_link,
-            amount=iq_loss, new_iq=new_iq,
+            actor=actor_link,
+            target=actual_target_link,
+            amount=iq_loss,
+            new_iq=new_iq,
         )
 
     # Устанавливаем кулдаун

@@ -11,7 +11,6 @@ _SLOTS_ALL_DAILY = "slots:all:"
 
 
 class SlotsStoreMixin:
-
     async def slots_daily_check(self, user_id: int, chat_id: int, max_spins: int) -> bool:
         key = f"{_SLOTS_DAILY}{user_id}:{chat_id}"
         raw = await self._r.get(key)

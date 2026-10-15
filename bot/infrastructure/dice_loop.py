@@ -77,7 +77,8 @@ async def _resolve_game(bot: Bot, game, container) -> None:
     if missing:
         logger.warning(
             "Dice game %d: missing results for %s — refunding all bets",
-            game.id, missing,
+            game.id,
+            missing,
         )
         async with container() as scope:
             service = await scope.get(DiceService)
@@ -141,10 +142,7 @@ async def _post_dice_results(bot: Bot, result, pluralizer) -> None:
             except Exception:
                 winner_mentions.append(f"<code>{uid}</code>")
         winners_str = ", ".join(winner_mentions)
-        lines.append(
-            f"🏆 Победители: {winners_str}\n"
-            f"💰 Приз: <b>{result.prize_per_winner} {score_word}</b> каждому"
-        )
+        lines.append(f"🏆 Победители: {winners_str}\n💰 Приз: <b>{result.prize_per_winner} {score_word}</b> каждому")
 
     result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
     schedule_delete(bot, result_msg, delay=_GAME_DELETE_DELAY)

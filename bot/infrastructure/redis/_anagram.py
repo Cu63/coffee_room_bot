@@ -7,7 +7,6 @@ import time
 
 
 class AnagramStoreMixin:
-
     _ANAGRAM_CD = "anagram:cd:"
     _ANAGRAM_GAME = "anagram:game:"
     _ANAGRAM_MSG = "anagram:msg:"
@@ -45,7 +44,12 @@ class AnagramStoreMixin:
         await self._r.delete(f"{self._ANAGRAM_MSG}{chat_id}:{message_id}")
 
     async def anagram_create_game(
-        self, game_id: str, data: dict, chat_id: int, message_id: int, ttl: int,
+        self,
+        game_id: str,
+        data: dict,
+        chat_id: int,
+        message_id: int,
+        ttl: int,
     ) -> None:
         pipe = self._r.pipeline()
         pipe.set(f"{self._ANAGRAM_GAME}{game_id}", json.dumps(data), ex=ttl)

@@ -43,9 +43,7 @@ _CB_HIT = "donotbuy:hit"
 def _build_kb(label: str, style: str | None) -> InlineKeyboardMarkup:
     """Одна кнопка «кнопка наёбка» заданного цвета (style)."""
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=label, callback_data=_CB_HIT, style=style)]
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=_CB_HIT, style=style)]]
     )
 
 
@@ -126,7 +124,8 @@ async def cb_donotbuy_hit(
     # Сколько списалось — видит только нажавший
     if charged > 0:
         alert = formatter._t["donotbuy_alert_charged"].format(
-            amount=charged, score_word=p.pluralize(charged),
+            amount=charged,
+            score_word=p.pluralize(charged),
         )
     else:
         alert = formatter._t["donotbuy_alert_zero"]

@@ -50,5 +50,9 @@ class IqPenaltyMiddleware(BaseMiddleware):
         new_iq = await iq_service.add_iq(message.from_user.id, message.chat.id, -cfg.substr_penalty)
         logger.debug(
             "iq: user %d in chat %d −%d IQ за «%s» (итого %d)",
-            message.from_user.id, message.chat.id, cfg.substr_penalty, cfg.substr_trigger, new_iq,
+            message.from_user.id,
+            message.chat.id,
+            cfg.substr_penalty,
+            cfg.substr_trigger,
+            new_iq,
         )

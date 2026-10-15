@@ -123,11 +123,13 @@ async def cmd_anagram(
     user_id = message.from_user.id
 
     # Upsert пользователя
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     # Проверяем баланс бота и списываем ставку с него
     bot_balance = await score_service.get_bot_balance(message.bot.id, chat_id)

@@ -234,8 +234,7 @@ async def cmd_giveaway_period_stop(
     prizes_str = " / ".join(f"{p} {pluralizer.pluralize(p)}" for p in data["prizes"])
     await reply_and_delete(
         message,
-        f"⏹ Периодический розыгрыш <code>{gp_id}</code> остановлен.\n"
-        f"Призы были: {prizes_str}",
+        f"⏹ Периодический розыгрыш <code>{gp_id}</code> остановлен.\nПризы были: {prizes_str}",
         parse_mode="HTML",
     )
 

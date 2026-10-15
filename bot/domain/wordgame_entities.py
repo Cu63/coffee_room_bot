@@ -39,15 +39,15 @@ class WordGame:
     game_id: str
     chat_id: int
     creator_id: int
-    word: str          # всегда UPPERCASE
+    word: str  # всегда UPPERCASE
     bet: int
     ends_at: float
     revealed: list[bool] = field(default_factory=list)
     guesses: list[dict] = field(default_factory=list)  # [{user_id, word}]
-    message_id: int = 0                                 # ID игрового сообщения в группе
+    message_id: int = 0  # ID игрового сообщения в группе
     finished: bool = False
     winner_id: int | None = None
-    is_random: bool = False                             # True если слово загадал бот (/rword)
+    is_random: bool = False  # True если слово загадал бот (/rword)
 
     def __post_init__(self) -> None:
         if not self.revealed:
@@ -66,7 +66,4 @@ class WordGame:
         return sum(self.revealed)
 
     def already_tried(self, user_id: int, word: str) -> bool:
-        return any(
-            g["user_id"] == user_id and g["word"] == word.upper()
-            for g in self.guesses
-        )
+        return any(g["user_id"] == user_id and g["word"] == word.upper() for g in self.guesses)

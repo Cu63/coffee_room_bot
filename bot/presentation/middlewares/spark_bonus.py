@@ -64,7 +64,10 @@ class SparkBonusMiddleware(BaseMiddleware):
                 new_value = await score_service.award_spark(anchor_id, chat_id, cfg.reward)
                 logger.debug(
                     "spark: user %d in chat %d awarded %d, new score %d",
-                    anchor_id, chat_id, cfg.reward, new_value,
+                    anchor_id,
+                    chat_id,
+                    cfg.reward,
+                    new_value,
                 )
 
                 # Начисляем XP зачинщику
@@ -74,5 +77,9 @@ class SparkBonusMiddleware(BaseMiddleware):
                     result = await xp_service.add_xp(anchor_id, chat_id, xp_cfg.rewards.spark)
                     logger.debug(
                         "spark xp: user %d in chat %d +%d xp (total %d, level %d)",
-                        anchor_id, chat_id, xp_cfg.rewards.spark, result.new_xp, result.new_level,
+                        anchor_id,
+                        chat_id,
+                        xp_cfg.rewards.spark,
+                        result.new_xp,
+                        result.new_level,
                     )

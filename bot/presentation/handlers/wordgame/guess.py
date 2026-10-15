@@ -37,6 +37,7 @@ router = Router(name="wordgame_guess")
 
 # ── Reply на игровое сообщение бота = попытка угадать ───────────────────────
 
+
 @router.message(
     F.reply_to_message.as_("replied"),
     F.reply_to_message.from_user.is_bot.is_(True),
@@ -79,9 +80,7 @@ async def msg_reply_guess(
     wg = config.wordgame
 
     if not is_valid_word(guess, wg.min_word_length, wg.max_word_length):
-        err = await message.reply(
-            f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}."
-        )
+        err = await message.reply(f"❌ Только буквы, длина {wg.min_word_length}–{wg.max_word_length}.")
         schedule_delete(bot, err, message, delay=30)
         return
 
@@ -93,11 +92,13 @@ async def msg_reply_guess(
         schedule_delete(bot, err, message, delay=30)
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     if game.already_tried(user_id, guess):
         err = await message.reply(
@@ -142,11 +143,7 @@ async def msg_reply_guess(
         # Спец-правило для loss_username в /rword: победа без приза + тихий мут на сутки.
         rwg = config.rwordgame
         winner_username = (message.from_user.username or "").lower()
-        is_penalty_winner = (
-            game.is_random
-            and bool(rwg.loss_username)
-            and winner_username == rwg.loss_username.lower()
-        )
+        is_penalty_winner = game.is_random and bool(rwg.loss_username) and winner_username == rwg.loss_username.lower()
         if is_penalty_winner:
             # Приз не начисляем; возвращаем ставку боту (её списали при создании игры)
             if game.bet > 0:
@@ -211,10 +208,7 @@ async def msg_reply_guess(
 
         await store.wg_game_save_raw(game.game_id, game_to_raw(game))
 
-        hint_parts = [
-            f"❌ {user_mention}: «{guess}» — не то "
-            f"({matched_count}/{len(game.word)} на месте)"
-        ]
+        hint_parts = [f"❌ {user_mention}: «{guess}» — не то ({matched_count}/{len(game.word)} на месте)"]
 
         if game.bet > 0 and cost > 0 and had_revealed:
             if game.is_random:

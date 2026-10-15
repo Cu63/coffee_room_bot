@@ -60,7 +60,10 @@ async def cmd_renew(
 
     # Списываем баллы
     result = await score_service.spend_score(
-        actor_id=user_id, target_id=user_id, chat_id=chat_id, cost=rc.cost,
+        actor_id=user_id,
+        target_id=user_id,
+        chat_id=chat_id,
+        cost=rc.cost,
         bot_id=message.bot.id,
     )
     if not result.success:

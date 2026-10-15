@@ -49,9 +49,7 @@ async def cmd_unsound(
     if not args:
         await reply_and_delete(
             message,
-            formatter._t["unsound_usage"].format(
-                cost=cfg.cost_per_minute, score_word=p.pluralize(cfg.cost_per_minute)
-            ),
+            formatter._t["unsound_usage"].format(cost=cfg.cost_per_minute, score_word=p.pluralize(cfg.cost_per_minute)),
             parse_mode=ParseMode.HTML,
         )
         return
@@ -67,9 +65,7 @@ async def cmd_unsound(
 
     minutes = seconds // 60
     if minutes < cfg.min_minutes or minutes > cfg.max_minutes:
-        await reply_and_delete(
-            message, formatter._t["unsound_range"].format(min=cfg.min_minutes, max=cfg.max_minutes)
-        )
+        await reply_and_delete(message, formatter._t["unsound_range"].format(min=cfg.min_minutes, max=cfg.max_minutes))
         return
 
     # Уже действует — не продлеваем и не списываем повторно
@@ -77,9 +73,7 @@ async def cmd_unsound(
     if active_until is not None:
         await reply_and_delete(
             message,
-            formatter._t["unsound_active"].format(
-                remaining=format_duration(int(active_until - time.time()))
-            ),
+            formatter._t["unsound_active"].format(remaining=format_duration(int(active_until - time.time()))),
         )
         return
 

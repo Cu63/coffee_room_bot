@@ -105,9 +105,7 @@ async def cmd_topiq(
         name = user_link(user.username, user.full_name, user.id) if user else str(entry.user_id)
         lines.append(f"{rank}. {name} — <b>{entry.iq}</b> IQ")
 
-    await reply_and_delete(
-        message, "\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
-    )
+    await reply_and_delete(message, "\n".join(lines), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
 
 
 @router.message(Command("buyiq"))

@@ -7,7 +7,6 @@ import time
 
 
 class WordgameStoreMixin:
-
     _WG_PENDING = "wg:pending:"
     _WG_AWAITING = "wg:awaiting:"
     _WG_GAME = "wg:game:"
@@ -18,11 +17,18 @@ class WordgameStoreMixin:
 
     async def wg_pending_create(self, user_id: int, chat_id: int, bet: int, duration_seconds: int) -> str:
         import random as _r
+
         game_id = str(_r.randint(10000, 99999))
-        data = json.dumps({
-            "game_id": game_id, "user_id": user_id, "chat_id": chat_id,
-            "bet": bet, "duration_seconds": duration_seconds, "lobby_msg_id": 0,
-        })
+        data = json.dumps(
+            {
+                "game_id": game_id,
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "bet": bet,
+                "duration_seconds": duration_seconds,
+                "lobby_msg_id": 0,
+            }
+        )
         await self._r.set(f"{self._WG_PENDING}{game_id}", data, ex=self._WG_TTL)
         return game_id
 
@@ -86,12 +92,17 @@ class WordgameStoreMixin:
     async def wg_game_create(self, game) -> None:
         key = f"{self._WG_GAME}{game.game_id}"
         data = {
-            "game_id": game.game_id, "chat_id": game.chat_id,
-            "creator_id": game.creator_id, "word": game.word,
-            "bet": game.bet, "ends_at": game.ends_at,
-            "revealed": game.revealed, "guesses": game.guesses,
+            "game_id": game.game_id,
+            "chat_id": game.chat_id,
+            "creator_id": game.creator_id,
+            "word": game.word,
+            "bet": game.bet,
+            "ends_at": game.ends_at,
+            "revealed": game.revealed,
+            "guesses": game.guesses,
             "message_id": game.message_id,
-            "finished": game.finished, "winner_id": game.winner_id,
+            "finished": game.finished,
+            "winner_id": game.winner_id,
             "is_random": game.is_random,
         }
         ttl = int(game.ends_at - time.time()) + 120

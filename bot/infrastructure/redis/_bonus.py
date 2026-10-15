@@ -15,7 +15,6 @@ _CHAIN_COOLDOWN = "chain:cd:"
 
 
 class BonusStoreMixin:
-
     # ── Burst ──────────────────────────────────────────────
 
     async def burst_cooldown_active(self, user_id: int, chat_id: int) -> bool:
@@ -86,7 +85,11 @@ class BonusStoreMixin:
         return bool(await self._r.exists(f"{_CHAIN_COOLDOWN}{pair}"))
 
     async def chain_add_reply(
-        self, chat_id: int, replier_id: int, author_id: int, window_seconds: int,
+        self,
+        chat_id: int,
+        replier_id: int,
+        author_id: int,
+        window_seconds: int,
     ) -> int | None:
         pair = self._chain_pair(chat_id, replier_id, author_id)
         last_key = f"{_CHAIN_LAST}{pair}"
@@ -102,7 +105,11 @@ class BonusStoreMixin:
         return results[1]
 
     async def chain_award_cleanup(
-        self, chat_id: int, user_a: int, user_b: int, cooldown_seconds: int,
+        self,
+        chat_id: int,
+        user_a: int,
+        user_b: int,
+        cooldown_seconds: int,
     ) -> None:
         pair = self._chain_pair(chat_id, user_a, user_b)
         pipe = self._r.pipeline()

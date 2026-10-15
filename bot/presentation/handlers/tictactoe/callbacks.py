@@ -138,10 +138,14 @@ async def cb_ttt_accept(
 
     # Определяем имена
     x_display = user_link(
-        data["player_x_username"] or None, data["player_x_name"], data["player_x"],
+        data["player_x_username"] or None,
+        data["player_x_name"],
+        data["player_x"],
     )
     o_display = user_link(
-        data["player_o_username"] or None, data["player_o_name"], data["player_o"],
+        data["player_o_username"] or None,
+        data["player_o_name"],
+        data["player_o"],
     )
 
     turn_player = x_display
@@ -280,10 +284,14 @@ async def cb_ttt_move(
 
         p = pluralizer
         x_display = user_link(
-            data["player_x_username"] or None, data["player_x_name"], data["player_x"],
+            data["player_x_username"] or None,
+            data["player_x_name"],
+            data["player_x"],
         )
         o_display = user_link(
-            data["player_o_username"] or None, data["player_o_name"], data["player_o"],
+            data["player_o_username"] or None,
+            data["player_o_name"],
+            data["player_o"],
         )
         bet = data["bet"]
         sw_bet = p.pluralize(bet)

@@ -38,6 +38,7 @@ async def main() -> None:
     # ── Redis ────────────────────────────────────────────────────
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)
     from bot.presentation import utils as presentation_utils
+
     presentation_utils.init_redis(redis)
 
     container = make_async_container(
@@ -87,6 +88,7 @@ async def main() -> None:
 
     # ── Стартап-лог ченджлога ────────────────────────────────────
     from bot.infrastructure.redis_store import RedisStore as _RS
+
     _tmp_store = _RS(redis)
     try:
         all_logs = await _tmp_store.changelog_scan_all()
@@ -95,8 +97,11 @@ async def main() -> None:
             title = latest.get("text", "").split("\n", 1)[0]
             date = latest.get("date", "?")
             logger.info(
-                "changelog [tracker %d]: %d записей. Последнее: \"%s\" (%s)",
-                tracker_chat_id, len(entries), title, date,
+                'changelog [tracker %d]: %d записей. Последнее: "%s" (%s)',
+                tracker_chat_id,
+                len(entries),
+                title,
+                date,
             )
     except Exception:
         logger.warning("changelog: не удалось прочитать при старте")

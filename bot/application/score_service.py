@@ -386,7 +386,11 @@ class ScoreService:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["burst"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["burst"],
         )
         return new_value
 
@@ -394,7 +398,11 @@ class ScoreService:
         """Тихое начисление за разжигание дискуссии."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["spark"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["spark"],
         )
         return new_value
 
@@ -402,7 +410,11 @@ class ScoreService:
         """Тихое начисление за цепочку реплаев."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["chain"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["chain"],
         )
         return new_value
 
@@ -410,7 +422,11 @@ class ScoreService:
         """Начисление бонуса лидеру дня."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward)
         await self._save_special_event(
-            user_id, user_id, chat_id, reward, SPECIAL_EMOJI["daily_leader"],
+            user_id,
+            user_id,
+            chat_id,
+            reward,
+            SPECIAL_EMOJI["daily_leader"],
         )
         return new_value
 

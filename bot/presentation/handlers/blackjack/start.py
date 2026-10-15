@@ -122,9 +122,7 @@ async def cmd_blackjack(
 
     # Создаём лобби
     game_id = _make_game_id()
-    display = user_link(
-        message.from_user.username, message.from_user.full_name or "", user_id
-    )
+    display = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
     sw_bet = p.pluralize(bet)
 
     data = {

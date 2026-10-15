@@ -255,9 +255,7 @@ async def cb_bj_hit(
         if user_id == data[f"{other}_id"]:
             await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
         else:
-            await safe_callback_answer(
-                cb, "Ты не участник этой игры.", show_alert=True
-            )
+            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
         return
 
     p = pluralizer
@@ -281,9 +279,7 @@ async def cb_bj_hit(
         other = "p2" if turn == "p1" else "p1"
         if data[f"{other}_done"]:
             # Оба закончили — вскрытие и результат
-            text = await _resolve_game(
-                data, store, score_repo, stats_repo, p, chat_id
-            )
+            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
             try:
                 await cb.message.edit_text(
                     text,
@@ -323,9 +319,7 @@ async def cb_bj_hit(
         other = "p2" if turn == "p1" else "p1"
         if data[f"{other}_done"]:
             # Оба закончили — результат
-            text = await _resolve_game(
-                data, store, score_repo, stats_repo, p, chat_id
-            )
+            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
             try:
                 await cb.message.edit_text(
                     text,
@@ -414,9 +408,7 @@ async def cb_bj_stand(
         if user_id == data[f"{other}_id"]:
             await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
         else:
-            await safe_callback_answer(
-                cb, "Ты не участник этой игры.", show_alert=True
-            )
+            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
         return
 
     p = pluralizer

@@ -54,11 +54,13 @@ from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete
 logger = logging.getLogger(__name__)
 router = Router(name="lot")
 
+
 def _make_lot_id() -> str:
     return f"{int(time.time() * 1000)}{random.randint(100, 999)}"
 
 
 # ── Рендер текста лота ───────────────────────────────────────────────────
+
 
 def _lot_text(data: dict, p: ScorePluralizer) -> str:
     ends_at = data["expires_at"]
@@ -89,17 +91,21 @@ def _lot_text(data: dict, p: ScorePluralizer) -> str:
 
 # ── Клавиатура с шагами ставок ────────────────────────────────────────────
 
+
 def _bid_kb(lot_id: str, steps: list[int], p: ScorePluralizer) -> InlineKeyboardMarkup:
     row = []
     for step in steps:
-        row.append(InlineKeyboardButton(
-            text=f"+{step}",
-            callback_data=f"lot:bid:{lot_id}:{step}",
-        ))
+        row.append(
+            InlineKeyboardButton(
+                text=f"+{step}",
+                callback_data=f"lot:bid:{lot_id}:{step}",
+            )
+        )
     return InlineKeyboardMarkup(inline_keyboard=[row])
 
 
 # ── /lot <время> <цена> <описание…> ──────────────────────────────────────
+
 
 @router.message(Command("lot"))
 @inject
@@ -140,7 +146,11 @@ async def cmd_lot(
     # Парсим длительность
     duration_sec = parse_duration(args[0])
     if duration_sec is None:
-        await reply_and_delete(message, "❌ Неверный формат времени. Используй <code>Xm</code> или <code>Xh</code>.", parse_mode=ParseMode.HTML)
+        await reply_and_delete(
+            message,
+            "❌ Неверный формат времени. Используй <code>Xm</code> или <code>Xh</code>.",
+            parse_mode=ParseMode.HTML,
+        )
         return
     if not (cfg.min_duration_sec <= duration_sec <= cfg.max_duration_sec):
         await reply_and_delete(
@@ -230,6 +240,7 @@ async def cmd_lot(
 
 # ── Callback: ставка ─────────────────────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("lot:bid:"))
 @inject
 async def cb_lot_bid(
@@ -285,11 +296,13 @@ async def cb_lot_bid(
         prev_price = data["current_price"]
 
         # Upsert участника
-        await user_repo.upsert(User(
-            id=user_id,
-            username=cb.from_user.username,
-            full_name=cb.from_user.full_name,
-        ))
+        await user_repo.upsert(
+            User(
+                id=user_id,
+                username=cb.from_user.username,
+                full_name=cb.from_user.full_name,
+            )
+        )
 
         # Проверяем баланс с учётом возврата своей же ставки:
         # если пользователь уже лидер, его баланс занижен на prev_price —
@@ -368,6 +381,7 @@ async def cb_lot_bid(
 
 # ── Публичная функция завершения (используется loop'ом) ───────────────────
 
+
 async def finish_lot(
     bot,
     chat_id: int,
@@ -411,9 +425,7 @@ async def finish_lot(
         logger.info("lot: лот %s в чате %d выиграл user %d за %d", lot_id, chat_id, winner_id, prize)
     else:
         result_text = (
-            f"🔨 <b>Аукцион завершён</b>\n\n"
-            f"📦 <b>{description}</b>\n\n"
-            f"<i>Никто не сделал ставку. Лот снят.</i>"
+            f"🔨 <b>Аукцион завершён</b>\n\n📦 <b>{description}</b>\n\n<i>Никто не сделал ставку. Лот снят.</i>"
         )
         logger.info("lot: лот %s в чате %d завершён без ставок", lot_id, chat_id)
 

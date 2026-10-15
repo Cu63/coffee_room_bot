@@ -113,13 +113,12 @@ class DailyLeaderboardService:
                 score_word = self._pluralizer.pluralize(bonus)
                 line += f" (+{bonus} {score_word})"
                 try:
-                    await self._score_service.award_daily_leader(
-                        leader.user_id, chat_id, bonus
-                    )
+                    await self._score_service.award_daily_leader(leader.user_id, chat_id, bonus)
                 except Exception:
                     logger.exception(
                         "daily_leaderboard: failed to award user %d in chat %d",
-                        leader.user_id, chat_id,
+                        leader.user_id,
+                        chat_id,
                     )
             lines.append(line)
 

@@ -51,9 +51,7 @@ async def cmd_selfmute(
     if not command.args:
         await reply_and_delete(
             message,
-            formatter._t["selfmute_usage"].format(
-                min=mute_cfg.selfmute_min_minutes, max=mute_cfg.selfmute_max_minutes
-            ),
+            formatter._t["selfmute_usage"].format(min=mute_cfg.selfmute_min_minutes, max=mute_cfg.selfmute_max_minutes),
         )
         return
     seconds = parse_duration(command.args)
@@ -68,9 +66,7 @@ async def cmd_selfmute(
     bot = message.bot
     chat_id = message.chat.id
     user_id = message.from_user.id
-    until, selfmute_was_stacked = await mute_service.compute_stacked_until(
-        user_id, chat_id, seconds
-    )
+    until, selfmute_was_stacked = await mute_service.compute_stacked_until(user_id, chat_id, seconds)
     was_admin = False
     admin_perms: dict | None = None
     try:
@@ -99,9 +95,7 @@ async def cmd_selfmute(
         if isinstance(member, ChatMemberAdministrator):
             was_admin = True
             admin_perms = _extract_admin_permissions(member)
-            await bot.promote_chat_member(
-                chat_id=chat_id, user_id=user_id, **{f: False for f in _ADMIN_PERM_FIELDS}
-            )
+            await bot.promote_chat_member(chat_id=chat_id, user_id=user_id, **{f: False for f in _ADMIN_PERM_FIELDS})
     except TelegramBadRequest as e:
         logger.warning("selfmute pre-check failed for user %d: %s", user_id, e)
         await reply_and_delete(message, formatter._t["selfmute_failed"])

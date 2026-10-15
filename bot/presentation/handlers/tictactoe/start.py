@@ -105,7 +105,10 @@ async def cmd_ttt(
         await reply_and_delete(
             message,
             formatter._t["ttt_not_enough"].format(
-                cost=bet, score_word=sw, balance=score.value, score_word_balance=sw_bal,
+                cost=bet,
+                score_word=sw,
+                balance=score.value,
+                score_word_balance=sw_bal,
             ),
         )
         return
@@ -124,7 +127,10 @@ async def cmd_ttt(
         await reply_and_delete(
             message,
             formatter._t["ttt_not_enough"].format(
-                cost=bet, score_word=sw, balance=result.current_balance, score_word_balance=sw_bal,
+                cost=bet,
+                score_word=sw,
+                balance=result.current_balance,
+                score_word_balance=sw_bal,
             ),
         )
         return
@@ -157,7 +163,9 @@ async def cmd_ttt(
     await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL)
 
     lobby_text = formatter._t["ttt_lobby"].format(
-        user=display, bet=bet, score_word=sw_bet,
+        user=display,
+        bet=bet,
+        score_word=sw_bet,
     )
     sent = await message.answer(
         lobby_text,

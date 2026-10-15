@@ -55,9 +55,7 @@ async def on_sixtyseven(
         # Первый «67» за день — награда только в день награды (6-е число МСК)
         if now.day == cfg.reward_day:
             await score_service.add_score(user_id, chat_id, cfg.reward, admin_id=bot.id)
-            link = user_link(
-                message.from_user.username, message.from_user.full_name or "", user_id
-            )
+            link = user_link(message.from_user.username, message.from_user.full_name or "", user_id)
             await message.reply(
                 formatter._t["sixtyseven_reward"].format(user=link, amount=cfg.reward),
                 parse_mode=ParseMode.HTML,

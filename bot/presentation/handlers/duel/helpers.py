@@ -13,13 +13,14 @@ from aiogram.types import (
 
 # ── Константы ───────────────────────────────────────────────────────────
 _DUEL_PREFIX = "duel:invite:"
-_DUEL_INVITE_TTL = 150   # секунд — с запасом, cleanup-loop проверяет expires_at=120
-_DUEL_TIMEOUT = 120      # секунд — реальный таймаут для игрока
+_DUEL_INVITE_TTL = 150  # секунд — с запасом, cleanup-loop проверяет expires_at=120
+_DUEL_TIMEOUT = 120  # секунд — реальный таймаут для игрока
 
 _SUPPORTED_GAMES = ("ttt", "bj")
 
 
 # ── Ключ приглашения ────────────────────────────────────────────────────
+
 
 def _duel_key(chat_id: int, invite_id: str) -> str:
     return f"{_DUEL_PREFIX}{chat_id}:{invite_id}"
@@ -30,6 +31,7 @@ def _make_invite_id() -> str:
 
 
 # ── Клавиатура приглашения ───────────────────────────────────────────────
+
 
 def _invite_kb(invite_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(

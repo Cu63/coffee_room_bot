@@ -80,9 +80,7 @@ def _play_kb(game_id: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="\U0001f0cf Ещё", callback_data=f"bj:hit:{game_id}"),
-                InlineKeyboardButton(
-                    text="\U0001f6d1 Хватит", callback_data=f"bj:stand:{game_id}"
-                ),
+                InlineKeyboardButton(text="\U0001f6d1 Хватит", callback_data=f"bj:stand:{game_id}"),
             ]
         ]
     )
@@ -100,7 +98,11 @@ def _player_display(data: dict, prefix: str) -> str:
 
 
 def _render_hand_line(
-    name: str, hand: list[dict], *, done: bool = False, busted: bool = False,
+    name: str,
+    hand: list[dict],
+    *,
+    done: bool = False,
+    busted: bool = False,
     hidden: bool = False,
 ) -> str:
     if hidden:
@@ -118,7 +120,10 @@ def _render_hand_line(
 
 
 def _render_table(
-    data: dict, *, result_line: str = "", reveal: bool = False,
+    data: dict,
+    *,
+    result_line: str = "",
+    reveal: bool = False,
 ) -> str:
     p1_display = _player_display(data, "p1")
     p2_display = _player_display(data, "p2")
@@ -158,12 +163,7 @@ def _turn_text(data: dict, p: ScorePluralizer) -> str:
     turn_display = _player_display(data, turn)
 
     table = _render_table(data)
-    return (
-        f"\U0001f0cf <b>Блекджек — дуэль</b>\n"
-        f"Ставка: <b>{bet} {sw}</b>\n\n"
-        f"{table}\n\n"
-        f"Ходит: {turn_display}"
-    )
+    return f"\U0001f0cf <b>Блекджек — дуэль</b>\nСтавка: <b>{bet} {sw}</b>\n\n{table}\n\nХодит: {turn_display}"
 
 
 # ── Логика завершения ──────────────────────────────────────────────────
@@ -246,7 +246,10 @@ async def _resolve_game(
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: winner %d awarded %d, new balance %d",
-            game_id, winner_id, total_pot, new_balance,
+            game_id,
+            winner_id,
+            total_pot,
+            new_balance,
         )
         sw = p.pluralize(total_pot)
         result_line = f"\U0001f3c6 {winner_display} выигрывает <b>{total_pot} {sw}</b>!"
@@ -256,11 +259,10 @@ async def _resolve_game(
         await stats_repo.add_win(winner_id, chat_id, "blackjack")
         logger.info(
             "BJ game %s: natural BJ winner %d awarded %d, new balance %d",
-            game_id, winner_id, total_pot, new_balance,
+            game_id,
+            winner_id,
+            total_pot,
+            new_balance,
         )
 
-    return (
-        f"\U0001f0cf <b>Блекджек — результат</b>\n\n"
-        f"{table}\n\n"
-        f"{result_line}"
-    )
+    return f"\U0001f0cf <b>Блекджек — результат</b>\n\n{table}\n\n{result_line}"

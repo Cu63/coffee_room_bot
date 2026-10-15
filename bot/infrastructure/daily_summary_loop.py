@@ -1,4 +1,5 @@
 """Фоновая задача: ежедневная сводка чата через OpenAI."""
+
 from __future__ import annotations
 
 import asyncio
@@ -55,6 +56,7 @@ async def _send_summary(bot: Bot, chat_id: int, text: str) -> None:
         except TelegramBadRequest:
             # HTML невалиден — шлём plain text
             import re
+
             plain = re.sub(r"<[^>]+>", "", part)
             await bot.send_message(chat_id, plain)
 
@@ -90,16 +92,18 @@ async def _run_once(bot: Bot, container) -> None:
         try:
             async with container() as scope:
                 message_repo = await scope.get(IMessageRepository)
-                messages = await message_repo.get_recent_with_text(
-                    chat_id, cfg.max_messages, since=start_of_day
-                )
+                messages = await message_repo.get_recent_with_text(chat_id, cfg.max_messages, since=start_of_day)
 
             if not messages:
                 logger.debug("daily_summary: chat %d has no messages, skipping", chat_id)
                 continue
 
             text = await generate_daily_summary(
-                client, formatter, cfg, messages, today_str,
+                client,
+                formatter,
+                cfg,
+                messages,
+                today_str,
                 admin_prefix=config.admin.prefix,
             )
             logger.info("daily_summary: chat=%d messages=%d done", chat_id, len(messages))

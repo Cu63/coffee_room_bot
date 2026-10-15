@@ -23,6 +23,7 @@ router = Router(name="wordgame_play")
 
 # ── /start в ЛС ─────────────────────────────────────────────────────────────
 
+
 @router.message(Command("start"), F.chat.type == "private")
 @inject
 async def cmd_start_private(
@@ -32,18 +33,13 @@ async def cmd_start_private(
     user_id = message.from_user.id
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
-        await message.answer(
-            "Привет! Чтобы начать игру, используй /word в групповом чате."
-        )
+        await message.answer("Привет! Чтобы начать игру, используй /word в групповом чате.")
         return
 
     pending = await store.wg_pending_get(game_id)
     if pending is None:
         await store.wg_awaiting_delete(user_id)
-        await message.answer(
-            "❌ Игра устарела (прошло больше 10 мин).\n"
-            "Начни новую командой /word в группе."
-        )
+        await message.answer("❌ Игра устарела (прошло больше 10 мин).\nНачни новую командой /word в группе.")
         return
 
     await message.answer(
@@ -55,6 +51,7 @@ async def cmd_start_private(
 
 
 # ── Приём слова в ЛС ─────────────────────────────────────────────────────────
+
 
 @router.message(F.chat.type == "private", F.text, ~F.text.startswith("/"), NoAnonState())
 @inject
@@ -68,10 +65,7 @@ async def msg_private_word(
     user_id = message.from_user.id
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
-        await message.answer(
-            "Нет активной игры, ожидающей слово.\n"
-            "Начни командой /word в групповом чате."
-        )
+        await message.answer("Нет активной игры, ожидающей слово.\nНачни командой /word в групповом чате.")
         return
 
     word = normalize_word(message.text or "")
@@ -79,17 +73,14 @@ async def msg_private_word(
 
     if not is_valid_word(word, wg.min_word_length, wg.max_word_length):
         await message.answer(
-            f"❌ Неверное слово. Только буквы, длина {wg.min_word_length}–{wg.max_word_length}.\n"
-            "Попробуй ещё раз:"
+            f"❌ Неверное слово. Только буквы, длина {wg.min_word_length}–{wg.max_word_length}.\nПопробуй ещё раз:"
         )
         return
 
     pending = await store.wg_pending_get(game_id)
     if pending is None:
         await store.wg_awaiting_delete(user_id)
-        await message.answer(
-            "❌ Игра устарела. Начни новую командой /word в группе."
-        )
+        await message.answer("❌ Игра устарела. Начни новую командой /word в группе.")
         return
 
     await store.wg_pending_delete(game_id)
@@ -123,14 +114,11 @@ async def msg_private_word(
                 parse_mode=ParseMode.HTML,
                 reply_markup=None,
             )
-            await bot.pin_chat_message(chat_id=chat_id,
-                                       message_id = lobby_msg_id,
-                                       disable_notification=True)
+            await bot.pin_chat_message(chat_id=chat_id, message_id=lobby_msg_id, disable_notification=True)
         except TelegramBadRequest:
             pass
 
     await message.answer(
-        f"✅ Слово принято! Игра запущена.\n"
-        f"Игрокам нужно угадать слово из <b>{len(word)}</b> букв.",
+        f"✅ Слово принято! Игра запущена.\nИгрокам нужно угадать слово из <b>{len(word)}</b> букв.",
         parse_mode=ParseMode.HTML,
     )

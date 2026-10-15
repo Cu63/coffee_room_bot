@@ -7,7 +7,6 @@ import time
 
 
 class LotStoreMixin:
-
     _LOT_GAME = "lot:game:"
     _LOT_ACTIVE = "lot:active:"
     _LOT_LOCK = "lot:lock:"
@@ -28,7 +27,8 @@ class LotStoreMixin:
     async def lot_game_save(self, chat_id: int, lot_id: str, data: dict, ttl: int) -> None:
         await self._r.set(
             f"{self._LOT_GAME}{chat_id}:{lot_id}",
-            json.dumps(data, ensure_ascii=False), ex=ttl,
+            json.dumps(data, ensure_ascii=False),
+            ex=ttl,
         )
 
     async def lot_game_delete(self, chat_id: int, lot_id: str) -> bool:
@@ -38,7 +38,8 @@ class LotStoreMixin:
         pipe = self._r.pipeline()
         pipe.set(
             f"{self._LOT_GAME}{chat_id}:{lot_id}",
-            json.dumps(data, ensure_ascii=False), ex=ttl,
+            json.dumps(data, ensure_ascii=False),
+            ex=ttl,
         )
         pipe.set(f"{self._LOT_ACTIVE}{chat_id}", lot_id, ex=ttl)
         await pipe.execute()

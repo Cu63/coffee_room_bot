@@ -62,7 +62,9 @@ async def cmd_amute(
             return
     parsed = await _resolve_mute_args(command.args, message, user_repo)
     if parsed is None:
-        await reply_and_delete(message, formatter._t["amute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes))
+        await reply_and_delete(
+            message, formatter._t["amute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
+        )
         return
     target, minutes = parsed
     if target is None:
@@ -71,9 +73,7 @@ async def cmd_amute(
     if target.id == message.from_user.id:
         await reply_and_delete(message, formatter._t["mute_self"])
         return
-    until, amute_was_stacked = await mute_service.compute_stacked_until(
-        target.id, chat_id, minutes * 60
-    )
+    until, amute_was_stacked = await mute_service.compute_stacked_until(target.id, chat_id, minutes * 60)
     ok = await apply_mute(
         bot,
         mute_service,

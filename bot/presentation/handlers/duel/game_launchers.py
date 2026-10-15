@@ -47,6 +47,7 @@ from bot.presentation.utils import NO_PREVIEW
 
 # ── Запуск TTT из дуэли ──────────────────────────────────────────────────
 
+
 async def _start_ttt_from_duel(
     cb: CallbackQuery,
     invite: dict,
@@ -121,6 +122,7 @@ async def _start_ttt_from_duel(
 
 # ── Запуск BJ из дуэли ───────────────────────────────────────────────────
 
+
 async def _start_bj_from_duel(
     cb: CallbackQuery,
     invite: dict,
@@ -189,17 +191,21 @@ async def _start_bj_from_duel(
         await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
 
         from bot.presentation.handlers.blackjack import _resolve_game
+
         # Получаем stats_repo из dishka через cb (нет прямого доступа, используем заглушку)
         # Поскольку natural BJ — редкий случай, логируем и продолжаем без stats
         try:
             # stats недоступны напрямую здесь, передаём фиктивный объект-заглушку
             class _NoStats:
-                async def add_win(self, *a, **kw): pass
+                async def add_win(self, *a, **kw):
+                    pass
+
             text = await _resolve_game(data, store, score_repo, _NoStats(), p, chat_id)
         except Exception:
             text = "🎰 Натуральный блекджек!"
         try:
             from bot.presentation.utils import schedule_delete
+
             await cb.message.edit_text(
                 text,
                 parse_mode=ParseMode.HTML,

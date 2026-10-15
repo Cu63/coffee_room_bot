@@ -40,6 +40,7 @@ router = Router(name="duel_start")
 
 # ── /duel @user <game> <bet> ─────────────────────────────────────────────
 
+
 @router.message(Command("duel"))
 @inject
 async def cmd_duel(

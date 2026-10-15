@@ -7,24 +7,34 @@ import time
 
 
 class MuteRouletteStoreMixin:
-
     _MUTE_ROULETTE = "mutegiveaway:"
 
     def _mg_key(self, chat_id: int, roulette_id: str) -> str:
         return f"{self._MUTE_ROULETTE}{chat_id}:{roulette_id}"
 
     async def mute_roulette_create(
-        self, chat_id: int, creator_id: int, mute_minutes: int,
-        losers_count: int, ends_at: float,
+        self,
+        chat_id: int,
+        creator_id: int,
+        mute_minutes: int,
+        losers_count: int,
+        ends_at: float,
     ) -> str:
         import random as _random
+
         roulette_id = str(_random.randint(10000, 99999))
         key = self._mg_key(chat_id, roulette_id)
-        data = json.dumps({
-            "roulette_id": roulette_id, "creator_id": creator_id,
-            "mute_minutes": mute_minutes, "losers_count": losers_count,
-            "ends_at": ends_at, "participants": [], "message_id": 0,
-        })
+        data = json.dumps(
+            {
+                "roulette_id": roulette_id,
+                "creator_id": creator_id,
+                "mute_minutes": mute_minutes,
+                "losers_count": losers_count,
+                "ends_at": ends_at,
+                "participants": [],
+                "message_id": 0,
+            }
+        )
         ttl = int(ends_at - time.time()) + 300
         await self._r.set(key, data, ex=max(ttl, 60))
         return roulette_id

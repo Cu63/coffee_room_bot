@@ -23,7 +23,9 @@ async def unmute_loop(container, bot: Bot, interval_seconds: int) -> None:
                 for entry in expired:
                     logger.info(
                         "Unmuting user %d in chat %d (was_admin=%s)",
-                        entry.user_id, entry.chat_id, entry.was_admin,
+                        entry.user_id,
+                        entry.chat_id,
+                        entry.was_admin,
                     )
                     await _unmute_user(bot, mute_service, entry)
         except Exception:

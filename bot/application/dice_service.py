@@ -19,7 +19,7 @@ class CreateResult:
 @dataclass
 class JoinResult:
     success: bool
-    already_joined: bool = False        # уже в этой игре
+    already_joined: bool = False  # уже в этой игре
     already_in_other_game: bool = False  # уже в другой активной игре чата
     not_enough: bool = False
     game_not_found: bool = False
@@ -31,8 +31,8 @@ class JoinResult:
 class FinishResult:
     game: DiceGame
     participants: list[int]
-    dice_results: dict[int, int]         # user_id -> dice_value
-    winners: list[int]                   # user_ids с максимальным значением
+    dice_results: dict[int, int]  # user_id -> dice_value
+    winners: list[int]  # user_ids с максимальным значением
     prize_per_winner: int
     total_pot: int
 
@@ -109,7 +109,9 @@ class DiceService:
     async def count_participants(self, game_id: int) -> int:
         return await self._dice_repo.count_participants(game_id)
 
-    async def finish(self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None) -> FinishResult | None:
+    async def finish(
+        self, game_id: int, dice_results: dict[int, int], *, bot_id: int | None = None
+    ) -> FinishResult | None:
         """Завершает игру с уже известными значениями костей. Распределяет призы."""
         game = await self._dice_repo.get(game_id)
         if game is None or game.status != DiceGameStatus.PENDING:

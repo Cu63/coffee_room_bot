@@ -41,24 +41,26 @@ async def cmd_save(
     if message.from_user is None or message.bot is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await reply_and_delete(message,formatter._t["admin_not_allowed"])
+        await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
     if target is None:
-        await reply_and_delete(message,formatter._t["save_usage"])
+        await reply_and_delete(message, formatter._t["save_usage"])
         return
     display = user_link(target.username, target.full_name, target.id)
     try:
         member = await message.bot.get_chat_member(message.chat.id, target.id)
     except Exception:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["save_not_admin"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
     if not isinstance(member, (ChatMemberAdministrator, ChatMemberOwner)):
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["save_not_admin"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -73,8 +75,8 @@ async def cmd_save(
     existing = await saved_perms_repo.get(target.id, message.chat.id)
     await saved_perms_repo.save(target.id, message.chat.id, perms)
     key = "save_overwritten" if existing else "save_success"
-    await reply_and_delete(message,
-        formatter._t[key].format(user=display), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
+    await reply_and_delete(
+        message, formatter._t[key].format(user=display), parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW
     )
 
 
@@ -91,16 +93,17 @@ async def cmd_restore(
     if message.from_user is None or message.bot is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await reply_and_delete(message,formatter._t["admin_not_allowed"])
+        await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
     if target is None:
-        await reply_and_delete(message,formatter._t["restore_usage"])
+        await reply_and_delete(message, formatter._t["restore_usage"])
         return
     display = user_link(target.username, target.full_name, target.id)
     perms = await saved_perms_repo.get(target.id, message.chat.id)
     if perms is None:
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["restore_not_found"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -114,9 +117,10 @@ async def cmd_restore(
             )
     except Exception:
         logger.exception("Failed to restore permissions for user %d", target.id)
-        await reply_and_delete(message,formatter._t["restore_failed"])
+        await reply_and_delete(message, formatter._t["restore_failed"])
         return
-    await reply_and_delete(message,
+    await reply_and_delete(
+        message,
         formatter._t["restore_success"].format(user=display),
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
@@ -136,35 +140,35 @@ async def cmd_op(
     if message.from_user is None or message.bot is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await reply_and_delete(message,formatter._t["admin_not_allowed"])
+        await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
     if target is None:
-        await reply_and_delete(message,formatter._t["op_usage"])
+        await reply_and_delete(message, formatter._t["op_usage"])
         return
     display = user_link(target.username, target.full_name, target.id)
     try:
         member = await message.bot.get_chat_member(message.chat.id, target.id)
     except Exception:
-        await reply_and_delete(message,formatter._t["op_failed"])
+        await reply_and_delete(message, formatter._t["op_failed"])
         return
     if isinstance(member, (ChatMemberOwner, ChatMemberAdministrator)):
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["op_already"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
     try:
-        await message.bot.promote_chat_member(
-            chat_id=message.chat.id, user_id=target.id, **MODERATOR_PERMS
-        )
+        await message.bot.promote_chat_member(chat_id=message.chat.id, user_id=target.id, **MODERATOR_PERMS)
     except Exception:
         logger.exception("Failed to op user %d", target.id)
-        await reply_and_delete(message,formatter._t["op_failed"])
+        await reply_and_delete(message, formatter._t["op_failed"])
         return
     await saved_perms_repo.save(target.id, message.chat.id, MODERATOR_PERMS)
-    await reply_and_delete(message,
+    await reply_and_delete(
+        message,
         formatter._t["op_success"].format(user=display),
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
@@ -183,27 +187,29 @@ async def cmd_deop(
     if message.from_user is None or message.bot is None:
         return
     if not is_admin(message.from_user.username, config.admin.users):
-        await reply_and_delete(message,formatter._t["admin_not_allowed"])
+        await reply_and_delete(message, formatter._t["admin_not_allowed"])
         return
     target = await _resolve_username(command.args, user_repo)
     if target is None:
-        await reply_and_delete(message,formatter._t["op_usage"])
+        await reply_and_delete(message, formatter._t["op_usage"])
         return
     display = user_link(target.username, target.full_name, target.id)
     try:
         member = await message.bot.get_chat_member(message.chat.id, target.id)
     except Exception:
-        await reply_and_delete(message,formatter._t["op_failed"])
+        await reply_and_delete(message, formatter._t["op_failed"])
         return
     if isinstance(member, ChatMemberOwner):
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["op_already"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
         return
     if not isinstance(member, ChatMemberAdministrator):
-        await reply_and_delete(message,
+        await reply_and_delete(
+            message,
             formatter._t["deop_not_admin"].format(user=display),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
@@ -214,9 +220,10 @@ async def cmd_deop(
         await message.bot.promote_chat_member(chat_id=message.chat.id, user_id=target.id, **demote_kw)
     except Exception:
         logger.exception("Failed to deop user %d", target.id)
-        await reply_and_delete(message,formatter._t["op_failed"])
+        await reply_and_delete(message, formatter._t["op_failed"])
         return
-    await reply_and_delete(message,
+    await reply_and_delete(
+        message,
         formatter._t["deop_success"].format(user=display),
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,

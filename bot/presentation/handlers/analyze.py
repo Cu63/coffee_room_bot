@@ -58,10 +58,7 @@ def _rate_limit_text(used: int, limit: int) -> str:
 
 
 def _depth_limit_text(requested_hours: float, max_hours: int) -> str:
-    return (
-        f"❌ Слишком большой диапазон анализа: <b>{requested_hours:.0f} ч</b>.\n"
-        f"Максимум — <b>{max_hours} ч</b>."
-    )
+    return f"❌ Слишком большой диапазон анализа: <b>{requested_hours:.0f} ч</b>.\nМаксимум — <b>{max_hours} ч</b>."
 
 
 @router.message(Command("analyze"))
@@ -110,9 +107,7 @@ async def cmd_analyze(
                 unknown.append(f"@{uname}")
 
         if not resolved:
-            await message.reply(
-                f"Не найдено ни одного из указанных пользователей: {', '.join(unknown)}"
-            )
+            await message.reply(f"Не найдено ни одного из указанных пользователей: {', '.join(unknown)}")
             return
 
         user_ids = resolved

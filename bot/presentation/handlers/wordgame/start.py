@@ -32,6 +32,7 @@ router = Router(name="wordgame_start")
 
 # ── /word <ставка> <время> ───────────────────────────────────────────────
 
+
 @router.message(Command("word"))
 @inject
 async def cmd_wordgame(
@@ -85,8 +86,7 @@ async def cmd_wordgame(
     if not (wg.min_duration_seconds <= duration_secs <= wg.max_duration_seconds):
         await reply_and_delete(
             message,
-            f"❌ Время: от {wg.min_duration_seconds // 60}m "
-            f"до {wg.max_duration_seconds // 60}m.",
+            f"❌ Время: от {wg.min_duration_seconds // 60}m до {wg.max_duration_seconds // 60}m.",
         )
         return
 
@@ -110,11 +110,13 @@ async def cmd_wordgame(
         )
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     bot_me = await bot.get_me()
     game_id = await store.wg_pending_create(
@@ -128,10 +130,7 @@ async def cmd_wordgame(
 
     user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
     bet_str = pluralizer.pluralize(bet)
-    dur_str = (
-        f"{duration_secs // 60} мин" if duration_secs < 3600
-        else f"{duration_secs // 3600} ч"
-    )
+    dur_str = f"{duration_secs // 60} мин" if duration_secs < 3600 else f"{duration_secs // 3600} ч"
 
     dm_sent = False
     try:
@@ -163,6 +162,7 @@ async def cmd_wordgame(
 
 
 # ── /rword <ставка> <время> — угадайка с рандомным словом ───────────────────
+
 
 @router.message(Command("rword"))
 @inject
@@ -236,8 +236,7 @@ async def cmd_random_wordgame(
     if not (wg.min_duration_seconds <= duration_secs <= wg.max_duration_seconds):
         await reply_and_delete(
             message,
-            f"❌ Время: от {wg.min_duration_seconds // 60}m "
-            f"до {wg.max_duration_seconds // 60}m.",
+            f"❌ Время: от {wg.min_duration_seconds // 60}m до {wg.max_duration_seconds // 60}m.",
         )
         return
 
@@ -263,11 +262,13 @@ async def cmd_random_wordgame(
         )
         return
 
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     ends_at = time.time() + duration_secs
     game_id = str(random.randint(10000, 99999))

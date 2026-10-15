@@ -15,7 +15,6 @@ _SLOTS_ALL_DAILY = "slots:all:"
 
 
 class ModerationStoreMixin:
-
     _MUTE_DAILY = "mute:daily:"
     _MUTE_TARGET = "mute:target:"
     _RENEW_DAILY = "renew:daily:"
@@ -178,9 +177,7 @@ class ModerationStoreMixin:
     # и по username (для обычных @упоминаний — чтобы не ходить в базу
     # на каждое сообщение с собачкой).
 
-    async def unsound_set(
-        self, chat_id: int, user_id: int, username: str | None, until_ts: float
-    ) -> None:
+    async def unsound_set(self, chat_id: int, user_id: int, username: str | None, until_ts: float) -> None:
         ttl = max(int(until_ts - time.time()) + 10, 60)
         pipe = self._r.pipeline()
         pipe.set(f"{_UNSOUND}{chat_id}:{user_id}", str(until_ts), ex=ttl)

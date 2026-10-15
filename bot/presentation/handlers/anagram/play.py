@@ -82,10 +82,7 @@ async def msg_reply_guess(
     )
 
     # Проверяем повторную попытку с тем же словом
-    already_tried = any(
-        t["user_id"] == user_id and t["word"] == guess
-        for t in data["tries"]
-    )
+    already_tried = any(t["user_id"] == user_id and t["word"] == guess for t in data["tries"])
     if already_tried:
         err = await message.reply(
             f"🔄 {user_mention}: «<b>{guess}</b>» ты уже пробовал. Другое слово!",
@@ -95,11 +92,13 @@ async def msg_reply_guess(
         return
 
     # Upsert пользователя
-    await user_repo.upsert(User(
-        id=user_id,
-        username=message.from_user.username,
-        full_name=message.from_user.full_name,
-    ))
+    await user_repo.upsert(
+        User(
+            id=user_id,
+            username=message.from_user.username,
+            full_name=message.from_user.full_name,
+        )
+    )
 
     schedule_delete(message.bot, message, delay=30)
 
@@ -125,9 +124,7 @@ async def msg_reply_guess(
         )
 
         try:
-            await message.bot.unpin_chat_message(
-                chat_id=chat_id, message_id=data["message_id"]
-            )
+            await message.bot.unpin_chat_message(chat_id=chat_id, message_id=data["message_id"])
         except Exception:
             pass
         try:
@@ -161,8 +158,11 @@ async def msg_reply_guess(
         # Обновляем игровое сообщение
         sw_bet = p.pluralize(data["bet"])
         new_text = _game_text(
-            data["shuffled"], data["bet"],
-            len(data["tries"]), sw_bet, data["expires_at"],
+            data["shuffled"],
+            data["bet"],
+            len(data["tries"]),
+            sw_bet,
+            data["expires_at"],
         )
         try:
             await message.bot.edit_message_text(

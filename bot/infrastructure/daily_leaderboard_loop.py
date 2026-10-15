@@ -1,4 +1,5 @@
 """Фоновая задача: ежедневный лидерборд активности."""
+
 from __future__ import annotations
 
 import asyncio

@@ -37,6 +37,7 @@ router = Router(name="duel_callbacks")
 
 # ── Callback: Принять дуэль ──────────────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("duel:accept:"))
 @inject
 async def cb_duel_accept(
@@ -130,6 +131,7 @@ async def cb_duel_accept(
 
 # ── Callback: Отказаться от дуэли ───────────────────────────────────────
 
+
 @router.callback_query(F.data.startswith("duel:decline:"))
 @inject
 async def cb_duel_decline(
@@ -188,14 +190,14 @@ async def cb_duel_decline(
 
     try:
         await cb.message.edit_text(
-            f"❌ {decliner_display} отказался от дуэли с {challenger_display}.\n\n"
-            f"Ставка возвращена.",
+            f"❌ {decliner_display} отказался от дуэли с {challenger_display}.\n\nСтавка возвращена.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
             reply_markup=None,
         )
         if cb.message.bot:
             from bot.presentation.utils import schedule_delete
+
             schedule_delete(cb.message.bot, cb.message, delay=30)
     except Exception:
         pass

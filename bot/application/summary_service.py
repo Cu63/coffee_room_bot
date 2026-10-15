@@ -7,6 +7,7 @@
    список фактов-тезисов (простая задача даже для слабой модели);
 3) REDUCE — собрать все тезисы (их немного) и оформить финальное HTML-саммари.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,11 +25,41 @@ logger = logging.getLogger(__name__)
 _NO_ANSWER = "Нет ответа от модели."
 
 # Односложные реплики без смысла для сводки.
-_NOISE_WORDS: frozenset[str] = frozenset({
-    "+", "++", "+1", "-", "ок", "окей", "ok", "ага", "угу", "да", "нет", "не",
-    "лол", "kek", "кек", "ору", "хаха", "ахаха", "топ", "че", "чё", "ну",
-    "хм", "ммм", "пон", "понял", "спс", "пж", "плюс", "ясно", "лан",
-})
+_NOISE_WORDS: frozenset[str] = frozenset(
+    {
+        "+",
+        "++",
+        "+1",
+        "-",
+        "ок",
+        "окей",
+        "ok",
+        "ага",
+        "угу",
+        "да",
+        "нет",
+        "не",
+        "лол",
+        "kek",
+        "кек",
+        "ору",
+        "хаха",
+        "ахаха",
+        "топ",
+        "че",
+        "чё",
+        "ну",
+        "хм",
+        "ммм",
+        "пон",
+        "понял",
+        "спс",
+        "пж",
+        "плюс",
+        "ясно",
+        "лан",
+    }
+)
 
 
 def _is_noise(text: str) -> bool:
@@ -67,7 +98,7 @@ def _clean(messages: list[ChatMessage], admin_prefix: str) -> list[ChatMessage]:
 
 def _chunk(items: list[ChatMessage], size: int) -> Iterator[list[ChatMessage]]:
     for i in range(0, len(items), size):
-        yield items[i:i + size]
+        yield items[i : i + size]
 
 
 async def generate_daily_summary(
@@ -107,7 +138,11 @@ async def generate_daily_summary(
             notes.append(note)
         logger.info(
             "daily_summary map: chunk %d/%d msgs=%d in=%d out=%d",
-            idx, len(chunks), len(chunk), resp.input_tokens, resp.output_tokens,
+            idx,
+            len(chunks),
+            len(chunk),
+            resp.input_tokens,
+            resp.output_tokens,
         )
 
     if not notes:
@@ -129,6 +164,9 @@ async def generate_daily_summary(
     )
     logger.info(
         "daily_summary reduce: chunks=%d notes_chars=%d in=%d out=%d",
-        len(chunks), len(combined), resp.input_tokens, resp.output_tokens,
+        len(chunks),
+        len(combined),
+        resp.input_tokens,
+        resp.output_tokens,
     )
     return resp.text or _NO_ANSWER

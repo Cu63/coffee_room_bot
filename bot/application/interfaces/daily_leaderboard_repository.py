@@ -8,6 +8,7 @@ from datetime import date
 @dataclass(slots=True)
 class DailyLeader:
     """Лидер в одной категории за день."""
+
     user_id: int
     username: str | None
     full_name: str
@@ -17,6 +18,7 @@ class DailyLeader:
 @dataclass(slots=True)
 class DailyLeaderboard:
     """Полный лидерборд за один день."""
+
     date: date
     top_messages: DailyLeader | None = None
     top_reactions_given: DailyLeader | None = None
@@ -24,12 +26,13 @@ class DailyLeaderboard:
     top_replies: DailyLeader | None = None
     top_ttt_wins: DailyLeader | None = None
     top_wordgame_wins: DailyLeader | None = None  # word + rword суммарно
-    top_mutes_given: DailyLeader | None = None     # больше всех выписал мутов
+    top_mutes_given: DailyLeader | None = None  # больше всех выписал мутов
     top_mutes_received: DailyLeader | None = None  # больше всех получил мутов
 
     def is_empty(self) -> bool:
         return all(
-            v is None for v in (
+            v is None
+            for v in (
                 self.top_messages,
                 self.top_reactions_given,
                 self.top_reactions_received,
@@ -43,7 +46,6 @@ class DailyLeaderboard:
 
 
 class IDailyLeaderboardRepository(ABC):
-
     @abstractmethod
     async def get_daily_leaderboard(self, chat_id: int, for_date: date) -> DailyLeaderboard:
         """Собрать лидерборд за указанный день."""

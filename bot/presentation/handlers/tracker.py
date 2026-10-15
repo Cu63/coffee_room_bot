@@ -29,19 +29,20 @@ router = Router(name="tracker")
 
 _TOPIC_TYPES = {"bug", "feature", "report", "changelog"}
 _TOPIC_LABELS = {
-    "bug":       "🐛 Баги",
-    "feature":   "💡 Фичи",
-    "report":    "🚨 Репорты",
+    "bug": "🐛 Баги",
+    "feature": "💡 Фичи",
+    "report": "🚨 Репорты",
     "changelog": "📋 Changelog",
 }
 _TOPIC_ICONS = {
-    "bug":     "🐛",
+    "bug": "🐛",
     "feature": "💡",
-    "report":  "🚨",
+    "report": "🚨",
 }
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
+
 
 async def _is_admin(message: Message) -> bool:
     if message.from_user is None or message.bot is None:
@@ -93,7 +94,7 @@ async def _send_report(
     report_id = await store.tracker_next_id()
     report_body = (
         f"{icon} <b>{label} #{report_id}</b>\n"
-        f"От: <a href=\"tg://user?id={sender.id}\">{sender.full_name}</a>{username_part}\n"
+        f'От: <a href="tg://user?id={sender.id}">{sender.full_name}</a>{username_part}\n'
         f"Чат: {chat_title} (<code>{message.chat.id}</code>)\n"
     )
     if target_line:
@@ -140,6 +141,7 @@ async def _send_report(
 
 # ── /settracker ──────────────────────────────────────────────────────────────
 
+
 @router.message(Command("settracker"), F.chat.type.in_({"group", "supergroup"}))
 @inject
 async def cmd_settracker(
@@ -155,11 +157,7 @@ async def cmd_settracker(
 
     if not command.args:
         current = await store.tracker_get_tracker_id(message.chat.id)
-        status = (
-            f"Текущий трекер: <code>{current}</code>"
-            if current
-            else "Трекер <b>не</b> привязан."
-        )
+        status = f"Текущий трекер: <code>{current}</code>" if current else "Трекер <b>не</b> привязан."
         await reply_and_delete(
             message,
             f"ℹ️ ID этого чата: <code>{message.chat.id}</code>\n"
@@ -172,7 +170,9 @@ async def cmd_settracker(
     try:
         tracker_chat_id = int(command.args.strip())
     except ValueError:
-        await reply_and_delete(message, "❌ Неверный ID. Пример: <code>/settracker -1001234567890</code>", parse_mode=ParseMode.HTML)
+        await reply_and_delete(
+            message, "❌ Неверный ID. Пример: <code>/settracker -1001234567890</code>", parse_mode=ParseMode.HTML
+        )
         return
 
     await store.tracker_set_source(message.chat.id, tracker_chat_id)
@@ -185,6 +185,7 @@ async def cmd_settracker(
 
 
 # ── /settopic ────────────────────────────────────────────────────────────────
+
 
 @router.message(Command("settopic"), F.chat.type == "supergroup")
 @inject
@@ -222,17 +223,19 @@ async def cmd_settopic(
     label = _TOPIC_LABELS[topic_type]
     await reply_and_delete(
         message,
-        f"✅ Топик назначен: {label}\n"
-        f"thread_id: <code>{thread_id}</code>",
+        f"✅ Топик назначен: {label}\nthread_id: <code>{thread_id}</code>",
         parse_mode=ParseMode.HTML,
     )
     logger.info(
         "tracker: чат %d топик %d назначен для '%s'",
-        message.chat.id, thread_id, topic_type,
+        message.chat.id,
+        thread_id,
+        topic_type,
     )
 
 
 # ── /bug ─────────────────────────────────────────────────────────────────────
+
 
 @router.message(Command("bug"), F.chat.type.in_({"group", "supergroup"}))
 @inject
@@ -256,6 +259,7 @@ async def cmd_bug(
 
 # ── /feature ─────────────────────────────────────────────────────────────────
 
+
 @router.message(Command("feature"), F.chat.type.in_({"group", "supergroup"}))
 @inject
 async def cmd_feature(
@@ -278,6 +282,7 @@ async def cmd_feature(
 
 # ── /report ──────────────────────────────────────────────────────────────────
 
+
 @router.message(Command("report"), F.chat.type.in_({"group", "supergroup"}))
 @inject
 async def cmd_report(
@@ -294,7 +299,7 @@ async def cmd_report(
     if message.reply_to_message and message.reply_to_message.from_user:
         ru = message.reply_to_message.from_user
         uname = f" (@{ru.username})" if ru.username else ""
-        target_line = f"<a href=\"tg://user?id={ru.id}\">{ru.full_name}</a>{uname}"
+        target_line = f'<a href="tg://user?id={ru.id}">{ru.full_name}</a>{uname}'
         reason = text or "(причина не указана)"
     elif text:
         # /report @username причина — берём первый токен как юзернейм
@@ -307,8 +312,7 @@ async def cmd_report(
     else:
         await reply_and_delete(
             message,
-            "❗ Ответь на сообщение пользователя или укажи: "
-            "<code>/report @username причина</code>",
+            "❗ Ответь на сообщение пользователя или укажи: <code>/report @username причина</code>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -317,6 +321,7 @@ async def cmd_report(
 
 
 # ── /updates ─────────────────────────────────────────────────────────────────
+
 
 @router.message(Command("updates"))
 @inject
@@ -372,6 +377,7 @@ async def cmd_updates(
 # Определяем по thread_id: если он совпадает с зарегистрированным changelog-топиком
 # данного чата — сохраняем в Redis.
 
+
 async def _handle_changelog_message(message: Message, store: RedisStore, is_edit: bool = False) -> None:
     """Общая логика обработки сообщения в changelog-топике."""
     if message.message_thread_id is None or not message.text:
@@ -400,7 +406,9 @@ async def _handle_changelog_message(message: Message, store: RedisStore, is_edit
     action = "обновлена" if is_edit else "добавлена"
     logger.info(
         "changelog: запись %s в чате %d (message_id=%d)",
-        action, chat_id, message.message_id,
+        action,
+        chat_id,
+        message.message_id,
     )
 
 

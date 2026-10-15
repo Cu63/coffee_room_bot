@@ -33,7 +33,8 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
                         await score_repo.add_delta(challenger_id, chat_id, bet)
                         logger.info(
                             "Duel invite expired: refunded %d to challenger %d",
-                            bet, challenger_id,
+                            bet,
+                            challenger_id,
                         )
                     if message_id:
                         try:

@@ -1,4 +1,5 @@
 """Хендлеры режимов чата: /silence, /gif, /chatmode off."""
+
 from __future__ import annotations
 
 import logging
@@ -30,6 +31,7 @@ def _format_remaining(entry) -> str:
 
     from bot.domain.bot_utils import format_duration
     from bot.domain.tz import TZ_MSK
+
     secs = max(0, int((entry.expires_at - datetime.now(TZ_MSK)).total_seconds()))
     return format_duration(secs)
 
@@ -61,20 +63,14 @@ async def _cmd_mode(
         try:
             minutes = int(command.args.strip())
         except ValueError:
-            await reply_and_delete(
-                message,
-                f"❌ Укажи количество минут числом. Например: /{mode} 10"
-            )
+            await reply_and_delete(message, f"❌ Укажи количество минут числом. Например: /{mode} 10")
             return
 
     if minutes < 1:
         await reply_and_delete(message, "❌ Минимум 1 минута.")
         return
     if minutes > mode_cfg.max_minutes:
-        await reply_and_delete(
-            message,
-            f"❌ Максимальная длительность — {mode_cfg.max_minutes} мин."
-        )
+        await reply_and_delete(message, f"❌ Максимальная длительность — {mode_cfg.max_minutes} мин.")
         return
 
     chat_id = message.chat.id
@@ -99,8 +95,7 @@ async def _cmd_mode(
                 label = _MODE_LABEL.get(existing.mode, existing.mode)
                 await reply_and_delete(
                     message,
-                    f"❌ Уже активен режим <b>{label}</b>.\n"
-                    f"Осталось: <b>{remaining}</b>",
+                    f"❌ Уже активен режим <b>{label}</b>.\nОсталось: <b>{remaining}</b>",
                     parse_mode=ParseMode.HTML,
                 )
             else:
@@ -207,12 +202,10 @@ async def cmd_chatmode(
         # Проверяем Telegram-админа
         try:
             from aiogram.types import ChatMemberAdministrator, ChatMemberOwner
+
             member = await message.bot.get_chat_member(chat_id, user_id)
             if not isinstance(member, (ChatMemberAdministrator, ChatMemberOwner)):
-                await reply_and_delete(
-                    message,
-                    "❌ Отменить режим может только его инициатор или администратор."
-                )
+                await reply_and_delete(message, "❌ Отменить режим может только его инициатор или администратор.")
                 return
         except Exception:
             await reply_and_delete(message, "❌ Не удалось проверить права.")

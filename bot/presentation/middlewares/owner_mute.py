@@ -15,15 +15,28 @@ from bot.infrastructure.redis_store import RedisStore
 logger = logging.getLogger(__name__)
 
 # Админские команды, которые овнер может выполнять даже под мутом
-_OWNER_ALLOWED_COMMANDS = frozenset({
-    "add", "sub", "set", "reset",
-    "op", "deop", "save", "restore",
-    "amute", "aunmute",
-    "giveaway", "giveaway_end", "giveaway_period", "giveaway_period_stop",
-    "mutegiveaway", "mutegiveaway_end",
-    "summary_admin",
-    "lot",
-})
+_OWNER_ALLOWED_COMMANDS = frozenset(
+    {
+        "add",
+        "sub",
+        "set",
+        "reset",
+        "op",
+        "deop",
+        "save",
+        "restore",
+        "amute",
+        "aunmute",
+        "giveaway",
+        "giveaway_end",
+        "giveaway_period",
+        "giveaway_period_stop",
+        "mutegiveaway",
+        "mutegiveaway_end",
+        "summary_admin",
+        "lot",
+    }
+)
 
 
 def _is_admin_command(message: Message) -> bool:

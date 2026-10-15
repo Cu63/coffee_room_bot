@@ -61,7 +61,9 @@ def pick_random_word(min_len: int, max_len: int) -> str | None:
     if not candidates:
         logger.warning(
             "Нет слов длиной %d–%d в словаре (всего слов: %d)",
-            min_len, max_len, len(all_words),
+            min_len,
+            max_len,
+            len(all_words),
         )
         return None
     return random.choice(candidates)

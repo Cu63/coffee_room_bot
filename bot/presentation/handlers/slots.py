@@ -35,12 +35,12 @@ router = Router(name="slots")
 _JACKPOT_VALUE = 64
 
 # Множители для обычных ставок
-_MULT_JACKPOT = 30     # net: +29×bet
-_MULT_WIN = 8          # net: +7×bet
+_MULT_JACKPOT = 30  # net: +29×bet
+_MULT_WIN = 8  # net: +7×bet
 
 # Множители для ставки all (сниженные, чтобы не ломать экономику)
-_ALL_MULT_JACKPOT = 5    # net: +4×bet
-_ALL_MULT_WIN = 3        # net: +2×bet
+_ALL_MULT_JACKPOT = 5  # net: +4×bet
+_ALL_MULT_WIN = 3  # net: +2×bet
 
 
 def _get_slots(value: int) -> tuple[int, int, int]:
@@ -85,11 +85,7 @@ async def cmd_slots(
     bot_id = bot.id
 
     if not command.args:
-        cooldown_str = (
-            f"\n⏳ Кулдаун: {sc.cooldown_minutes} мин. между спинами"
-            if sc.cooldown_minutes > 0
-            else ""
-        )
+        cooldown_str = f"\n⏳ Кулдаун: {sc.cooldown_minutes} мин. между спинами" if sc.cooldown_minutes > 0 else ""
         bot_balance = await score_service.get_bot_balance(bot_id, chat_id)
         await reply_and_delete(
             message,
@@ -254,9 +250,7 @@ async def cmd_slots(
             result_line = f"{all_prefix}🏆 Три одинаковых! Ты выиграл <b>{win_net}</b> {p.pluralize(win_net)}!"
 
     else:  # loss
-        result_line = (
-            f"{all_prefix}💸 Мимо. Потерял <b>{bet}</b> {p.pluralize(bet)}."
-        )
+        result_line = f"{all_prefix}💸 Мимо. Потерял <b>{bet}</b> {p.pluralize(bet)}."
 
     result_msg = await message.answer(
         f"{result_line}\nБаланс: {bal_str}",

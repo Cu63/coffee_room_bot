@@ -68,9 +68,7 @@ class FanficService:
         """Пишет фанфик про ``heroes`` с учётом их последних сообщений."""
         blocks: list[str] = []
         for hero in heroes:
-            messages = await self._repo.get_recent_with_text(
-                chat_id, self._config.messages_per_user, [hero.id]
-            )
+            messages = await self._repo.get_recent_with_text(chat_id, self._config.messages_per_user, [hero.id])
             blocks.append(_format_hero_block(hero, messages))
 
         user_prompt = self._fmt._t["ff_user_prompt"].format(
@@ -91,7 +89,11 @@ class FanficService:
 
         logger.info(
             "ff: chat=%d user=%d heroes=%d in=%d out=%d",
-            chat_id, user_id, len(heroes), resp.input_tokens, resp.output_tokens,
+            chat_id,
+            user_id,
+            len(heroes),
+            resp.input_tokens,
+            resp.output_tokens,
         )
 
         try:

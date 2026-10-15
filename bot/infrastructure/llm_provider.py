@@ -13,7 +13,6 @@ from bot.infrastructure.openai_client import OpenAiClient
 
 
 class LlmProvider(Provider):
-
     @provide(scope=Scope.REQUEST)
     def get_aitunnel_client(self, settings: BotSettings, config: AppConfig) -> AiTunnelClient:
         return AiTunnelClient(
@@ -27,9 +26,7 @@ class LlmProvider(Provider):
     # на весь процесс (токен действует 30 минут, переспрашивать его на
     # каждый запрос — лишний round-trip).
     @provide(scope=Scope.APP)
-    async def get_gigachat_client(
-        self, settings: BotSettings, config: AppConfig
-    ) -> AsyncIterable[GigaChatClient]:
+    async def get_gigachat_client(self, settings: BotSettings, config: AppConfig) -> AsyncIterable[GigaChatClient]:
         client = GigaChatClient(
             api_key=settings.gigachat_api_key,
             base_url=config.genai.base_url,

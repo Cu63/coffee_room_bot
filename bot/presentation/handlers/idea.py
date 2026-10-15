@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="idea")
 
 # Redis keys
-_IDEA_PREFIX = "idea:"          # idea:{chat_id}:{idea_id} → JSON
+_IDEA_PREFIX = "idea:"  # idea:{chat_id}:{idea_id} → JSON
 _IDEA_COUNTER = "idea:counter"  # глобальный счётчик
 
 
@@ -82,7 +82,11 @@ async def cmd_idea(
 
     # Формируем сообщение
     idea_text = formatter._t["idea_created"].format(
-        id=idea_id, user=display, text=text, up=0, down=0,
+        id=idea_id,
+        user=display,
+        text=text,
+        up=0,
+        down=0,
     )
     reply = await message.reply(
         idea_text,
@@ -101,8 +105,8 @@ async def cmd_idea(
         "author_username": user.username or "",
         "chat_id": message.chat.id,
         "message_id": reply.message_id,
-        "up": [],       # список user_id проголосовавших 👍
-        "down": [],     # список user_id проголосовавших 👎
+        "up": [],  # список user_id проголосовавших 👍
+        "down": [],  # список user_id проголосовавших 👎
         "notified": False,
         "created_at": time.time(),
     }
@@ -184,10 +188,16 @@ async def cb_idea_vote(
 
     # Обновляем кнопки
     display = user_link(
-        data["author_username"] or None, data["author_name"], data["author_id"],
+        data["author_username"] or None,
+        data["author_name"],
+        data["author_id"],
     )
     new_text = formatter._t["idea_created"].format(
-        id=idea_id, user=display, text=data["text"], up=up_count, down=down_count,
+        id=idea_id,
+        user=display,
+        text=data["text"],
+        up=up_count,
+        down=down_count,
     )
     try:
         await callback.message.edit_text(
@@ -211,7 +221,11 @@ async def cb_idea_vote(
 
         # Отправляем в трекер
         await _notify_threshold(
-            callback.bot, store, config, data, up_count,
+            callback.bot,
+            store,
+            config,
+            data,
+            up_count,
             formatter,
         )
 
@@ -227,7 +241,9 @@ async def _notify_threshold(
     """Уведомить админов, что идея набрала пороговое число голосов."""
     chat_id = data["chat_id"]
     author_display = user_link(
-        data["author_username"] or None, data["author_name"], data["author_id"],
+        data["author_username"] or None,
+        data["author_name"],
+        data["author_id"],
     )
     notify_text = formatter._t["idea_threshold"].format(
         id=data["id"],

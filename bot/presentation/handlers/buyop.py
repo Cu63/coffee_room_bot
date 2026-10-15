@@ -100,7 +100,9 @@ async def cmd_buyop(
         tag = config.buyop.tag
         if tag:
             await bot.set_chat_administrator_custom_title(
-                chat_id=chat_id, user_id=user_id, custom_title=tag,
+                chat_id=chat_id,
+                user_id=user_id,
+                custom_title=tag,
             )
     except Exception:
         logger.exception("Failed to buyop user %d", user_id)
@@ -121,7 +123,9 @@ async def cmd_buyop(
         # Откатываем promote
         try:
             await bot.promote_chat_member(
-                chat_id=chat_id, user_id=user_id, can_manage_chat=False,
+                chat_id=chat_id,
+                user_id=user_id,
+                can_manage_chat=False,
             )
         except Exception:
             pass

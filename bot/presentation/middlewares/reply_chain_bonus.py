@@ -66,7 +66,10 @@ class ReplyChainMiddleware(BaseMiddleware):
                 new_value = await score_service.award_chain(uid, chat_id, cfg.reward)
                 logger.debug(
                     "chain: user %d in chat %d awarded %d, new score %d",
-                    uid, chat_id, cfg.reward, new_value,
+                    uid,
+                    chat_id,
+                    cfg.reward,
+                    new_value,
                 )
 
             # Начисляем XP обоим участникам цепочки
@@ -77,5 +80,9 @@ class ReplyChainMiddleware(BaseMiddleware):
                     result = await xp_service.add_xp(uid, chat_id, xp_cfg.rewards.chain)
                     logger.debug(
                         "chain xp: user %d in chat %d +%d xp (total %d, level %d)",
-                        uid, chat_id, xp_cfg.rewards.chain, result.new_xp, result.new_level,
+                        uid,
+                        chat_id,
+                        xp_cfg.rewards.chain,
+                        result.new_xp,
+                        result.new_level,
                     )

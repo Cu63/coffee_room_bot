@@ -7,7 +7,6 @@ import time
 
 
 class ScanStoreMixin:
-
     async def bj_duel_pop_expired(self) -> list[dict]:
         now = time.time()
         expired: list[dict] = []

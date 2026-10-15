@@ -90,6 +90,9 @@ async def create_anagram_game(
 
     logger.info(
         "anagram_loop: создана авто-игра %s в чате %d, слово длиной %d, ставка %d",
-        game_id, chat_id, len(word), bet,
+        game_id,
+        chat_id,
+        len(word),
+        bet,
     )
     return True
