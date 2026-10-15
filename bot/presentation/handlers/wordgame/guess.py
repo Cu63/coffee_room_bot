@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import timedelta
 
 from aiogram import Bot, F, Router
@@ -107,7 +108,7 @@ async def msg_reply_guess(
         schedule_delete(bot, err, message, delay=30)
         return
 
-    user_mention = f'<a href="tg://user?id={user_id}">{message.from_user.full_name}</a>'
+    user_mention = f'<a href="tg://user?id={user_id}">{html.escape(message.from_user.full_name)}</a>'
 
     # Проверка баллов — только если ставка игры > 0 (иначе все попытки бесплатные)
     cost = wg.attempt_cost
@@ -134,9 +135,12 @@ async def msg_reply_guess(
 
     if is_correct:
         # ── ПОБЕДА ──────────────────────────────────────────────────────
+        # Атомарно забираем игру: если её уже завершил другой верный ответ
+        # или цикл истечения, приз второй раз не выплачиваем.
+        if await store.wg_game_finish(game.game_id) is None:
+            return
         game.finished = True
         game.winner_id = user_id
-        await store.wg_game_finish(game.game_id)
         await store.wg_chat_remove(chat_id, game.game_id)
 
         # Спец-правило для loss_username в /rword: победа без приза + тихий мут на сутки.
@@ -198,7 +202,13 @@ async def msg_reply_guess(
             schedule_delete(bot, result_msg, delay=30)
 
     else:
-        # ── НЕВЕРНО — редактируем игровое сообщение с новой маской ──────
+        # ── НЕВЕРНО ─────────────────────────────────────────────────────
+        # Сохраняем, только если игра ещё идёт: завершённую (победой или по
+        # времени) не воскрешаем, её сообщение не трогаем и плату не берём.
+        if not await store.wg_game_save_raw(game.game_id, game_to_raw(game)):
+            return
+
+        # Редактируем игровое сообщение с новой маской
         try:
             await bot.edit_message_text(
                 chat_id=chat_id,
@@ -208,8 +218,6 @@ async def msg_reply_guess(
             )
         except TelegramBadRequest:
             pass
-
-        await store.wg_game_save_raw(game.game_id, game_to_raw(game))
 
         hint_parts = [
             f"❌ {user_mention}: «{guess}» — не то "
