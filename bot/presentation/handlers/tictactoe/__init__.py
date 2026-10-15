@@ -7,20 +7,12 @@
   4. Каждый игрок может иметь максимум 3 фигуры на поле
   5. При постановке 4-й — самая старая исчезает
   6. Победа — 3 в ряд (стандартные комбинации)
+  7. После 50 ходов без победителя — ничья, ставки возвращаются
 """
 
 from aiogram import Router
 
 from bot.presentation.handlers.tictactoe.callbacks import router as callbacks_router
-
-# Re-export internal symbols used by other modules (e.g. duel.py)
-from bot.presentation.handlers.tictactoe.game_logic import (  # noqa: F401
-    _TTT_GAME_TTL,
-    _TTT_REDIS_BUFFER,
-    _game_kb,
-    _render_board,
-    _ttt_key,
-)
 from bot.presentation.handlers.tictactoe.start import router as start_router
 
 router = Router(name="tictactoe")

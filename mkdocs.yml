@@ -61,6 +61,7 @@ nav:
   - Архитектура: architecture.md
   - Игры:
     - Блекджек: games/blackjack.md
+    - Крестики-нолики: games/tictactoe.md
     - Слоты: games/slots.md
     - Кости: games/dice.md
     - Гивэвей: games/giveaway.md

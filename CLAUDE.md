@@ -58,10 +58,11 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 - `score_events` holds only reactions (duplicate check and removal, unique per chat). The money history (`/history`, `/uhistory`) is read from `ledger`.
 - Game state lives in Redis as JSON with a logical `expires_at` and a Redis TTL with a buffer on top, so cleanup loops see expired games before Redis drops the key.
 - State transitions must be atomic:
-  - finishing or claiming a game: `DEL`/`GETDEL` — only the caller whose delete succeeded pays out;
-  - saving a move: `SET … XX` (`KEEPTTL` where the TTL must not move) — never recreate a finished game;
-  - accepting a lobby: an `NX` lock;
+  - turn-based games (BJ, TTT, duel invites) go through `GameStoreMixin` (`bot/infrastructure/redis/_games.py`): read a `GameSnapshot` with `game_load`, then save a move with `game_save(snapshot, …)` and finish with `game_claim(snapshot)` — both are compare-and-set against the snapshot, so a double tap or a move computed from a stale state neither writes nor pays; accept a lobby with an `NX` lock plus `game_replace_if_state(key, "lobby", …)`;
+  - finishing or claiming elsewhere: `DEL`/`GETDEL` — only the caller whose delete succeeded pays out;
+  - saving a move elsewhere: `SET … XX` (`KEEPTTL` where the TTL must not move) — never recreate a finished game;
   - multi-field compare-and-set: Lua or WATCH (`RedisStore.game_patch_if_state`, `lot_game_save_if_unchanged`).
+- A game started from `/duel` keeps the invite's ledger ref (`data["ref"] = "duel:<invite_id>"`): stakes, prizes and refunds of one game share one ref.
 - Cleanup loops take expired games one at a time (Lua "delete if expired"), settle each in its own short transaction and edit the Telegram message after the commit.
 - Timeouts: a lobby nobody accepted → refund the creator; an abandoned started game → both stakes go to the bot.
 - The bot's own balance in each chat (`bot.id`) is the house: purchases and fees go there, prizes are paid from it. `scores.user_id` references `users`, so `main()` upserts the bot into `users` at startup (`register_bot_user`).

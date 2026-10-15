@@ -116,6 +116,39 @@ async def test_lobby_message_id_does_not_overwrite_accepted_game(store, redis):
     assert json.loads(await redis.get(key))["p2_id"] == 2
 
 
+async def test_game_moves_and_finish_need_a_fresh_snapshot(store, redis):
+    key = f"bj:duel:{CHAT}:cas"
+    assert await store.game_create(key, {"state": "playing", "turn": "p1"}, 500)
+    assert await store.game_create(key, {"state": "lobby"}, 500) is None  # ключ занят
+
+    read = await store.game_load(key)
+    moved = await store.game_save(read, {"state": "playing", "turn": "p2"}, 600)
+    assert moved is not None and 590 < await redis.ttl(key) <= 600
+
+    # Второе нажатие по старому снимку: ни хода, ни расчёта
+    assert await store.game_save(read, {"state": "playing", "turn": "p1", "extra": 1}, 600) is None
+    assert await store.game_claim(read) is False
+    assert json.loads(await redis.get(key))["turn"] == "p2"
+
+    assert await store.game_claim(moved) is True
+    assert await store.game_claim(moved) is False  # рассчитывает ровно один
+    assert await store.game_save(moved, {"state": "playing"}, 600) is None  # завершённую не воскрешаем
+    assert await redis.exists(key) == 0
+
+
+async def test_lobby_is_accepted_once(store, redis):
+    key = f"ttt:{CHAT}:lobby"
+    await store.game_create(key, {"state": "lobby", "message_id": 0}, 500)
+    await store.game_patch_if_state(key, "lobby", {"message_id": 42})  # снимок лобби поменялся — не помеха
+
+    first, second = await asyncio.gather(
+        store.game_replace_if_state(key, "lobby", {"state": "playing", "player_o": 1}, 600),
+        store.game_replace_if_state(key, "lobby", {"state": "playing", "player_o": 2}, 600),
+    )
+    assert [first is not None, second is not None].count(True) == 1
+    assert await store.game_replace_if_state(f"ttt:{CHAT}:gone", "lobby", {"state": "playing"}, 600) is None
+
+
 # ── Лот ───────────────────────────────────────────────────────────────
 
 

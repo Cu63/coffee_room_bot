@@ -1,50 +1,52 @@
-"""Game launch functions for starting TTT and BJ games from duel invitations."""
+"""Запуск TTT и BJ из принятого приглашения на дуэль.
+
+Ставки обоих уже списаны с меткой приглашения (duel:<id>), а приглашение забрано
+из Redis: дальше игра живёт как обычная, но выплаты идут с той же меткой.
+"""
 
 from __future__ import annotations
 
-import json
 import random
 import time
 
-from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 
-from bot.application.blackjack_service import build_deck, cards_to_dicts
 from bot.application.interfaces.score_repository import IScoreRepository
+from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers.blackjack import (
+from bot.presentation.handlers.blackjack.helpers import (
     _BJ_GAME_TTL,
     _BJ_REDIS_BUFFER,
+    _DELETE_DELAY,
     _bj_key,
+    _deal,
+    _hand_alert,
+    _play_kb,
+    _settle_game,
+    _side_of,
+    _turn_text,
 )
-from bot.presentation.handlers.blackjack import (
-    _hand_score_from_dicts as _bj_hand_score,
-)
-from bot.presentation.handlers.blackjack import (
-    _is_natural as _bj_is_natural,
-)
-from bot.presentation.handlers.blackjack import (
-    _play_kb as _bj_play_kb,
-)
-from bot.presentation.handlers.blackjack import (
-    _turn_text as _bj_turn_text,
-)
-
-# Импортируем внутренние утилиты из игровых хендлеров
-from bot.presentation.handlers.tictactoe import (
+from bot.presentation.handlers.tictactoe.game_logic import (
     _TTT_GAME_TTL,
     _TTT_REDIS_BUFFER,
+    _game_kb,
+    _render_board,
     _ttt_key,
 )
-from bot.presentation.handlers.tictactoe import (
-    _game_kb as _ttt_game_kb,
-)
-from bot.presentation.handlers.tictactoe import (
-    _render_board as _ttt_render_board,
-)
-from bot.presentation.utils import NO_PREVIEW
+from bot.presentation.utils import edit_callback_message, safe_callback_answer, schedule_delete
+
+
+def _players(invite: dict) -> list[tuple[int, str, str]]:
+    """Создатель и цель в случайном порядке: первый ходит первым."""
+    players = [
+        (invite["challenger_id"], invite["challenger_name"], invite["challenger_username"]),
+        (invite["target_id"], invite["target_name"], invite["target_username"]),
+    ]
+    random.shuffle(players)
+    return players
+
 
 # ── Запуск TTT из дуэли ──────────────────────────────────────────────────
 
@@ -59,34 +61,21 @@ async def _start_ttt_from_duel(
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует TTT игру, в которой оба игрока уже известны."""
-
-    challenger_id = invite["challenger_id"]
-    challenger_name = invite["challenger_name"]
-    challenger_username = invite["challenger_username"]
-    target_id = invite["target_id"]
-    target_name = invite["target_name"]
-    target_username = invite["target_username"]
-
-    # Случайно распределяем X и O
-    if random.choice([True, False]):
-        player_x_id, player_x_name, player_x_username = challenger_id, challenger_name, challenger_username
-        player_o_id, player_o_name, player_o_username = target_id, target_name, target_username
-    else:
-        player_x_id, player_x_name, player_x_username = target_id, target_name, target_username
-        player_o_id, player_o_name, player_o_username = challenger_id, challenger_name, challenger_username
-
+    (x_id, x_name, x_username), (o_id, o_name, o_username) = _players(invite)
     data = {
         "game_id": game_id,
+        "ref": f"duel:{invite['invite_id']}",
         "state": "playing",
-        "player_x": player_x_id,
-        "player_x_name": player_x_name,
-        "player_x_username": player_x_username,
-        "player_o": player_o_id,
-        "player_o_name": player_o_name,
-        "player_o_username": player_o_username,
+        "player_x": x_id,
+        "player_x_name": x_name,
+        "player_x_username": x_username,
+        "player_o": o_id,
+        "player_o_name": o_name,
+        "player_o_username": o_username,
         "board": [0] * 9,
         "history_x": [],
         "history_o": [],
+        "moves": 0,
         "turn": "x",
         "bet": bet,
         "chat_id": chat_id,
@@ -94,32 +83,19 @@ async def _start_ttt_from_duel(
         "created_at": time.time(),
         "expires_at": time.time() + _TTT_GAME_TTL,
     }
+    await store.game_create(_ttt_key(chat_id, game_id), data, _TTT_GAME_TTL + _TTT_REDIS_BUFFER)
 
-    ttt_key = _ttt_key(chat_id, game_id)
-    await store._r.set(ttt_key, json.dumps(data), ex=_TTT_GAME_TTL + _TTT_REDIS_BUFFER)
-
-    x_display = user_link(player_x_username or None, player_x_name, player_x_id)
-    o_display = user_link(player_o_username or None, player_o_name, player_o_id)
-    sw_bet = p.pluralize(bet)
-
-    board_text = _ttt_render_board([0] * 9, [], [], "x")
+    x_display = user_link(x_username or None, x_name, x_id)
+    o_display = user_link(o_username or None, o_name, o_id)
     text = (
         f"🎮 <b>Крестики-нолики — дуэль</b>\n\n"
         f"❌ {x_display}  vs  ⭕ {o_display}\n"
-        f"Ставка: <b>{bet} {sw_bet}</b>\n\n"
-        f"{board_text}\n\n"
+        f"Ставка: <b>{bet} {p.pluralize(bet)}</b>\n\n"
+        f"{_render_board([0] * 9, [], [], 'x')}\n\n"
         f"Ходит: {x_display} ❌"
     )
-
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_ttt_game_kb(game_id, [0] * 9),
-        )
-    except Exception:
-        pass
+    await edit_callback_message(cb, text, _game_kb(game_id, [0] * 9))
+    await safe_callback_answer(cb, "⚔️ Игра началась!")
 
 
 # ── Запуск BJ из дуэли ───────────────────────────────────────────────────
@@ -133,110 +109,42 @@ async def _start_bj_from_duel(
     bet: int,
     store: RedisStore,
     score_repo: IScoreRepository,
+    stats_repo: IUserStatsRepository,
     p: ScorePluralizer,
 ) -> None:
     """Инициализирует BJ игру, в которой оба игрока уже известны."""
-
-    challenger_id = invite["challenger_id"]
-    challenger_name = invite["challenger_name"]
-    challenger_username = invite["challenger_username"]
-    target_id = invite["target_id"]
-    target_name = invite["target_name"]
-    target_username = invite["target_username"]
-
-    # Случайно выбираем, кто ходит первым (p1)
-    if random.choice([True, False]):
-        p1_id, p1_name, p1_username = challenger_id, challenger_name, challenger_username
-        p2_id, p2_name, p2_username = target_id, target_name, target_username
-    else:
-        p1_id, p1_name, p1_username = target_id, target_name, target_username
-        p2_id, p2_name, p2_username = challenger_id, challenger_name, challenger_username
-
-    deck = build_deck()
-    p1_hand = cards_to_dicts([deck.pop(), deck.pop()])
-    p2_hand = cards_to_dicts([deck.pop(), deck.pop()])
-
+    (p1_id, p1_name, p1_username), (p2_id, p2_name, p2_username) = _players(invite)
     data = {
         "game_id": game_id,
-        "state": "playing",
+        "ref": f"duel:{invite['invite_id']}",
         "p1_id": p1_id,
         "p1_name": p1_name,
         "p1_username": p1_username,
         "p2_id": p2_id,
         "p2_name": p2_name,
         "p2_username": p2_username,
-        "deck": cards_to_dicts(deck),
-        "p1_hand": p1_hand,
-        "p2_hand": p2_hand,
         "p1_done": False,
         "p2_done": False,
         "p1_busted": False,
         "p2_busted": False,
-        "turn": "p1",
         "bet": bet,
         "chat_id": chat_id,
         "message_id": cb.message.message_id,
         "created_at": time.time(),
-        "expires_at": time.time() + _BJ_GAME_TTL,
     }
+    _deal(data)
 
-    bj_key = _bj_key(chat_id, game_id)
-
-    # Проверяем натуральные блекджеки
-    p1_natural = _bj_is_natural(p1_hand)
-    p2_natural = _bj_is_natural(p2_hand)
-
-    if p1_natural or p2_natural:
-        # Мгновенное завершение — resolve_game сам удалит ключ
-        data["p1_done"] = True
-        data["p2_done"] = True
-        await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
-
-        from bot.presentation.handlers.blackjack import _resolve_game
-
-        # Получаем stats_repo из dishka через cb (нет прямого доступа, используем заглушку)
-        # Поскольку natural BJ — редкий случай, логируем и продолжаем без stats
-        try:
-            # stats недоступны напрямую здесь, передаём фиктивный объект-заглушку
-            class _NoStats:
-                async def add_win(self, *a, **kw):
-                    pass
-
-            text = await _resolve_game(data, store, score_repo, _NoStats(), p, chat_id)
-        except Exception:
-            text = "🎰 Натуральный блекджек!"
-        if text is None:
-            # Игру уже рассчитали — итог в сообщении не трогаем
-            return
-        try:
-            from bot.presentation.utils import schedule_delete
-
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=None,
-            )
-            if cb.message.bot:
-                schedule_delete(cb.message.bot, cb.message, delay=120)
-        except Exception:
-            pass
+    if data["p1_done"] and data["p2_done"]:
+        # Натуральный блекджек — сразу вскрытие. Игра никуда не сохранялась, а приглашение
+        # уже забрано: рассчитать её больше некому
+        text = await _settle_game(data, score_repo, stats_repo, p, chat_id)
+        await edit_callback_message(cb, text)
+        if cb.message.bot:
+            schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+        await safe_callback_answer(cb, "\U0001f3b0 Блекджек!")
         return
 
-    # Обычный старт
-    if _bj_hand_score(p1_hand) == 21:
-        data["p1_done"] = True
-        data["turn"] = "p2"
-
-    await store._r.set(bj_key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER)
-
-    text = _bj_turn_text(data, p)
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_bj_play_kb(game_id),
-        )
-    except Exception:
-        pass
+    await store.game_create(_bj_key(chat_id, game_id), data, _BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+    await edit_callback_message(cb, _turn_text(data, p), _play_kb(game_id))
+    side = _side_of(data, cb.from_user.id)
+    await safe_callback_answer(cb, "⚔️ Игра началась!\n\n" + _hand_alert(data, side), show_alert=True)

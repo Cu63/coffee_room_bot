@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import time
 
 from aiogram import Router
@@ -165,7 +164,7 @@ async def cmd_ttt(
     }
 
     key = _ttt_key(chat_id, game_id)
-    await store._r.set(key, json.dumps(data), ex=_TTT_LOBBY_TTL + _TTT_REDIS_BUFFER)
+    await store.game_create(key, data, _TTT_LOBBY_TTL + _TTT_REDIS_BUFFER)
 
     lobby_text = formatter._t["ttt_lobby"].format(
         user=display,

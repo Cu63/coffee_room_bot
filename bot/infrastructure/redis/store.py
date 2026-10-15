@@ -8,6 +8,7 @@ import redis.asyncio as aioredis
 
 from bot.infrastructure.redis._anagram import AnagramStoreMixin
 from bot.infrastructure.redis._bonus import BonusStoreMixin
+from bot.infrastructure.redis._games import GameStoreMixin
 from bot.infrastructure.redis._giveaway import GiveawayStoreMixin
 from bot.infrastructure.redis._llm import LlmStoreMixin
 from bot.infrastructure.redis._lot import LotStoreMixin
@@ -33,6 +34,7 @@ class RedisStore(
     TrackerStoreMixin,
     LlmStoreMixin,
     ScanStoreMixin,
+    GameStoreMixin,
 ):
     """Обёртка над Redis для хранения игрового состояния.
 

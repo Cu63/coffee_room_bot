@@ -11,8 +11,8 @@ from typing import Any
 import redis.asyncio as aioredis
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import CallbackQuery, LinkPreviewOptions, Message
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, LinkPreviewOptions, Message
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +137,18 @@ async def check_gameban(
     if remaining <= 0:
         return None
     return templates["selfban_blocked"].format(remaining=format_duration(remaining))
+
+
+async def edit_callback_message(cb: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None = None) -> None:
+    """Обновить сообщение с кнопками (HTML). Состояние уже сохранено — сбой Telegram только логируем."""
+    try:
+        await cb.message.edit_text(
+            text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=markup
+        )
+    except TelegramAPIError as e:
+        if "message is not modified" not in str(e):
+            message = cb.message
+            logger.warning("Не удалось обновить сообщение %s в чате %s: %s", message.message_id, message.chat.id, e)
 
 
 async def safe_callback_answer(callback: CallbackQuery, text: str = "", show_alert: bool = False) -> None:

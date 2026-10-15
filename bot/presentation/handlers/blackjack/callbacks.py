@@ -1,21 +1,19 @@
-"""Callback-хендлеры блекджека: accept, hit, stand."""
+"""Callback-хендлеры блекджека: accept, hit, stand, peek.
+
+Каждый ход — compare-and-set по прочитанному снимку игры (store.game_save / game_claim):
+второе нажатие по тому же снимку не возьмёт ту же карту ещё раз и не рассчитает игру дважды.
+"""
 
 from __future__ import annotations
 
-import json
 import random
 import time
 
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.blackjack_service import (
-    build_deck,
-    cards_to_dicts,
-    dicts_to_cards,
-)
+from bot.application.blackjack_service import cards_to_dicts, dicts_to_cards
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
@@ -24,27 +22,36 @@ from bot.domain.entities import User
 from bot.domain.ledger import LedgerKind
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.message_formatter import MessageFormatter
+from bot.infrastructure.redis._games import GameSnapshot
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers.blackjack.helpers import (
+    _BJ_ACCEPT_LOCK_TTL,
     _BJ_GAME_TTL,
     _BJ_REDIS_BUFFER,
+    _DELETE_DELAY,
     _bj_key,
+    _deal,
+    _format_hand_from_dicts,
+    _game_ref,
+    _hand_alert,
     _hand_score_from_dicts,
-    _is_natural,
+    _other,
     _play_kb,
-    _resolve_game,
+    _settle_game,
+    _side_of,
     _turn_text,
 )
-from bot.presentation.utils import (
-    NO_PREVIEW,
-    check_gameban,
-    safe_callback_answer,
-    schedule_delete,
-)
+from bot.presentation.utils import check_gameban, safe_callback_answer, schedule_delete
+from bot.presentation.utils import edit_callback_message as _edit
 
 router = Router(name="blackjack_callbacks")
 
-_DELETE_DELAY = 120  # задержка удаления результата
+_NOT_FOUND = "Игра завершена или не найдена."
+
+
+def _game_id(cb: CallbackQuery) -> str | None:
+    parts = (cb.data or "").split(":")
+    return parts[2] if len(parts) >= 3 else None
 
 
 # ── Callback: принять вызов ────────────────────────────────────────────
@@ -62,12 +69,11 @@ async def cb_bj_accept(
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
+    game_id = _game_id(cb)
+    if game_id is None:
         await safe_callback_answer(cb)
         return
 
-    game_id = parts[2]
     chat_id = cb.message.chat.id
     user_id = cb.from_user.id
 
@@ -78,13 +84,11 @@ async def cb_bj_accept(
         return
 
     key = _bj_key(chat_id, game_id)
-
-    raw = await store._r.get(key)
-    if raw is None:
+    snapshot = await store.game_load(key)
+    if snapshot is None:
         await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
         return
-
-    data = json.loads(raw)
+    data = snapshot.data
 
     if data["state"] != "lobby":
         await safe_callback_answer(cb, "Игра уже началась.", show_alert=True)
@@ -101,21 +105,15 @@ async def cb_bj_accept(
 
     # Одно принятие на лобби: второй нажавший (или двойное нажатие) не будет списан
     accept_lock = f"bj:lock:accept:{chat_id}:{game_id}"
-    if not await store._r.set(accept_lock, "1", nx=True, ex=30):
+    if not await store.game_lock(accept_lock, _BJ_ACCEPT_LOCK_TTL):
         await safe_callback_answer(cb, "Игра уже началась.", show_alert=True)
         return
 
-    # Upsert пользователя
-    await user_repo.upsert(
-        User(
-            id=user_id,
-            username=cb.from_user.username,
-            full_name=cb.from_user.full_name,
-        )
-    )
+    await user_repo.upsert(User(id=user_id, username=cb.from_user.username, full_name=cb.from_user.full_name))
 
     bet = data["bet"]
     p = pluralizer
+    ref = _game_ref(data)
 
     # Списываем ставку с принимающего
     result = await score_service.spend_score(
@@ -125,10 +123,10 @@ async def cb_bj_accept(
         cost=bet,
         emoji=SPECIAL_EMOJI.get("bj", "\U0001f0cf"),
         kind=LedgerKind.STAKE,
-        ref=f"bj:{game_id}",
+        ref=ref,
     )
     if not result.success:
-        await store._r.delete(accept_lock)
+        await store.game_unlock(accept_lock)
         sw = p.pluralize(bet)
         sw_bal = p.pluralize(result.current_balance)
         await safe_callback_answer(
@@ -138,89 +136,118 @@ async def cb_bj_accept(
         )
         return
 
-    # Заполняем данные второго игрока
     data["p2_id"] = user_id
     data["p2_name"] = cb.from_user.full_name or ""
     data["p2_username"] = cb.from_user.username or ""
+    data["message_id"] = cb.message.message_id
 
     # Случайно назначаем, кто p1 и p2 (кто ходит первым)
     if random.choice([True, False]):
-        # Меняем местами: принимающий становится p1, создатель — p2
-        data["p1_id"], data["p2_id"] = data["p2_id"], data["p1_id"]
-        data["p1_name"], data["p2_name"] = data["p2_name"], data["p1_name"]
-        data["p1_username"], data["p2_username"] = (
-            data["p2_username"],
-            data["p1_username"],
-        )
+        for field in ("id", "name", "username"):
+            data[f"p1_{field}"], data[f"p2_{field}"] = data[f"p2_{field}"], data[f"p1_{field}"]
 
-    # Раздаём карты
-    deck = build_deck()
-    data["p1_hand"] = cards_to_dicts([deck.pop(), deck.pop()])
-    data["p2_hand"] = cards_to_dicts([deck.pop(), deck.pop()])
-    data["deck"] = cards_to_dicts(deck)
-    data["state"] = "playing"
-    data["turn"] = "p1"  # p1 ходит первым
-    data["expires_at"] = time.time() + _BJ_GAME_TTL
+    _deal(data)
 
-    # Натуральный блекджек — мгновенное завершение
-    is_natural = _is_natural(data["p1_hand"]) or _is_natural(data["p2_hand"])
-    if is_natural:
-        data["p1_done"] = True
-        data["p2_done"] = True
-    elif _hand_score_from_dicts(data["p1_hand"]) == 21:
-        # Автостенд на 21 для первого игрока
-        data["p1_done"] = True
-        data["turn"] = "p2"
-        if _hand_score_from_dicts(data["p2_hand"]) == 21:
-            data["p2_done"] = True
-
-    # XX: если лобби уже забрал cleanup-loop (и вернул ставку создателю) —
-    # игру не воскрешаем, а ставку принимающего возвращаем
-    if not await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER, xx=True):
-        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=f"bj:{game_id}")
+    # Лобби → игра, только если лобби ещё ждёт: если его уже забрал cleanup-loop
+    # (и вернул ставку создателю), игру не воскрешаем, а ставку принимающего возвращаем
+    snapshot = await store.game_replace_if_state(key, "lobby", data, _BJ_GAME_TTL + _BJ_REDIS_BUFFER)
+    if snapshot is None:
+        await score_repo.add_delta(user_id, chat_id, bet, kind=LedgerKind.REFUND, ref=ref)
         await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
         return
 
+    side = _side_of(data, user_id)
     if data["p1_done"] and data["p2_done"]:
-        text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
-        if text is None:
-            await safe_callback_answer(cb, "Игра уже завершена.")
-            return
-        try:
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=None,
-            )
-            if cb.message.bot:
-                schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
-        except Exception:
-            pass
-        await safe_callback_answer(cb, "\U0001f3b0 Блекджек!" if is_natural else "\u2694\ufe0f Игра завершена!")
+        # Натуральный блекджек — сразу вскрытие
+        if await _finish(cb, store, snapshot, score_repo, stats_repo, p):
+            await safe_callback_answer(cb, "\U0001f3b0 Блекджек!")
         return
 
-    text = _turn_text(data, p)
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_play_kb(game_id),
-        )
-    except Exception:
-        pass
-
-    await safe_callback_answer(cb, "\u2694\ufe0f Игра началась!")
+    await _edit(cb, _turn_text(data, p), _play_kb(game_id))
+    await safe_callback_answer(cb, "⚔️ Игра началась!\n\n" + _hand_alert(data, side), show_alert=True)
 
 
-async def _save_playing(store: RedisStore, key: str, data: dict) -> bool:
-    """Сохранить ход. XX: игру, которую уже рассчитали или забрал cleanup-loop, не воскрешаем.
+# ── Ход: общая часть ───────────────────────────────────────────────────
 
-    Без XX параллельный «Ещё» после «Хватит» записывал игру обратно, и её можно
-    было рассчитать второй раз (или cleanup-loop забирал её повторно).
-    """
-    return bool(await store._r.set(key, json.dumps(data), ex=_BJ_GAME_TTL + _BJ_REDIS_BUFFER, xx=True))
+
+async def _load_turn(cb: CallbackQuery, store: RedisStore) -> tuple[GameSnapshot, str] | None:
+    """Игра и сторона нажавшего, если сейчас его ход. Иначе отвечает сам и возвращает None."""
+    game_id = _game_id(cb)
+    if game_id is None:
+        await safe_callback_answer(cb)
+        return None
+
+    snapshot = await store.game_load(_bj_key(cb.message.chat.id, game_id))
+    if snapshot is None:
+        await safe_callback_answer(cb, _NOT_FOUND, show_alert=True)
+        return None
+    data = snapshot.data
+    if data["state"] != "playing":
+        await safe_callback_answer(cb, "Игра не активна.", show_alert=True)
+        return None
+
+    side = _side_of(data, cb.from_user.id)
+    if side is None:
+        await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
+        return None
+    if side != data["turn"]:
+        await safe_callback_answer(cb, "Сейчас не твой ход!")
+        return None
+    return snapshot, side
+
+
+async def _finish(
+    cb: CallbackQuery,
+    store: RedisStore,
+    snapshot: GameSnapshot,
+    score_repo: IScoreRepository,
+    stats_repo: IUserStatsRepository,
+    p: ScorePluralizer,
+) -> bool:
+    """Забрать игру и рассчитать. False — её уже рассчитал другой запрос или цикл истечения."""
+    if not await store.game_claim(snapshot):
+        await _answer_stale(cb, store, snapshot)
+        return False
+    text = await _settle_game(snapshot.data, score_repo, stats_repo, p, cb.message.chat.id)
+    await _edit(cb, text, None)
+    if cb.message.bot:
+        schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+    return True
+
+
+async def _answer_stale(cb: CallbackQuery, store: RedisStore, snapshot: GameSnapshot) -> None:
+    """Ход посчитан по устаревшему снимку: двойное нажатие или игру уже закончили."""
+    if await store.game_load(snapshot.key) is None:
+        await safe_callback_answer(cb, _NOT_FOUND, show_alert=True)
+    else:
+        await safe_callback_answer(cb)  # второе нажатие той же кнопки — ход уже сделан
+
+
+async def _end_turn(
+    cb: CallbackQuery,
+    store: RedisStore,
+    snapshot: GameSnapshot,
+    side: str,
+    score_repo: IScoreRepository,
+    stats_repo: IUserStatsRepository,
+    p: ScorePluralizer,
+    alert: str,
+) -> None:
+    """Сохранить ход. Игрок закончил — ход переходит; закончили оба — вскрытие."""
+    data = snapshot.data
+    if data[f"{side}_done"] and data[f"{_other(side)}_done"]:
+        if await _finish(cb, store, snapshot, score_repo, stats_repo, p):
+            await safe_callback_answer(cb, alert, show_alert=True)
+        return
+
+    if data[f"{side}_done"]:
+        data["turn"] = _other(side)  # перебор не выдаём: ход просто переходит
+    data["expires_at"] = time.time() + _BJ_GAME_TTL
+    if await store.game_save(snapshot, data, _BJ_GAME_TTL + _BJ_REDIS_BUFFER) is None:
+        await _answer_stale(cb, store, snapshot)
+        return
+    await _edit(cb, _turn_text(data, p), _play_kb(data["game_id"]))
+    await safe_callback_answer(cb, alert, show_alert=True)
 
 
 # ── Callback: Hit ──────────────────────────────────────────────────────
@@ -235,158 +262,26 @@ async def cb_bj_hit(
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
-        await safe_callback_answer(cb)
+    loaded = await _load_turn(cb, store)
+    if loaded is None:
         return
+    snapshot, side = loaded
+    data = snapshot.data
 
-    game_id = parts[2]
-    chat_id = cb.message.chat.id
-    user_id = cb.from_user.id
-    key = _bj_key(chat_id, game_id)
-
-    raw = await store._r.get(key)
-    if raw is None:
-        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
-        return
-
-    data = json.loads(raw)
-
-    if data["state"] != "playing":
-        await safe_callback_answer(cb, "Игра не активна.", show_alert=True)
-        return
-
-    turn = data["turn"]
-    active_id = data[f"{turn}_id"]
-
-    if user_id != active_id:
-        # Проверяем, является ли пользователь вторым игроком
-        other = "p2" if turn == "p1" else "p1"
-        if user_id == data[f"{other}_id"]:
-            await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
-        else:
-            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
-        return
-
-    p = pluralizer
-
-    # Берём карту
     deck = dicts_to_cards(data["deck"])
     card = deck.pop()
     data["deck"] = cards_to_dicts(deck)
-    data[f"{turn}_hand"].append({"rank": card.rank, "suit": card.suit})
+    data[f"{side}_hand"].append({"rank": card.rank, "suit": card.suit})
 
-    score = _hand_score_from_dicts(data[f"{turn}_hand"])
-
-    # Обновляем expires_at при каждом действии, чтобы cleanup loop не забрал активную игру
-    data["expires_at"] = time.time() + _BJ_GAME_TTL
-
+    score = _hand_score_from_dicts(data[f"{side}_hand"])
     if score > 21:
-        # Перебор — помечаем, но не раскрываем сопернику
-        data[f"{turn}_busted"] = True
-        data[f"{turn}_done"] = True
+        data[f"{side}_busted"] = True
+        data[f"{side}_done"] = True
+    elif score == 21:
+        data[f"{side}_done"] = True  # автоматически «Хватит»
 
-        other = "p2" if turn == "p1" else "p1"
-        if data[f"{other}_done"]:
-            # Оба закончили — вскрытие и результат
-            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
-            if text is None:
-                await safe_callback_answer(cb, "Игра уже завершена.")
-                return
-            try:
-                await cb.message.edit_text(
-                    text,
-                    parse_mode=ParseMode.HTML,
-                    link_preview_options=NO_PREVIEW,
-                    reply_markup=None,
-                )
-                if cb.message.bot:
-                    schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
-            except Exception:
-                pass
-            await safe_callback_answer(cb, "\U0001f4a5 Перебор!")
-            return
-
-        # Тихий переход хода — соперник не знает о переборе
-        data["turn"] = other
-        if not await _save_playing(store, key, data):
-            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
-            return
-
-        text = _turn_text(data, p)
-        try:
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=_play_kb(game_id),
-            )
-        except Exception:
-            pass
-        # Сообщаем о переборе только перебравшему (alert видит только он)
-        await safe_callback_answer(cb, "\U0001f4a5 Перебор! Соперник не знает.", show_alert=True)
-        return
-
-    if score == 21:
-        # Автоматический Stand
-        data[f"{turn}_done"] = True
-
-        other = "p2" if turn == "p1" else "p1"
-        if data[f"{other}_done"]:
-            # Оба закончили — результат
-            text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
-            if text is None:
-                await safe_callback_answer(cb, "Игра уже завершена.")
-                return
-            try:
-                await cb.message.edit_text(
-                    text,
-                    parse_mode=ParseMode.HTML,
-                    link_preview_options=NO_PREVIEW,
-                    reply_markup=None,
-                )
-                if cb.message.bot:
-                    schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
-            except Exception:
-                pass
-            await safe_callback_answer(cb, "\U0001f3af 21!")
-            return
-
-        # Переход хода
-        data["turn"] = other
-        if not await _save_playing(store, key, data):
-            await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
-            return
-
-        text = _turn_text(data, p)
-        try:
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=_play_kb(game_id),
-            )
-        except Exception:
-            pass
-        await safe_callback_answer(cb, "\U0001f3af 21!")
-        return
-
-    # Продолжаем — тот же игрок ходит
-    if not await _save_playing(store, key, data):
-        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
-        return
-
-    text = _turn_text(data, p)
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_play_kb(game_id),
-        )
-    except Exception:
-        pass
-    await safe_callback_answer(cb)
+    alert = f"\U0001f0cf Взял {_format_hand_from_dicts([data[f'{side}_hand'][-1]])}.\n" + _hand_alert(data, side)
+    await _end_turn(cb, store, snapshot, side, score_repo, stats_repo, pluralizer, alert)
 
 
 # ── Callback: Stand ────────────────────────────────────────────────────
@@ -401,79 +296,27 @@ async def cb_bj_stand(
     stats_repo: FromDishka[IUserStatsRepository],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
-        await safe_callback_answer(cb)
+    loaded = await _load_turn(cb, store)
+    if loaded is None:
         return
+    snapshot, side = loaded
+    snapshot.data[f"{side}_done"] = True
+    await _end_turn(cb, store, snapshot, side, score_repo, stats_repo, pluralizer, _hand_alert(snapshot.data, side))
 
-    game_id = parts[2]
-    chat_id = cb.message.chat.id
-    user_id = cb.from_user.id
-    key = _bj_key(chat_id, game_id)
 
-    raw = await store._r.get(key)
-    if raw is None:
-        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
+# ── Callback: свои карты ───────────────────────────────────────────────
+
+
+@router.callback_query(F.data.startswith("bj:peek:"))
+@inject
+async def cb_bj_peek(cb: CallbackQuery, store: FromDishka[RedisStore]) -> None:
+    game_id = _game_id(cb)
+    snapshot = await store.game_load(_bj_key(cb.message.chat.id, game_id)) if game_id else None
+    if snapshot is None or snapshot.data["state"] != "playing":
+        await safe_callback_answer(cb, _NOT_FOUND, show_alert=True)
         return
-
-    data = json.loads(raw)
-
-    if data["state"] != "playing":
-        await safe_callback_answer(cb, "Игра не активна.", show_alert=True)
+    side = _side_of(snapshot.data, cb.from_user.id)
+    if side is None:
+        await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
         return
-
-    turn = data["turn"]
-    active_id = data[f"{turn}_id"]
-
-    if user_id != active_id:
-        other = "p2" if turn == "p1" else "p1"
-        if user_id == data[f"{other}_id"]:
-            await safe_callback_answer(cb, "Сейчас не твой ход!", show_alert=False)
-        else:
-            await safe_callback_answer(cb, "Ты не участник этой игры.", show_alert=True)
-        return
-
-    p = pluralizer
-    data[f"{turn}_done"] = True
-
-    # Обновляем expires_at при каждом действии
-    data["expires_at"] = time.time() + _BJ_GAME_TTL
-
-    other = "p2" if turn == "p1" else "p1"
-    if data[f"{other}_done"]:
-        # Оба закончили — результат
-        text = await _resolve_game(data, store, score_repo, stats_repo, p, chat_id)
-        if text is None:
-            await safe_callback_answer(cb, "Игра уже завершена.")
-            return
-        try:
-            await cb.message.edit_text(
-                text,
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-                reply_markup=None,
-            )
-            if cb.message.bot:
-                schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
-        except Exception:
-            pass
-        await safe_callback_answer(cb, "\u270b Хватит!")
-        return
-
-    # Переход хода к сопернику
-    data["turn"] = other
-    if not await _save_playing(store, key, data):
-        await safe_callback_answer(cb, "Игра завершена или не найдена.", show_alert=True)
-        return
-
-    text = _turn_text(data, p)
-    try:
-        await cb.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_play_kb(game_id),
-        )
-    except Exception:
-        pass
-    await safe_callback_answer(cb, "\u270b Хватит!")
+    await safe_callback_answer(cb, _hand_alert(snapshot.data, side), show_alert=True)
