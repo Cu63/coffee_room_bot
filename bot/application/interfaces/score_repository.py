@@ -7,7 +7,7 @@ from bot.domain.ledger import LedgerKind
 class IScoreRepository(ABC):
     """Балансы. Каждое изменение попадает в журнал ledger с типом ``kind``.
 
-    ``ref`` — что именно (``msg:<id>``, ``mute``, ``bj:<game_id>``…),
+    ``ref`` — что именно (``msg:<id>:<эмодзи>``, ``mute``, ``bj:<game_id>``…),
     ``counterparty_id`` — вторая сторона операции (кто поставил реакцию, кому перевод…).
     """
 

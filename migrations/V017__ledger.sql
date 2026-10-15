@@ -14,7 +14,7 @@ CREATE TABLE ledger (
     delta           BIGINT      NOT NULL,
     balance_after   BIGINT      NOT NULL,
     kind            TEXT        NOT NULL,   -- reaction, transfer, purchase, stake, prize, refund, bonus, tax, admin, opening
-    ref             TEXT,                   -- что именно: msg:<id>, mute, bj:<game_id>, lot:<lot_id>…
+    ref             TEXT,                   -- что именно: msg:<id>:<эмодзи>, mute, bj:<game_id>, lot:<lot_id>…
     counterparty_id BIGINT,                 -- вторая сторона: кто поставил реакцию, кому перевод, кого замутили
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );

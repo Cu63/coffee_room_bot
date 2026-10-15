@@ -174,7 +174,12 @@ class ScoreService:
         # 9. Применить
         delta = reaction.weight
         new_value = await self._score_repo.add_delta(
-            target_id, chat_id, delta, kind=LedgerKind.REACTION, ref=f"msg:{message_id}", counterparty_id=actor_id
+            target_id,
+            chat_id,
+            delta,
+            kind=LedgerKind.REACTION,
+            ref=f"msg:{message_id}:{emoji}",
+            counterparty_id=actor_id,
         )
 
         await self._event_repo.save(
@@ -226,7 +231,12 @@ class ScoreService:
 
         delta = reaction.weight
         new_value = await self._score_repo.add_delta(
-            target_id, chat_id, delta, kind=LedgerKind.REACTION, ref=f"msg:{message_id}", counterparty_id=actor_id
+            target_id,
+            chat_id,
+            delta,
+            kind=LedgerKind.REACTION,
+            ref=f"msg:{message_id}:{emoji}",
+            counterparty_id=actor_id,
         )
 
         await self._event_repo.save(
@@ -262,7 +272,7 @@ class ScoreService:
             chat_id,
             reverse_delta,
             kind=LedgerKind.REACTION,
-            ref=f"msg:{message_id}",
+            ref=f"msg:{message_id}:{emoji}",
             counterparty_id=actor_id,
         )
 

@@ -61,8 +61,8 @@ async def test_reaction_and_its_removal_are_journaled(conn, score_service_factor
     await svc.apply_reaction(B, CHAT, 1, "🔥")
     await svc.remove_reaction(B, CHAT, 1, "🔥")
     assert await journal(conn, A) == [
-        entry(LedgerKind.REACTION, 3, 3, "msg:1", B),
-        entry(LedgerKind.REACTION, -3, 0, "msg:1", B),
+        entry(LedgerKind.REACTION, 3, 3, "msg:1:🔥", B),
+        entry(LedgerKind.REACTION, -3, 0, "msg:1:🔥", B),
     ]
 
 
