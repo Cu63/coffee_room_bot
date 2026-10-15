@@ -12,12 +12,13 @@ Telegram bot (aiogram 3) for group-chat gamification: an internal currency ("б�
 uv sync                                    # dependencies (the dev group is installed by default)
 uv run python -m bot                       # run locally: needs PostgreSQL, Redis and .env
 uv run pytest tests/unit                   # unit tests
+uv run pytest tests/integration            # integration + e2e: needs TEST_DATABASE_URL and TEST_REDIS_URL, see Tests
 uv run ruff check . && uv run ruff format --check .   # lint, exactly as CI runs it
 docker compose up --build -d               # full stack
 just migrate                               # Flyway migrations (see Justfile)
 ```
 
-CI (`.github/workflows/ci.yml`) runs two jobs: `lint` (ruff check + ruff format --check) and `test` (pytest `tests/unit`). Keep both green: `scripts/deploy.sh` on the server deploys `master` only after both pass.
+CI (`.github/workflows/ci.yml`) runs three jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`) and `integration` (pytest `tests/integration` against Postgres 16 and Redis 7 service containers). Keep all three green: `scripts/deploy.sh` on the server deploys `master` only after they pass.
 
 ## Architecture
 
@@ -60,11 +61,11 @@ One Postgres transaction per update (or per loop scope): `DatabaseProvider.get_t
   - multi-field compare-and-set: Lua or WATCH (`RedisStore.game_patch_if_state`, `lot_game_save_if_unchanged`).
 - Cleanup loops take expired games one at a time (Lua "delete if expired"), settle each in its own short transaction and edit the Telegram message after the commit.
 - Timeouts: a lobby nobody accepted → refund the creator; an abandoned started game → both stakes go to the bot.
-- The bot's own balance in each chat (`bot.id`) is the house: purchases and fees go there, prizes are paid from it.
+- The bot's own balance in each chat (`bot.id`) is the house: purchases and fees go there, prizes are paid from it. `scores.user_id` references `users`, so `main()` upserts the bot into `users` at startup (`register_bot_user`).
 
 ### Configuration
 
-- `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Admins are `admin.users` (Telegram usernames); `admin.prefix` only filters admin messages out of chat summaries.
+- `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Unknown keys are an error (`extra="forbid"`): a typo fails startup and `tests/unit/test_config.py`. Admins are `admin.users` (Telegram usernames); `admin.prefix` only filters admin messages out of chat summaries.
 - `configs/messages.yaml` — user-facing texts. New texts go here (plenty of older code still has hardcoded strings). `tests/unit/test_smoke.py` checks that every `_t["key"]` used in code exists.
 - `configs/help.yaml` — `/help` menu structure and texts.
 - `configs/words_ru.txt` — word list for `/rword` and `/anagram`. It is gitignored and has to be put on the server by hand.
@@ -77,6 +78,13 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 ### Background Tasks
 
 About 17 loops in `bot/infrastructure/*_loop.py`, started in `bot/main.py`: event cleanup, unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax.
+
+### Tests
+
+- `tests/unit` — pure logic, no services.
+- `tests/integration` — real PostgreSQL and Redis from `TEST_DATABASE_URL` / `TEST_REDIS_URL`; without them the tests are skipped. Every test truncates all tables and flushes the Redis db, so point both at a dedicated database and Redis db number. Migrations are applied automatically; `tests/integration/conftest.py` shows how to start throwaway containers.
+- E2E tests use the `tg` fixture: a real `Dispatcher` assembled by the same `bootstrap.py` functions as `main.py`, the full DI container, and `FakeTelegramSession` (`tests/integration/fake_telegram.py`) in place of the Bot API. It answers like Telegram and records every request.
+- Make races deterministic with a barrier or event inside a monkeypatched method (see `test_e2e.py`), not with sleeps, and check that the test fails when the protection it covers is removed.
 
 ## Conventions
 
