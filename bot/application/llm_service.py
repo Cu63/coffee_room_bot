@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
+from bot.domain.bot_utils import is_admin_account
 from bot.infrastructure.aitunnel_client import AiTunnelClient
 from bot.infrastructure.search_engine import SearchEngine
 
@@ -56,11 +57,8 @@ class LlmService:
         self._search_max_results = search_max_results
         self._admin_users = set(admin_users)
 
-    def _is_admin(self, username: str | None) -> bool:
-        return username is not None and username.lower() in self._admin_users
-
     async def _check_limit(self, user_id: int, username: str | None) -> None:
-        if self._is_admin(username):
+        if is_admin_account(user_id, username, self._admin_users):
             return
         count = await self._repo.count_today(user_id, _LIMITED_COMMANDS)
         if count >= self._daily_limit:
@@ -74,7 +72,7 @@ class LlmService:
             text=text,
             used_today=used,
             daily_limit=self._daily_limit,
-            is_admin=self._is_admin(username),
+            is_admin=is_admin_account(user_id, username, self._admin_users),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )

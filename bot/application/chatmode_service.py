@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -12,6 +13,8 @@ from bot.application.interfaces.chatmode_repository import ChatmodeEntry, IChatm
 from bot.application.score_service import ScoreService
 from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
+
+logger = logging.getLogger(__name__)
 
 # Права для каждого режима
 # silence: запрещаем всё, кроме реакций (реакции не входят в ChatPermissions — они всегда доступны)
@@ -121,6 +124,21 @@ class ChatmodeService:
 
         total_cost = cost_per_minute * minutes
 
+        # Права чата запоминаем до того, как кто-либо их поменял, и сразу занимаем чат:
+        # из двух параллельных /silence второй получит already_active и ничего не заплатит
+        chat = await bot.get_chat(chat_id)
+        now = datetime.now(TZ_MSK)
+        entry = ChatmodeEntry(
+            chat_id=chat_id,
+            mode=mode,
+            activated_by=user_id,
+            activated_at=now,
+            expires_at=now + timedelta(minutes=minutes),
+            saved_perms=perms_to_dict(chat.permissions or ChatPermissions()),
+        )
+        if not await self._repo.try_create(entry):
+            return ActivateResult(success=False, error="already_active")
+
         # Снимаем баллы
         from bot.application.score_service import SPECIAL_EMOJI
 
@@ -134,28 +152,13 @@ class ChatmodeService:
             bot_id=bot_id,
         )
         if not spend.success:
+            await self._repo.delete(chat_id)
             return ActivateResult(
                 success=False,
                 error="not_enough",
                 cost=total_cost,
                 new_balance=spend.current_balance,
             )
-
-        # Сохраняем текущие права чата
-        chat = await bot.get_chat(chat_id)
-        current_perms = chat.permissions or ChatPermissions()
-        saved = perms_to_dict(current_perms)
-
-        now = datetime.now(TZ_MSK)
-        entry = ChatmodeEntry(
-            chat_id=chat_id,
-            mode=mode,
-            activated_by=user_id,
-            activated_at=now,
-            expires_at=now + timedelta(minutes=minutes),
-            saved_perms=saved,
-        )
-        await self._repo.save(entry)
 
         # Выставляем ограничения
         await bot.set_chat_permissions(
@@ -176,7 +179,7 @@ class ChatmodeService:
                 use_independent_chat_permissions=True,
             )
         except Exception:
-            pass
+            logger.exception("chatmode: не удалось вернуть права чата %d", entry.chat_id)
         await self._repo.delete(entry.chat_id)
 
     async def get_expired(self) -> list[ChatmodeEntry]:

@@ -22,8 +22,8 @@ class IChatmodeRepository(ABC):
         ...
 
     @abstractmethod
-    async def save(self, entry: ChatmodeEntry) -> None:
-        """Сохранить активный режим (upsert)."""
+    async def try_create(self, entry: ChatmodeEntry) -> bool:
+        """Занять чат режимом. False — в чате уже есть режим (запись не меняется)."""
         ...
 
     @abstractmethod

@@ -23,17 +23,15 @@ class PostgresChatmodeRepository(IChatmodeRepository):
         )
         return self._to_entry(row)
 
-    async def save(self, entry: ChatmodeEntry) -> None:
-        await self._conn.execute(
+    async def try_create(self, entry: ChatmodeEntry) -> bool:
+        # DO NOTHING, а не upsert: второй параллельный /silence не должен перезаписать
+        # сохранённые права чата правами «тишины» — тогда чат остался бы в ней навсегда
+        created = await self._conn.fetchval(
             """
             INSERT INTO chatmode (chat_id, mode, activated_by, activated_at, expires_at, saved_perms)
             VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (chat_id) DO UPDATE
-                SET mode         = EXCLUDED.mode,
-                    activated_by = EXCLUDED.activated_by,
-                    activated_at = EXCLUDED.activated_at,
-                    expires_at   = EXCLUDED.expires_at,
-                    saved_perms  = EXCLUDED.saved_perms
+            ON CONFLICT (chat_id) DO NOTHING
+            RETURNING 1
             """,
             entry.chat_id,
             entry.mode,
@@ -42,6 +40,7 @@ class PostgresChatmodeRepository(IChatmodeRepository):
             entry.expires_at,
             json.dumps(entry.saved_perms),
         )
+        return created is not None
 
     async def delete(self, chat_id: int) -> None:
         await self._conn.execute(

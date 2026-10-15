@@ -6,26 +6,24 @@ import logging
 import math
 import random
 import time
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
-from aiogram.types import ChatMemberAdministrator, ChatMemberOwner, ChatPermissions, Message
+from aiogram.types import Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.iq_service import IqService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
-from bot.domain.entities import MuteEntry
 from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import (
-    _ADMIN_PERM_FIELDS,
-)
+from bot.presentation.handlers._admin_utils import MuteOutcome, apply_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -47,59 +45,9 @@ async def _apply_mute_debuff(
     muted_by: int,
 ) -> bool:
     """Применить мут-дебафф. Возвращает True если мут наложен."""
-    from datetime import datetime, timedelta
-
-    now = datetime.now(TZ_MSK)
-    until = now + timedelta(minutes=minutes)
-
-    try:
-        member = await bot.get_chat_member(chat_id, target_id)
-    except Exception:
-        return False
-
-    if isinstance(member, ChatMemberOwner):
-        return False
-
-    was_admin = isinstance(member, ChatMemberAdministrator)
-    admin_perms = None
-    if was_admin:
-        admin_perms = {}
-        for field in _ADMIN_PERM_FIELDS:
-            admin_perms[field] = getattr(member, field, False) or False
-        if member.custom_title:
-            admin_perms["custom_title"] = member.custom_title
-        try:
-            await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **{f: False for f in _ADMIN_PERM_FIELDS})
-        except Exception:
-            return False
-
-    try:
-        await bot.restrict_chat_member(
-            chat_id=chat_id,
-            user_id=target_id,
-            permissions=ChatPermissions(can_send_messages=False),
-            until_date=until,
-        )
-    except Exception:
-        if was_admin and admin_perms:
-            try:
-                kw = {k: v for k, v in admin_perms.items() if k in _ADMIN_PERM_FIELDS}
-                await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **kw)
-            except Exception:
-                pass
-        return False
-
-    await mute_service.save_mute(
-        MuteEntry(
-            user_id=target_id,
-            chat_id=chat_id,
-            muted_by=muted_by,
-            until_at=until,
-            was_admin=was_admin,
-            admin_permissions=admin_perms,
-        )
-    )
-    return True
+    until = datetime.now(TZ_MSK) + timedelta(minutes=minutes)
+    muted = await apply_mute(bot, mute_service, target_id=target_id, chat_id=chat_id, muted_by=muted_by, until=until)
+    return muted.outcome == MuteOutcome.MUTED
 
 
 @router.message(Command("poker"))

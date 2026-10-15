@@ -19,7 +19,7 @@ from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import _resolve_username, _unmute_user
+from bot.presentation.handlers._admin_utils import _resolve_username, lift_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 router = Router(name="unmute_cmd")
@@ -117,7 +117,7 @@ async def cmd_unmute(
     if is_owner_muted:
         await store.owner_mute_delete(chat_id, target_id)
     if entry is not None:
-        await _unmute_user(message.bot, mute_service, entry)
+        await lift_mute(message.bot, mute_service, entry)
 
     await reply_and_delete(
         message,
