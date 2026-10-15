@@ -85,7 +85,9 @@ async def cmd_unmute(
     cost = max(1, math.ceil(remaining_minutes * mute_cfg.cost_per_minute * mute_cfg.unmute_multiplier))
 
     # Списываем баллы с актора: проверка баланса и списание — один атомарный запрос
-    spend = await score_service.spend_score(actor_id, actor_id, chat_id, cost, SPECIAL_EMOJI["sub"])
+    spend = await score_service.spend_score(
+        actor_id, actor_id, chat_id, cost, SPECIAL_EMOJI["sub"], bot_id=message.bot.id
+    )
     if not spend.success:
         await reply_and_delete(
             message,

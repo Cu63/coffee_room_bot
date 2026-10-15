@@ -19,8 +19,11 @@ from aiogram.methods import (
     AnswerCallbackQuery,
     DeleteMessage,
     EditMessageText,
+    GetChatMember,
     GetMe,
     PinChatMessage,
+    PromoteChatMember,
+    RestrictChatMember,
     SendMessage,
     SetMessageReaction,
     TelegramMethod,
@@ -34,6 +37,11 @@ M = TypeVar("M", bound=TelegramMethod[Any])
 
 BOT_USER = User(id=BOT_ID, is_bot=True, first_name="Кофебот", username="coffee_test_bot")
 CHAT_JSON = {"id": CHAT, "type": "supergroup", "title": "Кофейня"}
+
+
+def member(uid: int, **fields: Any) -> User:
+    """Участник чата; seed_users заводит его в БД с тем же username."""
+    return User(**{"id": uid, "is_bot": False, "first_name": f"User {uid}", "username": f"user{uid}", **fields})
 
 
 def _message_json(message_id: int, text: str, sender: User = BOT_USER) -> dict[str, Any]:
@@ -53,6 +61,8 @@ class FakeTelegramSession(BaseSession):
         super().__init__()
         self.log: list[tuple[TelegramMethod[Any], Any]] = []
         self._message_ids = itertools.count(10_000)
+        # Статус в чате для getChatMember: member, left, kicked, creator. По умолчанию — member.
+        self.member_status: dict[int, str] = {}
 
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
         content = json.dumps({"ok": True, "result": self._result(method)})
@@ -68,9 +78,28 @@ class FakeTelegramSession(BaseSession):
                 return _message_json(method.message_id, method.text)
             case GetMe():
                 return BOT_USER.model_dump(mode="json", exclude_none=True)
-            case AnswerCallbackQuery() | PinChatMessage() | UnpinChatMessage() | DeleteMessage() | SetMessageReaction():
+            case GetChatMember():
+                return self._chat_member_json(method.user_id)
+            case (
+                AnswerCallbackQuery()
+                | PinChatMessage()
+                | UnpinChatMessage()
+                | DeleteMessage()
+                | SetMessageReaction()
+                | RestrictChatMember()
+                | PromoteChatMember()
+            ):
                 return True
         raise NotImplementedError(f"фейковый Telegram не умеет {type(method).__name__}")
+
+    def _chat_member_json(self, user_id: int) -> dict[str, Any]:
+        status = self.member_status.get(user_id, "member")
+        result: dict[str, Any] = {"status": status, "user": member(user_id).model_dump(mode="json", exclude_none=True)}
+        if status == "kicked":
+            result["until_date"] = 0
+        if status == "creator":
+            result["is_anonymous"] = False
+        return result
 
     async def stream_content(
         self,
