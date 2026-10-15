@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from aiogram import Dispatcher
 from aiogram.types import User as TgUser
+from dishka import AsyncContainer
 
+from bot.application.interfaces.user_repository import IUserRepository
+from bot.domain.entities import User
 from bot.infrastructure.config_loader import AppConfig, BotSettings
 from bot.presentation.middlewares.auto_delete import AutoDeleteCommandMiddleware
 from bot.presentation.middlewares.auto_react import AutoReactMiddleware
@@ -18,6 +21,18 @@ from bot.presentation.middlewares.spark_bonus import SparkBonusMiddleware
 from bot.presentation.middlewares.telegram_errors import TelegramErrorsMiddleware
 from bot.presentation.middlewares.track_message import TrackMessageMiddleware
 from bot.presentation.middlewares.unsound_guard import UnsoundGuardMiddleware
+
+
+async def register_bot_user(container: AsyncContainer, bot_me: TgUser) -> None:
+    """Заводит бота в users.
+
+    Баланс бота в каждом чате — касса (покупки, комиссии, призы), а scores.user_id
+    ссылается на users. Раньше бот попадал в users только после первой автореакции,
+    и в новой БД первая же покупка падала на внешнем ключе.
+    """
+    async with container() as scope:
+        user_repo = await scope.get(IUserRepository)
+        await user_repo.upsert(User(id=bot_me.id, username=bot_me.username, full_name=bot_me.full_name, is_bot=True))
 
 
 def register_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:

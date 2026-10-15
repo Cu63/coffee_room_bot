@@ -79,11 +79,13 @@ async def main() -> None:
     dp = Dispatcher()
 
     from bot.infrastructure.bootstrap import (
+        register_bot_user,
         register_middlewares,
         register_post_dishka_middlewares,
         register_routers,
     )
 
+    await register_bot_user(container, bot_me)
     register_middlewares(dp, bot_me)
     register_routers(dp, config, settings)
     setup_dishka(container, dp)
