@@ -525,6 +525,20 @@ class TaxConfig(_BaseConfig):
     ]
 
 
+class ThinkConfig(_BaseConfig):
+    """Настройки /think — случайная мысль участника по его IQ и свежей переписке.
+
+    Провайдер тот же, что у /analyze и /ff (OPENAI_API_KEY), модель — своя.
+    """
+
+    enabled: bool = True
+    model: str = "gpt-4.1-nano"
+    max_output_tokens: int = 300  # мысль короткая
+    temperature: float = 1.1  # выше = неожиданнее
+    messages_count: int = 30  # сколько последних сообщений чата идёт в контекст
+    daily_limit_per_user: int = 2  # мыслей на пользователя в сутки (0 = без лимита, админам не считается)
+
+
 class AppConfig(_BaseConfig):
     score: ScoreConfig = ScoreConfig()
     reactions: dict[str, int] = {}
@@ -567,6 +581,7 @@ class AppConfig(_BaseConfig):
     tax: TaxConfig = TaxConfig()
     genai: GenaiConfig = GenaiConfig()
     fanfic: FanficConfig = FanficConfig()
+    think: ThinkConfig = ThinkConfig()
     unsound: UnsoundConfig = UnsoundConfig()
 
 

@@ -330,6 +330,14 @@ fanfic:
   max_prompt_length: 500           # максимальная длина сюжета
   daily_limit_per_user: 5          # фанфиков на пользователя в сутки (0 = без лимита, админам не считается)
 
+think:
+  enabled: true                    # false — полностью отключить /think
+  model: "gpt-4.1-nano"            # провайдер тот же, что у /analyze и /ff
+  max_output_tokens: 300           # мысль короткая
+  temperature: 1.1                 # выше = неожиданнее
+  messages_count: 30               # сколько последних сообщений чата берётся в контекст
+  daily_limit_per_user: 2          # мыслей на пользователя в сутки (0 = без лимита, админам не считается)
+
 genai:
   enabled: true                    # false — полностью отключить /genai
   cost: 100                        # стоимость одной генерации (кирчиков)
