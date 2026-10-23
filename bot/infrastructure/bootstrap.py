@@ -130,6 +130,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.slots import router as slots_router
     from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.tag import router as tag_router
+    from bot.presentation.handlers.think import router as think_router
     from bot.presentation.handlers.tictactoe import router as ttt_router
     from bot.presentation.handlers.tracker import router as tracker_router
     from bot.presentation.handlers.transfer import router as transfer_router
@@ -185,5 +186,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         dp.include_router(genai_router)
     if config.fanfic.enabled:
         dp.include_router(fanfic_router)
+    if config.think.enabled:
+        dp.include_router(think_router)
     if config.unsound.enabled:
         dp.include_router(unsound_router)

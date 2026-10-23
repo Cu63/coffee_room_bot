@@ -36,6 +36,7 @@ from bot.application.llm_service import LlmService
 from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.application.stake_service import StakeService
+from bot.application.think_service import ThinkService
 from bot.application.xp_service import XpService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
@@ -165,6 +166,26 @@ class AppServiceProvider(Provider):
             message_repo=message_repo,
             llm_repo=llm_repo,
             config=config.fanfic,
+            formatter=formatter,
+            tx=tx,
+            admin_users=config.admin.users,
+        )
+
+    @provide(scope=Scope.REQUEST)
+    def get_think_service(
+        self,
+        client: OpenAiClient,
+        message_repo: IMessageRepository,
+        llm_repo: ILlmRepository,
+        config: AppConfig,
+        formatter: MessageFormatter,
+        tx: ITransactionManager,
+    ) -> ThinkService:
+        return ThinkService(
+            client=client,
+            message_repo=message_repo,
+            llm_repo=llm_repo,
+            config=config.think,
             formatter=formatter,
             tx=tx,
             admin_users=config.admin.users,
