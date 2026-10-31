@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Telegram bot (aiogram 3) for group-chat gamification: an internal currency ("баллы") earned through emoji reactions, spent on paid actions (mute, tag, buyop, …), wager games (blackjack, tic-tac-toe, duels, dice, slots, word games, lot auctions) and LLM commands. The bot works in several chats; balances are per chat. Everything user-facing is in Russian (texts, comments, config).
+Telegram bot (aiogram 3) for group-chat gamification: an internal currency ("баллы") earned through emoji reactions, spent on paid actions (tag, buyop, …), wager games (blackjack, tic-tac-toe, duels, dice, slots, word games, lot auctions) and LLM commands. The bot works in several chats; balances are per chat. Everything user-facing is in Russian (texts, comments, config).
 
 ## Key Commands
 
@@ -73,6 +73,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 
 - Every mute goes through `apply_mute()` and every unmute through `lift_mute()` (`bot/presentation/handlers/_admin_utils.py`). They keep the admin-rights snapshot in `active_mutes` (merged in SQL, so a repeated mute never loses it), never shorten a longer mute, and leave a restriction set by hand alone (`MuteOutcome.RESTRICTED_BY_ADMIN`).
 - A title bought with `/buyop` (or given by `/op`) is not a moderator: check rights with `can_moderate()`: a bot admin, the chat owner, or an admin who can delete messages or restrict members.
+- Only holders of mute rights mute and unmute other people: `/mute` (alias `/amute`) and `/unmute` (alias `/aunmute`) check `can_mute()` — a bot admin, the chat owner, or an admin who can restrict members. They are free. Anything else that mutes hits only the player themself or follows a bot rule: `/selfmute`, `/poker` (the mute debuff never lands on another member), «67», the `/rword` penalty, and `/mutegiveaway`, which only a bot admin starts and players join by choice.
 
 ### Configuration
 

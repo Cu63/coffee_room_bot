@@ -126,6 +126,11 @@ class FakeTelegramSession(BaseSession):
         # Права участников чата: getChat отдаёт, setChatPermissions меняет
         self.chat_permissions: dict[str, bool] = dict(CHAT_PERMISSIONS)
 
+    def set_admin(self, user_id: int, **rights: Any) -> None:
+        """Сделать участника администратором: права — ADMIN_RIGHTS с поправками из rights."""
+        self.member_status[user_id] = "administrator"
+        self.admin_rights[user_id] = ADMIN_RIGHTS | rights
+
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
         content = json.dumps({"ok": True, "result": self._result(method)})
         result = self.check_response(bot=bot, method=method, status_code=200, content=content).result
@@ -226,10 +231,13 @@ class TelegramHarness:
         self._update_ids = itertools.count(1)
         self._message_ids = itertools.count(1)
 
-    async def send(self, user: User, text: str) -> int:
-        """Сообщение пользователя в чат; возвращает его message_id."""
+    async def send(self, user: User, text: str, reply_to: User | None = None) -> int:
+        """Сообщение пользователя в чат (ответом на сообщение reply_to, если задан); возвращает его message_id."""
         message_id = next(self._message_ids)
-        message = Message.model_validate(_message_json(message_id, text, sender=user))
+        data = _message_json(message_id, text, sender=user)
+        if reply_to is not None:
+            data["reply_to_message"] = _message_json(next(self._message_ids), "…", sender=reply_to)
+        message = Message.model_validate(data)
         await self.dp.feed_update(self.bot, Update(update_id=next(self._update_ids), message=message))
         return message_id
 

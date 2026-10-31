@@ -1,6 +1,6 @@
 """E2E модерации.
 
-Мут не теряет админку, не трогает ручные ограничения и не укорачивает оплаченный мут;
+Мут не теряет админку, не трогает ручные ограничения и не укорачивает более длинный мут;
 режимы чата не списывают дважды и не теряют права чата; титул из /buyop — не модератор;
 админы бота — по id.
 """
@@ -40,9 +40,13 @@ async def mute_row(conn) -> dict | None:
     return {"until_at": row["until_at"], "was_admin": row["was_admin"], "perms": json.loads(perms) if perms else None}
 
 
+def grant_mute_rights(tg, user_id: int = ACTOR) -> None:
+    tg.session.set_admin(user_id, can_restrict_members=True)
+
+
 async def test_second_mute_keeps_admin_rights_and_unmute_restores_them(tg, conn):
-    await seed_users(conn, ACTOR, HELPER, balance=100)
-    await seed_users(conn, VICTIM)
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
     tg.session.member_status[VICTIM] = "administrator"
 
     await tg.send(member(ACTOR), "/mute @user712 1")
@@ -57,36 +61,35 @@ async def test_second_mute_keeps_admin_rights_and_unmute_restores_them(tg, conn)
     assert (second["was_admin"], second["perms"]) == (True, first["perms"])
     assert second["until_at"] > first["until_at"]  # время стекуется
 
-    await tg.send(member(HELPER), "/unmute @user712")
+    await tg.send(member(ACTOR), "/unmute @user712")
     assert await mute_row(conn) is None
     restored = [p for p in tg.requests(PromoteChatMember) if p.user_id == VICTIM][-1]
     assert restored.can_delete_messages and restored.can_pin_messages
 
 
-async def test_paid_mute_does_not_touch_restriction_set_by_admin(tg, conn, app_container):
-    await seed_users(conn, ACTOR, balance=100)
-    await seed_users(conn, VICTIM)
+async def test_mute_does_not_touch_restriction_set_by_admin(tg, conn, app_container):
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
     tg.session.member_status[VICTIM] = "restricted"  # админ ограничил вручную, бот об этом не знает
 
     await tg.send(member(ACTOR), "/mute @user712 1")
 
-    # Раньше мут за 3 балла заменял ручное ограничение, а размут снимал его совсем
+    # Раньше мут ботом заменял ручное ограничение, а размут снимал его совсем
     texts = await app_container.get(MessageFormatter)
     [reply] = tg.requests(SendMessage)
     assert reply.text == texts._t["mute_restricted_by_admin"].format(target="<code>@user712</code>")
     assert tg.requests(RestrictChatMember) == []
     assert await mute_row(conn) is None
-    assert (await balance(conn, ACTOR), await balance(conn, BOT_ID)) == (100, 0)  # списание откатилось
 
 
-async def test_roulette_or_poker_mute_does_not_shorten_paid_mute(tg, conn, app_container):
-    await seed_users(conn, ACTOR, balance=100)
-    await seed_users(conn, VICTIM)
+async def test_roulette_or_poker_mute_does_not_shorten_longer_mute(tg, conn, app_container):
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
     await tg.send(member(ACTOR), "/mute @user712 30")
-    paid = await mute_row(conn)
+    longer = await mute_row(conn)
     tg.session.member_status[VICTIM] = "restricted"
 
-    # Рулетка или кочерга мутят на 5 минут — оплаченные 30 не должны сократиться
+    # Рулетка или кочерга мутят на 5 минут — выданные модератором 30 не должны сократиться
     async with app_container() as scope:
         mute_service = await scope.get(MuteService)
         result = await apply_mute(
@@ -98,9 +101,9 @@ async def test_roulette_or_poker_mute_does_not_shorten_paid_mute(tg, conn, app_c
             until=datetime.now(TZ_MSK) + timedelta(minutes=5),
         )
 
-    assert (result.outcome, result.until) == (MuteOutcome.MUTED, paid["until_at"])
-    assert (await mute_row(conn))["until_at"] == paid["until_at"]
-    assert tg.requests(RestrictChatMember)[-1].until_date == paid["until_at"]
+    assert (result.outcome, result.until) == (MuteOutcome.MUTED, longer["until_at"])
+    assert (await mute_row(conn))["until_at"] == longer["until_at"]
+    assert tg.requests(RestrictChatMember)[-1].until_date == longer["until_at"]
 
 
 # ── /silence и /gif ───────────────────────────────────────────────────────────

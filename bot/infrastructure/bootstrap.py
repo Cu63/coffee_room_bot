@@ -122,7 +122,6 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.mute import router as mute_router
     from bot.presentation.handlers.news import router as news_router
     from bot.presentation.handlers.poker import router as poker_router
-    from bot.presentation.handlers.protect import router as protect_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
     from bot.presentation.handlers.selfban import router as selfban_router
@@ -154,7 +153,6 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     dp.include_router(transfer_router)
     dp.include_router(renew_router)
     dp.include_router(wordgame_router)
-    dp.include_router(protect_router)
     dp.include_router(admin_chats_router)
     dp.include_router(admin_score_router)
     dp.include_router(admin_user_router)

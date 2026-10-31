@@ -1,4 +1,4 @@
-"""Moderation: мут-лимиты, owner_mute, gameban, renew."""
+"""Moderation: owner_mute, gameban, renew."""
 
 from __future__ import annotations
 
@@ -15,8 +15,6 @@ _SLOTS_ALL_DAILY = "slots:all:"
 
 
 class ModerationStoreMixin:
-    _MUTE_DAILY = "mute:daily:"
-    _MUTE_TARGET = "mute:target:"
     _RENEW_DAILY = "renew:daily:"
     _DONOTBUY_DAILY = "donotbuy:daily:"
     _SIXTYSEVEN_DAILY = "six7:daily:"
@@ -65,26 +63,6 @@ class ModerationStoreMixin:
         pipe.expire(key, 86400)
         result = await pipe.execute()
         return int(result[0])
-
-    async def mute_daily_count(self, actor_id: int, chat_id: int) -> int:
-        key = f"{self._MUTE_DAILY}{actor_id}:{chat_id}"
-        raw = await self._r.get(key)
-        return int(raw or 0)
-
-    async def mute_daily_increment(self, actor_id: int, chat_id: int) -> None:
-        key = f"{self._MUTE_DAILY}{actor_id}:{chat_id}"
-        pipe = self._r.pipeline()
-        pipe.incr(key)
-        pipe.expire(key, 86400)
-        await pipe.execute()
-
-    async def mute_target_cooldown_ok(self, actor_id: int, target_id: int, chat_id: int) -> bool:
-        key = f"{self._MUTE_TARGET}{actor_id}:{target_id}:{chat_id}"
-        return not bool(await self._r.exists(key))
-
-    async def mute_target_cooldown_set(self, actor_id: int, target_id: int, chat_id: int, hours: int) -> None:
-        key = f"{self._MUTE_TARGET}{actor_id}:{target_id}:{chat_id}"
-        await self._r.set(key, "1", ex=hours * 3600)
 
     # ── /renew ─────────────────────────────────────────────
 

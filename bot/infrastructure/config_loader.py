@@ -129,16 +129,9 @@ class AutoReactConfig(_BaseConfig):
 
 
 class MuteConfig(_BaseConfig):
-    cost_per_minute: int = 3
-    min_minutes: int = 1
-    max_minutes: int = 15
-    daily_limit: int = 3
-    target_cooldown_hours: int = 2
+    # /mute и /unmute — только для тех, у кого есть право на муты (can_mute), бесплатно и без лимитов
     selfmute_min_minutes: int = 1
     selfmute_max_minutes: int = 1440
-    protection_cost: int = 200
-    protection_duration_hours: int = 24
-    unmute_multiplier: float = 1.5
 
 
 class TagConfig(_BaseConfig):

@@ -70,16 +70,39 @@ def has_moderation_rights(member: ChatMember) -> bool:
     return isinstance(member, ChatMemberAdministrator) and (member.can_restrict_members or member.can_delete_messages)
 
 
+def has_mute_rights(member: ChatMember) -> bool:
+    """Владелец чата или админ с правом «Блокировка участников» (can_restrict_members)."""
+    if isinstance(member, ChatMemberOwner):
+        return True
+    return isinstance(member, ChatMemberAdministrator) and member.can_restrict_members
+
+
+async def _chat_member(bot: Bot, chat_id: int, user_id: int) -> ChatMember | None:
+    try:
+        return await bot.get_chat_member(chat_id, user_id)
+    except TelegramAPIError:
+        logger.warning("Не удалось проверить права %d в чате %d", user_id, chat_id)
+        return None
+
+
 async def can_moderate(bot: Bot, chat_id: int, user: User, admins: Collection[str]) -> bool:
     """Админ бота из конфига или модератор чата с настоящими правами."""
     if is_admin(user, admins):
         return True
-    try:
-        member = await bot.get_chat_member(chat_id, user.id)
-    except TelegramAPIError:
-        logger.warning("Не удалось проверить права %d в чате %d", user.id, chat_id)
-        return False
-    return has_moderation_rights(member)
+    member = await _chat_member(bot, chat_id, user.id)
+    return member is not None and has_moderation_rights(member)
+
+
+async def can_mute(bot: Bot, chat_id: int, user: User, admins: Collection[str]) -> bool:
+    """Право на муты: админ бота из конфига, владелец чата или админ, который может ограничивать участников.
+
+    Мутить других и снимать с них мут могут только они. Права удалять сообщения
+    для этого мало, а титул из /buyop и /op прав не даёт вовсе.
+    """
+    if is_admin(user, admins):
+        return True
+    member = await _chat_member(bot, chat_id, user.id)
+    return member is not None and has_mute_rights(member)
 
 
 def _extract_admin_permissions(member: ChatMemberAdministrator) -> dict:
@@ -119,7 +142,7 @@ async def _resolve_user_and_number(args, user_repo):
 
 
 async def _resolve_mute_args(args, message: Message, user_repo: IUserRepository):
-    """Разбирает аргументы /mute и /amute с поддержкой reply.
+    """Разбирает аргументы /mute с поддержкой reply.
 
     Варианты:
       /mute @username 30    — явный username + время
