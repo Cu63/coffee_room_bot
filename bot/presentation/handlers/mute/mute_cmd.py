@@ -1,4 +1,4 @@
-"""Команда /mute — мут пользователя за баллы."""
+"""Команда /mute (она же /amute) — мут участника тем, у кого есть право на муты."""
 
 from __future__ import annotations
 
@@ -18,20 +18,15 @@ from aiogram.types import (
 )
 from dishka.integrations.aiogram import FromDishka, inject
 
-from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.mute_service import MuteService
-from bot.application.score_service import ScoreService
 from bot.domain.bot_utils import parse_duration
 from bot.domain.entities import User
-from bot.domain.ledger import LedgerKind
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.errors import AbortUpdate
-from bot.presentation.handlers._admin_utils import MuteOutcome, _resolve_mute_args, apply_mute
+from bot.presentation.handlers._admin_utils import MuteOutcome, _resolve_mute_args, apply_mute, can_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -44,7 +39,7 @@ _RANDOM_PICK_ATTEMPTS = 5
 async def _pick_random_member(bot: Bot, score_repo: IScoreRepository, chat_id: int, exclude_id: int) -> User | None:
     """Случайный участник с ненулевым счётом в чате (не бот, не exclude_id), который ещё в чате.
 
-    Счёт остаётся и у тех, кто вышел: платить за мут отсутствующего незачем, поэтому
+    Счёт остаётся и у тех, кто вышел: мутить отсутствующего незачем, поэтому
     таких пропускаем и тянем ещё раз.
     """
     for _ in range(_RANDOM_PICK_ATTEMPTS):
@@ -65,25 +60,27 @@ async def _pick_random_member(bot: Bot, score_repo: IScoreRepository, chat_id: i
     return None
 
 
-@router.message(Command("mute"))
+@router.message(Command("mute", "amute"))
 @inject
 async def cmd_mute(
     message: Message,
     command: CommandObject,
-    score_service: FromDishka[ScoreService],
     mute_service: FromDishka[MuteService],
-    protection_repo: FromDishka[IMuteProtectionRepository],
     user_repo: FromDishka[IUserRepository],
     score_repo: FromDishka[IScoreRepository],
-    store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
+    """/mute @user <время>, ответом /mute <время> или /mute random <время>. Бесплатно."""
     if message.from_user is None or message.bot is None:
         return
-    mute_cfg = config.mute
-    p = formatter._p
-    usage = formatter._t["mute_usage"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes)
+    bot = message.bot
+    chat_id = message.chat.id
+    # Мутить других может только тот, у кого есть право на муты
+    if not await can_mute(bot, chat_id, message.from_user, config.admin.users):
+        await reply_and_delete(message, formatter._t["mute_not_allowed"])
+        return
+    usage = formatter._t["mute_usage"]
     args = (command.args or "").split()
     # /mute random <время> — цель выбирает бот
     is_random = len(args) == 2 and args[0].lower() in _RANDOM_TARGETS
@@ -93,7 +90,7 @@ async def cmd_mute(
             await reply_and_delete(message, usage)
             return
         minutes = max(1, seconds // 60)
-        target = await _pick_random_member(message.bot, score_repo, message.chat.id, message.from_user.id)
+        target = await _pick_random_member(bot, score_repo, chat_id, message.from_user.id)
         if target is None:
             await reply_and_delete(message, formatter._t["mute_random_no_candidates"])
             return
@@ -109,125 +106,37 @@ async def cmd_mute(
     if target.id == message.from_user.id:
         await reply_and_delete(message, formatter._t["mute_self"])
         return
-    if minutes < mute_cfg.min_minutes or minutes > mute_cfg.max_minutes:
-        await reply_and_delete(
-            message,
-            formatter._t["mute_invalid_minutes"].format(min=mute_cfg.min_minutes, max=mute_cfg.max_minutes),
-        )
-        return
-    # Дневной лимит мутов
-    if mute_cfg.daily_limit > 0:
-        daily_count = await store.mute_daily_count(message.from_user.id, message.chat.id)
-        if daily_count >= mute_cfg.daily_limit:
-            await reply_and_delete(
-                message,
-                formatter._t["mute_daily_limit"].format(count=daily_count, limit=mute_cfg.daily_limit),
-            )
-            return
-    # Кулдаун между мутами одного участника
-    target_link = user_link(target.username, target.full_name, target.id)
-    if mute_cfg.target_cooldown_hours > 0:
-        if not await store.mute_target_cooldown_ok(message.from_user.id, target.id, message.chat.id):
-            await reply_and_delete(
-                message,
-                formatter._t["mute_target_cooldown"].format(target=target_link, hours=mute_cfg.target_cooldown_hours),
-                parse_mode=ParseMode.HTML,
-                link_preview_options=NO_PREVIEW,
-            )
-            return
-    protected_until = await protection_repo.get(target.id, message.chat.id)
-    if protected_until is not None:
-        until_str = protected_until.astimezone(TZ_MSK).strftime("%H:%M %d.%m")
-        await reply_and_delete(
-            message,
-            formatter._t["mute_target_protected"].format(target=target_link, until=until_str),
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-        )
-        return
-    cost = minutes * mute_cfg.cost_per_minute
-    score = await score_service.get_score(message.from_user.id, message.chat.id)
-    if score.value < cost:
-        await reply_and_delete(
-            message,
-            formatter._t["mute_not_enough"].format(
-                cost=cost,
-                score_word=p.pluralize(cost),
-                balance=score.value,
-                score_word_balance=p.pluralize(score.value),
-            ),
-        )
-        return
-    bot = message.bot
-    chat_id = message.chat.id
+
     # Стекуем: прибавляем к оставшемуся времени мута, не заменяем его
-    until, mute_was_stacked = await mute_service.compute_stacked_until(target.id, chat_id, minutes * 60)
-
-    # Сначала баллы (атомарно), потом мут. Если замутить не вышло — AbortUpdate
-    # откатывает списание вместе со всей транзакцией.
-    result = await score_service.spend_score(
-        actor_id=message.from_user.id,
-        target_id=target.id,
-        chat_id=chat_id,
-        cost=cost,
-        kind=LedgerKind.PURCHASE,
-        ref="mute",
-        bot_id=bot.id,
-    )
-    if not result.success:
-        await reply_and_delete(
-            message,
-            formatter._t["mute_not_enough"].format(
-                cost=cost,
-                score_word=p.pluralize(cost),
-                balance=result.current_balance,
-                score_word_balance=p.pluralize(result.current_balance),
-            ),
-        )
-        return
-
+    until, was_stacked = await mute_service.compute_stacked_until(target.id, chat_id, minutes * 60)
     muted = await apply_mute(
         bot, mute_service, target_id=target.id, chat_id=chat_id, muted_by=message.from_user.id, until=until
     )
+    target_link = user_link(target.username, target.full_name, target.id)
     if muted.outcome == MuteOutcome.OWNER:
-        # Владельца ограничить нельзя — мягкий мут: его сообщения удаляет middleware
-        await store.owner_mute_set(chat_id, target.id, until.timestamp())
-        await mute_service.log_mute(target.id, message.from_user.id, chat_id)
-    elif muted.outcome == MuteOutcome.RESTRICTED_BY_ADMIN:
+        await reply_and_delete(message, formatter._t["mute_owner"])
+        return
+    if muted.outcome == MuteOutcome.RESTRICTED_BY_ADMIN:
         await reply_and_delete(
             message,
             formatter._t["mute_restricted_by_admin"].format(target=target_link),
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
         )
-        raise AbortUpdate
-    elif muted.outcome != MuteOutcome.MUTED:
+        return
+    if muted.outcome != MuteOutcome.MUTED:
         await reply_and_delete(message, formatter._t["mute_failed"])
-        raise AbortUpdate
-    else:
-        until = muted.until or until
+        return
 
-    # Фиксируем мут в Redis (счётчик и кулдаун)
-    if mute_cfg.daily_limit > 0:
-        await store.mute_daily_increment(message.from_user.id, chat_id)
-    if mute_cfg.target_cooldown_hours > 0:
-        await store.mute_target_cooldown_set(message.from_user.id, target.id, chat_id, mute_cfg.target_cooldown_hours)
+    until = muted.until or until
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
-    stack_note = f" (итого: {total_minutes} мин)" if mute_was_stacked else ""
+    stack_note = f" (итого: {total_minutes} мин)" if was_stacked else ""
     random_note = formatter._t["mute_random_picked"].format(target=target_link) + "\n" if is_random else ""
     await reply_and_delete(
         message,
         random_note
-        + formatter._t["mute_success"].format(
-            actor=actor_link,
-            target=target_link,
-            minutes=minutes,
-            cost=cost,
-            score_word=p.pluralize(cost),
-            balance=result.new_balance,
-            score_word_balance=p.pluralize(result.new_balance),
-        )
+        + formatter._t["mute_success"].format(actor=actor_link, target=target_link, minutes=minutes)
         + stack_note,
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,

@@ -150,8 +150,12 @@ async def cmd_poker(
         actual_target_id = user_id
         actual_target_link = actor_link
 
-    # Выбираем случайный дебафф
-    debuff = random.choice([DEBUFF_MUTE, DEBUFF_GAMEBAN, DEBUFF_SCORE, DEBUFF_IQ])
+    # Выбираем случайный дебафф. Мутить другого может только тот, у кого есть право на муты,
+    # поэтому кочерга мутит лишь самого бьющего: удар по себе или осечка
+    debuffs = [DEBUFF_MUTE, DEBUFF_GAMEBAN, DEBUFF_SCORE, DEBUFF_IQ]
+    if actual_target_id != user_id:
+        debuffs.remove(DEBUFF_MUTE)
+    debuff = random.choice(debuffs)
 
     if backfire:
         backfire_text = formatter._t["poker_backfire"].format(

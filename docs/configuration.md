@@ -44,13 +44,9 @@ limits:
 
 ```yaml
 mute:
-  cost_per_minute: 20           # стоимость 1 минуты мута
-  min_minutes: 1
-  max_minutes: 120
+  # /mute и /unmute — только для тех, у кого есть право на муты; бесплатно и без лимитов
   selfmute_min_minutes: 1
   selfmute_max_minutes: 1440    # 24 часа
-  protection_cost: 200          # стоимость /protect
-  protection_duration_hours: 24
 ```
 
 ### Тег

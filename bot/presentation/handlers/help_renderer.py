@@ -76,14 +76,8 @@ class HelpRenderer:
             daily_score_received=lc.daily_score_received,
             max_message_age_hours=lc.max_message_age_hours,
             retention_days=config.history.retention_days,
-            cost_per_minute=f"{mc.cost_per_minute} {p.pluralize(mc.cost_per_minute)}",
-            min_minutes=mc.min_minutes,
-            max_minutes=mc.max_minutes,
             selfmute_min=mc.selfmute_min_minutes,
             selfmute_max=mc.selfmute_max_minutes,
-            protection_hours=mc.protection_duration_hours,
-            protection_cost=mc.protection_cost,
-            unmute_multiplier=mc.unmute_multiplier,
             cost_self=f"{tc.cost_self} {p.pluralize(tc.cost_self)}",
             cost_member=f"{tc.cost_member} {p.pluralize(tc.cost_member)}",
             cost_admin=f"{tc.cost_admin} {p.pluralize(tc.cost_admin)}",
@@ -93,8 +87,6 @@ class HelpRenderer:
             max_bet=f"{bjc.max_bet} {p.pluralize(bjc.max_bet)}",
             bj_min=bjc.min_bet,
             bj_max=bjc.max_bet,
-            mute_min=mc.min_minutes,
-            mute_max=mc.max_minutes,
             slots_min=sc.min_bet,
             slots_max=sc.max_bet,
             slots_cooldown=sc.cooldown_minutes,
@@ -168,27 +160,8 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "mute":
-            parts = [
-                s["header"],
-                "",
-                _fmt(s["cost_row"]),
-                _fmt(s["range_row"]),
-                _fmt(s.get("random_row", "")),
-                s["no_debt"],
-                "",
-                s["selfmute_header"],
-                _fmt(s["selfmute_row"]),
-                "",
-                s["unmute_header"],
-            ]
-            parts += [_fmt(r) for r in s.get("unmute_rows", [])]
-            parts += [
-                "",
-                s["protect_header"],
-            ]
-            parts += [_fmt(r) for r in s.get("protect_rows", [])]
-            parts += ["", s["time_formats"], "", s["admin_note"].strip()]
-            return "\n".join(parts)
+            rows = [_fmt(r) for r in s.get("rows", [])]
+            return s["header"] + "\n\n" + "\n".join(rows)
 
         if section == "tag":
             rows = [_fmt(r) for r in s.get("rows", [])]

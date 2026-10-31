@@ -77,7 +77,7 @@ PostgreSQL через asyncpg (raw SQL, без ORM). Каждый репозит
 | `llm_requests` | Лог LLM-запросов |
 | `giveaways` + `participants` + `winners` | Розыгрыши |
 | `dice_games` + `dice_participants` | Игры в кости |
-| `mute_protection` | Защита от мута |
+| `mute_protection` | Защита от мута — не используется: `/protect` убран, когда мутить стали только модераторы |
 
 ### Транзакции
 

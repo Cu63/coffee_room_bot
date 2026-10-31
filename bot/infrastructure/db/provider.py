@@ -19,7 +19,6 @@ from bot.application.interfaces.iq_repository import IIqRepository
 from bot.application.interfaces.ledger_repository import ILedgerRepository
 from bot.application.interfaces.llm_repository import ILlmRepository
 from bot.application.interfaces.message_repository import IMessageRepository
-from bot.application.interfaces.mute_protection_repository import IMuteProtectionRepository
 from bot.application.interfaces.mute_repository import IMuteRepository
 from bot.application.interfaces.per_target_limits_repository import IPerTargetLimitsRepository
 from bot.application.interfaces.saved_permissions_repository import ISavedPermissionsRepository
@@ -40,7 +39,6 @@ from bot.infrastructure.db.postgres_iq_repository import PostgresIqRepository
 from bot.infrastructure.db.postgres_ledger_repository import PostgresLedgerRepository
 from bot.infrastructure.db.postgres_llm_repository import PostgresLlmRepository
 from bot.infrastructure.db.postgres_message_repository import PostgresMessageRepository
-from bot.infrastructure.db.postgres_mute_protection_repository import PostgresMuteProtectionRepository
 from bot.infrastructure.db.postgres_mute_repository import PostgresMuteRepository
 from bot.infrastructure.db.postgres_per_target_limits_repository import PostgresPerTargetLimitsRepository
 from bot.infrastructure.db.postgres_saved_permissions_repository import PostgresSavedPermissionsRepository
@@ -106,10 +104,6 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_saved_perms_repo(self, tm: ITransactionManager) -> ISavedPermissionsRepository:
         return PostgresSavedPermissionsRepository(tm.get_connection())
-
-    @provide(scope=Scope.REQUEST)
-    def get_mute_protection_repo(self, tm: ITransactionManager) -> IMuteProtectionRepository:
-        return PostgresMuteProtectionRepository(tm.get_connection())
 
     @provide(scope=Scope.REQUEST)
     def get_user_stats_repo(self, tm: ITransactionManager) -> IUserStatsRepository:
