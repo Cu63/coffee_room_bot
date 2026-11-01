@@ -403,7 +403,7 @@ class ChatmodePresetConfig(_BaseConfig):
     """Настройки одного пресета режима чата."""
 
     cost_per_minute: int = 5
-    max_minutes: int = 30
+    max_minutes: int = 15
 
 
 class ChatmodeConfig(_BaseConfig):
@@ -411,8 +411,8 @@ class ChatmodeConfig(_BaseConfig):
 
     enabled: bool = True
     default_minutes: int = 5
-    silence: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=10, max_minutes=30)
-    gif: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=5, max_minutes=20)
+    silence: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=10, max_minutes=15)
+    gif: ChatmodePresetConfig = ChatmodePresetConfig(cost_per_minute=5, max_minutes=15)
 
 
 class NewsFeedConfig(_BaseConfig):
