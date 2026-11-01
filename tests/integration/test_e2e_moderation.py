@@ -165,6 +165,21 @@ async def test_silence_without_money_leaves_chat_free(tg, conn, silence_cost):
     assert await balance(conn, HELPER) == 1000 - silence_cost
 
 
+@pytest.mark.parametrize("mode", ["silence", "gif"])
+async def test_chat_mode_is_limited_to_max_minutes(tg, conn, app_container, mode):
+    preset = getattr((await app_container.get(AppConfig)).chatmode, mode)
+    await seed_users(conn, ACTOR, balance=1000)
+
+    await tg.send(member(ACTOR), f"/{mode} {preset.max_minutes + 1}")
+    assert tg.requests(SendMessage)[-1].text == f"❌ Максимальная длительность — {preset.max_minutes} мин."
+    assert await chatmode_row(conn) is None
+    assert await balance(conn, ACTOR) == 1000
+
+    await tg.send(member(ACTOR), f"/{mode} {preset.max_minutes}")
+    assert await chatmode_row(conn) is not None
+    assert await balance(conn, ACTOR) == 1000 - preset.cost_per_minute * preset.max_minutes
+
+
 # ── Титул из /buyop — не модератор ────────────────────────────────────────────
 
 
