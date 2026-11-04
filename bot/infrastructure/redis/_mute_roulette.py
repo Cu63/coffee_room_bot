@@ -50,10 +50,6 @@ class MuteRouletteStoreMixin:
             results.append((roulette_id, data))
         return results
 
-    async def mute_roulette_get(self, chat_id: int, roulette_id: str) -> dict | None:
-        raw = await self._r.get(self._mg_key(chat_id, roulette_id))
-        return json.loads(raw) if raw else None
-
     async def mute_roulette_join(self, chat_id: int, roulette_id: str, user_id: int) -> bool:
         key = self._mg_key(chat_id, roulette_id)
         raw = await self._r.get(key)

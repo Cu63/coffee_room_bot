@@ -19,11 +19,6 @@ class IDiceRepository(ABC):
     async def get(self, game_id: int) -> DiceGame | None: ...
 
     @abstractmethod
-    async def get_pending_in_chat(self, chat_id: int) -> DiceGame | None:
-        """Возвращает активную (pending) игру в чате, или None."""
-        ...
-
-    @abstractmethod
     async def finish(self, game_id: int) -> None:
         """Переводит статус в finished."""
         ...

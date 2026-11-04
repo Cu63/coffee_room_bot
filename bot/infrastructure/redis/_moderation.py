@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import time
 
+from bot.infrastructure.redis._slots import _SLOTS_ALL_DAILY, _SLOTS_LAST
+
 _OWNER_MUTE = "owner_mute:"
 _GAMEBAN = "gameban:"
 _UNSOUND = "unsound:"
 _UNSOUND_NAME = "unsound:name:"
 _UNSOUND_NOTICE = "unsound:notice:"
-_SLOTS_DAILY = "slots:daily:"
-_SLOTS_LAST = "slots:last:"
-_SLOTS_ALL_DAILY = "slots:all:"
 
 
 class ModerationStoreMixin:
@@ -99,7 +98,6 @@ class ModerationStoreMixin:
     async def renew_game_limits(self, user_id: int, chat_id: int) -> None:
         await self._r.delete(
             f"{_SLOTS_LAST}{user_id}:{chat_id}",
-            f"{_SLOTS_DAILY}{user_id}:{chat_id}",
             f"{_SLOTS_ALL_DAILY}{user_id}:{chat_id}",
         )
 
@@ -110,13 +108,6 @@ class ModerationStoreMixin:
         ttl = max(int(until_ts - time.time()) + 10, 60)
         await self._r.set(key, str(until_ts), ex=ttl)
 
-    async def gameban_active(self, user_id: int, chat_id: int) -> bool:
-        key = f"{_GAMEBAN}{user_id}:{chat_id}"
-        raw = await self._r.get(key)
-        if raw is None:
-            return False
-        return float(raw) > time.time()
-
     async def gameban_get_until(self, user_id: int, chat_id: int) -> float | None:
         key = f"{_GAMEBAN}{user_id}:{chat_id}"
         raw = await self._r.get(key)
@@ -124,9 +115,6 @@ class ModerationStoreMixin:
             return None
         ts = float(raw)
         return ts if ts > time.time() else None
-
-    async def gameban_delete(self, user_id: int, chat_id: int) -> None:
-        await self._r.delete(f"{_GAMEBAN}{user_id}:{chat_id}")
 
     # ── Owner mute ────────────────────────────────────────
 
@@ -141,11 +129,6 @@ class ModerationStoreMixin:
         if raw is None:
             return False
         return float(raw) > time.time()
-
-    async def owner_mute_get_ts(self, chat_id: int, user_id: int) -> float | None:
-        key = f"{_OWNER_MUTE}{chat_id}:{user_id}"
-        raw = await self._r.get(key)
-        return float(raw) if raw else None
 
     async def owner_mute_delete(self, chat_id: int, user_id: int) -> None:
         await self._r.delete(f"{_OWNER_MUTE}{chat_id}:{user_id}")

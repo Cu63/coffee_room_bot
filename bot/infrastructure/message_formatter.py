@@ -21,17 +21,6 @@ class MessageFormatter:
         self._t = templates
         self._p = pluralizer
 
-    def score_changed(self, user: str, delta: int, total: int) -> str:
-        verb = "получает" if delta > 0 else "теряет"
-        return self._t["score_changed"].format(
-            user=user,
-            verb=verb,
-            delta=abs(delta),
-            score_word=self._p.pluralize(abs(delta)),
-            score_word_total=self._p.pluralize(total),
-            total=total,
-        )
-
     def score_info(self, user: str, total: int) -> str:
         if total == 0:
             return self._t["score_info_zero"].format(

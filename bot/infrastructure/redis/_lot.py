@@ -24,13 +24,6 @@ class LotStoreMixin:
         raw = await self._r.get(f"{self._LOT_GAME}{chat_id}:{lot_id}")
         return json.loads(raw) if raw else None
 
-    async def lot_game_save(self, chat_id: int, lot_id: str, data: dict, ttl: int) -> None:
-        await self._r.set(
-            f"{self._LOT_GAME}{chat_id}:{lot_id}",
-            json.dumps(data, ensure_ascii=False),
-            ex=ttl,
-        )
-
     # Обновляет лот, только если с момента чтения не было других ставок
     # (bids_count не изменился) и лот ещё не завершён (ключ существует).
     _LOT_CAS_SCRIPT = """

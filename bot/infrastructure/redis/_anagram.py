@@ -41,14 +41,8 @@ class AnagramStoreMixin:
         key = f"{self._ANAGRAM_GAME}{game_id}"
         return bool(await self._r.set(key, json.dumps(data), xx=True, keepttl=True))
 
-    async def anagram_game_delete(self, game_id: str) -> bool:
-        return bool(await self._r.delete(f"{self._ANAGRAM_GAME}{game_id}"))
-
     async def anagram_msg_get(self, chat_id: int, message_id: int) -> str | None:
         return await self._r.get(f"{self._ANAGRAM_MSG}{chat_id}:{message_id}")
-
-    async def anagram_msg_delete(self, chat_id: int, message_id: int) -> None:
-        await self._r.delete(f"{self._ANAGRAM_MSG}{chat_id}:{message_id}")
 
     async def anagram_create_game(
         self,

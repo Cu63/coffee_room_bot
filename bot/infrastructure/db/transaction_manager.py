@@ -27,11 +27,6 @@ class PostgresTransactionManager(ITransactionManager):
     def get_connection(self) -> "LazyConnection":
         return self._lazy
 
-    @property
-    def in_transaction(self) -> bool:
-        """Держит ли запрос сейчас соединение из пула."""
-        return self._conn is not None
-
     async def acquire(self) -> asyncpg.Connection:
         """Соединение текущей транзакции; первая операция открывает её."""
         if self._conn is None:

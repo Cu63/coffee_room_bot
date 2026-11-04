@@ -135,7 +135,8 @@ async def test_lot_auction(tg, conn, redis, app_container, config, texts, lot):
 
     # Время вышло: цикл завершает лот, ставка победителя остаётся у бота
     state = await lot_state(redis, lot)
-    await RedisStore(redis).lot_game_save(CHAT, lot.lot_id, dict(state, expires_at=time.time() - 1), 60)
+    expired = dict(state, expires_at=time.time() - 1)
+    assert await RedisStore(redis).lot_game_save_if_unchanged(CHAT, lot.lot_id, state["bids_count"], expired, 60)
     await lot_loop._tick(tg.bot, app_container)
 
     result = tg.requests(EditMessageText)[-1]

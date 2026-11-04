@@ -39,7 +39,7 @@ async def test_wordgame_win_is_paid_once_and_game_not_revived(store, redis):
     await store.wg_game_create(game)
     ttl_before = await redis.ttl("wg:game:55555")
 
-    raw = await store.wg_game_get("55555")
+    raw = json.loads(await redis.get("wg:game:55555"))
     raw["guesses"].append({"user_id": 2, "word": "КИТ"})
     assert await store.wg_game_save_raw("55555", raw) is True
     assert abs(await redis.ttl("wg:game:55555") - ttl_before) <= 1  # KEEPTTL

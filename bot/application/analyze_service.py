@@ -113,12 +113,6 @@ class AnalyzeService:
             return ""
         return self._fmt._t["analyze_shortage_warning"].format(actual=actual, requested=requested)
 
-    # ── Публичный метод: глобальная статистика токенов за день ───────────
-
-    async def get_global_tokens_today(self) -> tuple[int, int]:
-        """Возвращает (input_total, output_total) по всем пользователям за сегодня."""
-        return await self._llm_repo.sum_tokens_global_today(_ANALYZE_COMMANDS)
-
     # ── /analyze ─────────────────────────────────────────────────────────
 
     async def analyze(

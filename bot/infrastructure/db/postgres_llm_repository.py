@@ -55,21 +55,3 @@ class PostgresLlmRepository(ILlmRepository):
             user_id,
             list(commands),
         )
-
-    async def sum_tokens_global_today(
-        self,
-        commands: tuple[str, ...],
-    ) -> tuple[int, int]:
-        """Глобальная сумма (input_tokens, output_tokens) за сегодня."""
-        row = await self._conn.fetchrow(
-            """
-            SELECT
-                COALESCE(SUM(input_tokens), 0)  AS input_total,
-                COALESCE(SUM(output_tokens), 0) AS output_total
-            FROM llm_requests
-            WHERE command = ANY($1)
-              AND created_at >= CURRENT_DATE
-            """,
-            list(commands),
-        )
-        return int(row["input_total"]), int(row["output_total"])

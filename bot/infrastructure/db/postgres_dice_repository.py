@@ -42,13 +42,6 @@ class PostgresDiceRepository(IDiceRepository):
         )
         return self._row_to_game(row) if row else None
 
-    async def get_pending_in_chat(self, chat_id: int) -> DiceGame | None:
-        row = await self._conn.fetchrow(
-            "SELECT * FROM dice_games WHERE chat_id = $1 AND status = 'pending' LIMIT 1",
-            chat_id,
-        )
-        return self._row_to_game(row) if row else None
-
     async def finish(self, game_id: int) -> None:
         await self._conn.execute(
             "UPDATE dice_games SET status = 'finished' WHERE id = $1",

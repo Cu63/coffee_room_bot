@@ -60,7 +60,6 @@ class TransferResult:
     success: bool
     amount: int = 0
     sender_balance: int = 0  # баланс отправителя после перевода
-    receiver_balance: int = 0  # баланс получателя после перевода
     current_balance: int = 0  # текущий баланс при ошибке «недостаточно»
 
 
@@ -269,9 +268,6 @@ class ScoreService:
 
         return ApplyResult(applied=True, delta=reverse_delta, new_value=new_value)
 
-    async def get_stats(self, user_id: int, chat_id: int):
-        return await self._stats_repo.get(user_id, chat_id)
-
     async def get_score(self, user_id: int, chat_id: int) -> Score:
         score = await self._score_repo.get(user_id, chat_id)
         if score is None:
@@ -423,16 +419,11 @@ class ScoreService:
             balance = (await self.get_score(sender_id, chat_id)).value
             return TransferResult(success=False, amount=amount, current_balance=balance)
 
-        receiver_new = await self._score_repo.add_delta(
+        await self._score_repo.add_delta(
             receiver_id, chat_id, amount, kind=LedgerKind.TRANSFER, counterparty_id=sender_id
         )
 
-        return TransferResult(
-            success=True,
-            amount=amount,
-            sender_balance=sender_new,
-            receiver_balance=receiver_new,
-        )
+        return TransferResult(success=True, amount=amount, sender_balance=sender_new)
 
     async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
