@@ -105,21 +105,6 @@ class PostgresGiveawayRepository(IGiveawayRepository):
             [(w.giveaway_id, w.user_id, w.prize, w.position) for w in winners],
         )
 
-    async def get_winners(self, giveaway_id: int) -> list[GiveawayWinner]:
-        rows = await self._conn.fetch(
-            "SELECT * FROM giveaway_winners WHERE giveaway_id = $1 ORDER BY position",
-            giveaway_id,
-        )
-        return [
-            GiveawayWinner(
-                giveaway_id=r["giveaway_id"],
-                user_id=r["user_id"],
-                prize=r["prize"],
-                position=r["position"],
-            )
-            for r in rows
-        ]
-
     @staticmethod
     def _row_to_giveaway(row: asyncpg.Record) -> Giveaway:
         return Giveaway(

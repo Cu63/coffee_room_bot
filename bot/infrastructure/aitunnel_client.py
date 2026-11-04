@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import aiohttp
 
@@ -9,19 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
-class ToolCall:
-    id: str
-    name: str
-    arguments: str  # JSON string
-
-
-@dataclass(slots=True)
 class LlmResponse:
     text: str
     input_tokens: int
     output_tokens: int
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    raw_message: dict | None = None
 
 
 class AiTunnelClient:
@@ -51,8 +42,6 @@ class AiTunnelClient:
         self,
         messages: list[dict],
         *,
-        json_mode: bool = False,
-        tools: list[dict] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         model: str | None = None,
@@ -70,10 +59,6 @@ class AiTunnelClient:
         }
         if temperature is not None:
             payload["temperature"] = temperature
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        if tools:
-            payload["tools"] = tools
 
         for attempt in range(self._MAX_RETRIES):
             async with session.post(f"{self._base_url}/chat/completions", json=payload) as resp:
@@ -84,34 +69,17 @@ class AiTunnelClient:
             finish_reason = choice_raw.get("finish_reason")
             choice = choice_raw["message"]
             usage = data.get("usage", {})
-            logger.info(
-                "LLM finish_reason=%s, content=%s, tool_calls=%s",
-                finish_reason,
-                repr((choice.get("content") or "")[:100]),
-                len(choice.get("tool_calls", [])),
-            )
+            logger.info("LLM finish_reason=%s, content=%s", finish_reason, repr((choice.get("content") or "")[:100]))
 
             if finish_reason == "error" and attempt < self._MAX_RETRIES - 1:
                 logger.warning("LLM returned error, retrying (attempt %d)", attempt + 1)
                 continue
             break
 
-        tool_calls: list[ToolCall] = []
-        for tc in choice.get("tool_calls", []):
-            tool_calls.append(
-                ToolCall(
-                    id=tc["id"],
-                    name=tc["function"]["name"],
-                    arguments=tc["function"]["arguments"],
-                )
-            )
-
         return LlmResponse(
             text=choice.get("content") or "",
             input_tokens=usage.get("prompt_tokens", 0),
             output_tokens=usage.get("completion_tokens", 0),
-            tool_calls=tool_calls,
-            raw_message=choice,
         )
 
     async def close(self) -> None:

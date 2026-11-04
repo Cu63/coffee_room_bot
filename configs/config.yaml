@@ -130,7 +130,6 @@ system:
   cleanup_interval_hours: 6       # как часто удалять устаревшие события и сообщения
   messages_retention_days: 30     # сколько дней хранить тексты сообщений (саммари, /analyze, /ff, реакции)
   unmute_check_interval_seconds: 60   # как часто проверять истёкшие муты
-  auto_delete_seconds: 120        # через сколько секунд удалять служебные сообщения
   history_page_size: 30           # строк на страницу в /history
 
 renew:
@@ -159,7 +158,6 @@ rwordgame:
   max_bet: 25                 # лимит ставки для /rword (0–N)
   min_word_length: 2          # минимальная длина случайного слова
   max_word_length: 21         # максимальная длина случайного слова
-  words_file: "configs/words_ru.txt"  # путь к файлу словаря
   max_games_per_window: 1     # макс. игр за окно (не более 1 игры в час на пользователя)
   game_window_hours: 1        # окно лимита в часах
   cooldown_minutes: 20        # задержка между играми /rword (в минутах)
@@ -188,7 +186,6 @@ donotbuy:
   enabled: true
   max_price: 5000               # верхняя граница случайной цены за нажатие
   daily_limit: 2                # нажатий в сутки на пользователя (в т.ч. неудачных)
-  grid_size: 9                  # сколько ячеек в сетке (кнопка стоит в случайной)
 
 tictactoe:
   enabled: true
