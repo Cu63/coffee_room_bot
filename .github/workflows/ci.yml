@@ -58,7 +58,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run pytest tests/integration -v
+      # Все тесты одним прогоном: юнит-тесты и интеграционные уживаются в одном процессе
+      - run: uv run pytest tests -v
 
   docker:
     runs-on: ubuntu-latest

@@ -98,6 +98,20 @@ def register_post_dishka_middlewares(dp: Dispatcher, bot_me: TgUser) -> None:
     dp.message.outer_middleware(OwnerMuteDeleteMiddleware())
 
 
+def _include(dp: Dispatcher, router: Router) -> None:
+    """Подключает роутер модуля к dp, отцепив его от прежнего Dispatcher.
+
+    Роутеры хендлеров — синглтоны модулей, а aiogram не даёт подключить роутер ко второму родителю.
+    В боте Dispatcher один, но тесты собирают свой на каждый тест — в любом порядке и в одном процессе.
+    Публичного способа отцепить роутер у aiogram нет.
+    """
+    previous = router.parent_router
+    if previous is not None and previous is not dp:
+        previous.sub_routers.remove(router)
+        router._parent_router = None
+    dp.include_router(router)
+
+
 def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | None = None) -> None:
     """Регистрирует все роутеры хендлеров.
 
@@ -146,66 +160,66 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.warn import router as warn_router
     from bot.presentation.handlers.wordgame import router as wordgame_router
 
-    dp.include_router(commands_router)
-    dp.include_router(sixtyseven_router)
+    _include(dp, commands_router)
+    _include(dp, sixtyseven_router)
     if config.blackjack.enabled:
-        dp.include_router(blackjack_router)
+        _include(dp, blackjack_router)
     if config.dice.enabled:
-        dp.include_router(dice_router)
-    dp.include_router(llm_router)
-    dp.include_router(analyze_router)
-    dp.include_router(reactions_router)
+        _include(dp, dice_router)
+    _include(dp, llm_router)
+    _include(dp, analyze_router)
+    _include(dp, reactions_router)
     if config.slots.enabled:
-        dp.include_router(slots_router)
-    dp.include_router(giveaway_router)
-    dp.include_router(mute_router)
+        _include(dp, slots_router)
+    _include(dp, giveaway_router)
+    _include(dp, mute_router)
     if config.warn.enabled:
-        dp.include_router(warn_router)
-    dp.include_router(tag_router)
-    dp.include_router(transfer_router)
-    dp.include_router(renew_router)
-    dp.include_router(wordgame_router)
-    dp.include_router(admin_chats_router)
-    dp.include_router(admin_score_router)
-    dp.include_router(admin_user_router)
-    dp.include_router(help_router)
+        _include(dp, warn_router)
+    _include(dp, tag_router)
+    _include(dp, transfer_router)
+    _include(dp, renew_router)
+    _include(dp, wordgame_router)
+    _include(dp, admin_chats_router)
+    _include(dp, admin_score_router)
+    _include(dp, admin_user_router)
+    _include(dp, help_router)
     if config.tictactoe.enabled:
-        dp.include_router(ttt_router)
-    dp.include_router(duel_router)
+        _include(dp, ttt_router)
+    _include(dp, duel_router)
     if config.anagram.enabled:
-        dp.include_router(anagram_router)
+        _include(dp, anagram_router)
     if config.lot.enabled:
-        dp.include_router(lot_router)
-    dp.include_router(buyop_router)
-    dp.include_router(idea_router)
+        _include(dp, lot_router)
+    _include(dp, buyop_router)
+    _include(dp, idea_router)
     if config.iq.enabled:
-        dp.include_router(iq_router)
+        _include(dp, iq_router)
     if config.poker.enabled:
-        dp.include_router(poker_router)
+        _include(dp, poker_router)
     if config.donotbuy.enabled:
-        dp.include_router(donotbuy_router)
-    dp.include_router(selfban_router)
-    dp.include_router(summary_admin_router)
-    dp.include_router(tracker_router)
-    dp.include_router(anon_router)
-    dp.include_router(daily_router)
-    dp.include_router(chatmode_router)
-    dp.include_router(news_router)
+        _include(dp, donotbuy_router)
+    _include(dp, selfban_router)
+    _include(dp, summary_admin_router)
+    _include(dp, tracker_router)
+    _include(dp, anon_router)
+    _include(dp, daily_router)
+    _include(dp, chatmode_router)
+    _include(dp, news_router)
     # /genai работает только при заданном GIGACHAT_API_KEY
     if config.genai.enabled and settings.gigachat_api_key:
-        dp.include_router(genai_router)
+        _include(dp, genai_router)
     if config.fanfic.enabled:
-        dp.include_router(fanfic_router)
+        _include(dp, fanfic_router)
     if config.think.enabled:
-        dp.include_router(think_router)
+        _include(dp, think_router)
     if config.quiz.enabled:
-        dp.include_router(quiz_router)
+        _include(dp, quiz_router)
     if config.whosaid.enabled:
-        dp.include_router(whosaid_router)
+        _include(dp, whosaid_router)
     if config.quiz.enabled or config.whosaid.enabled:
-        dp.include_router(answer_router)
+        _include(dp, answer_router)
     if config.unsound.enabled:
-        dp.include_router(unsound_router)
+        _include(dp, unsound_router)
 
 
 def registered_commands(router: Router) -> set[str]:

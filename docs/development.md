@@ -38,6 +38,7 @@ uv run ruff check --fix     # исправление lint-ошибок
 ```bash
 uv run pytest tests/unit/          # unit-тесты: чистая логика, без сервисов
 uv run pytest tests/integration/   # интеграционные и e2e: настоящие PostgreSQL и Redis
+uv run pytest tests/               # всё одним прогоном (интеграционные без TEST_* пропускаются)
 ```
 
 Интеграционные тесты берут адреса из `TEST_DATABASE_URL` и `TEST_REDIS_URL`, без них они пропускаются.
@@ -55,7 +56,8 @@ uv run pytest tests/integration/
 
 E2E-тесты (`tests/integration/test_e2e.py`) прогоняют апдейт через настоящий Dispatcher со всеми
 middleware и роутерами, а вместо Telegram подставляют `FakeTelegramSession`: она отвечает как Bot API
-и записывает каждый запрос бота. В CI интеграционные тесты идут отдельным джобом `integration`.
+и записывает каждый запрос бота. Каждый тест собирает свой Dispatcher: `register_routers()` переносит
+в него роутеры модулей. В CI джоб `integration` гоняет все тесты одним прогоном.
 
 ## Добавить новую реакцию
 
