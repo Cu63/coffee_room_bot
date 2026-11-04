@@ -28,6 +28,7 @@ from aiogram.methods import (
     RestrictChatMember,
     SendMessage,
     SetChatAdministratorCustomTitle,
+    SetChatMemberTag,
     SetChatPermissions,
     SetMessageReaction,
     TelegramMethod,
@@ -90,9 +91,11 @@ CHAT_PERMISSIONS: dict[str, bool] = {
     "can_send_polls": True,
     "can_send_other_messages": True,
     "can_add_web_page_previews": True,
+    "can_edit_tag": True,
     "can_change_info": False,
     "can_invite_users": True,
     "can_pin_messages": False,
+    "can_manage_topics": False,
 }
 
 
@@ -125,6 +128,12 @@ class FakeTelegramSession(BaseSession):
         self.admin_rights: dict[int, dict[str, Any]] = {}
         # Права участников чата: getChat отдаёт, setChatPermissions меняет
         self.chat_permissions: dict[str, bool] = dict(CHAT_PERMISSIONS)
+        # Права ограниченных участников: restrictChatMember ставит, полный набор прав снимает
+        self.restrictions: dict[int, dict[str, bool]] = {}
+        # Теги обычных участников (setChatMemberTag)
+        self.tags: dict[int, str | None] = {}
+        # Методы, на которые Telegram ответит ошибкой: тип метода → описание ошибки
+        self.errors: dict[type[TelegramMethod[Any]], str] = {}
 
     def set_admin(self, user_id: int, **rights: Any) -> None:
         """Сделать участника администратором: права — ADMIN_RIGHTS с поправками из rights."""
@@ -132,6 +141,10 @@ class FakeTelegramSession(BaseSession):
         self.admin_rights[user_id] = ADMIN_RIGHTS | rights
 
     async def make_request(self, bot: Bot, method: TelegramMethod[Any], timeout: int | None = None) -> Any:
+        if type(method) in self.errors:
+            self.log.append((method, None))
+            content = json.dumps({"ok": False, "error_code": 400, "description": self.errors[type(method)]})
+            self.check_response(bot=bot, method=method, status_code=400, content=content)
         content = json.dumps({"ok": True, "result": self._result(method)})
         result = self.check_response(bot=bot, method=method, status_code=200, content=content).result
         self.log.append((method, result))
@@ -172,14 +185,13 @@ class FakeTelegramSession(BaseSession):
             case SetChatAdministratorCustomTitle():
                 self.admin_rights.setdefault(method.user_id, dict(ADMIN_RIGHTS))["custom_title"] = method.custom_title
                 return True
-            case (
-                AnswerCallbackQuery()
-                | PinChatMessage()
-                | UnpinChatMessage()
-                | DeleteMessage()
-                | SetMessageReaction()
-                | RestrictChatMember()
-            ):
+            case SetChatMemberTag():
+                self.tags[method.user_id] = method.tag
+                return True
+            case RestrictChatMember():
+                self._restrict(method)
+                return True
+            case AnswerCallbackQuery() | PinChatMessage() | UnpinChatMessage() | DeleteMessage() | SetMessageReaction():
                 return True
         raise NotImplementedError(f"фейковый Telegram не умеет {type(method).__name__}")
 
@@ -193,8 +205,21 @@ class FakeTelegramSession(BaseSession):
         if status == "administrator":
             result |= self.admin_rights.get(user_id, ADMIN_RIGHTS)
         if status == "restricted":
-            result |= {field: False for field in _RESTRICTED_FLAGS} | {"is_member": True, "until_date": 0}
+            rights = self.restrictions.get(user_id, {field: False for field in _RESTRICTED_FLAGS})
+            result |= rights | {"is_member": True, "until_date": 0}
         return result
+
+    def _restrict(self, method: RestrictChatMember) -> None:
+        """Все права разом снимают ограничение, как в Telegram; иначе участник ограничен ровно этими правами."""
+        perms = method.permissions.model_dump(mode="json", exclude_none=True)
+        if all(perms.get(field) for field in _RESTRICTED_FLAGS):
+            self.restrictions.pop(method.user_id, None)
+            if self.member_status.get(method.user_id) == "restricted":
+                self.member_status[method.user_id] = "member"
+            return
+        self.restrictions[method.user_id] = {field: bool(perms.get(field)) for field in _RESTRICTED_FLAGS}
+        if self.member_status.get(method.user_id, "member") == "member":
+            self.member_status[method.user_id] = "restricted"
 
     def _promote(self, method: PromoteChatMember) -> None:
         """Хоть одно право — администратор ровно с этими правами; ни одного — снова обычный участник."""

@@ -5,19 +5,23 @@ from __future__ import annotations
 import html
 import logging
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import ChatMemberAdministrator, ChatMemberOwner, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.application.interfaces.user_repository import IUserRepository
+from bot.application.mute_service import MuteService
 from bot.application.score_service import SPECIAL_EMOJI, ScoreService
 from bot.domain.bot_utils import is_admin
 from bot.domain.ledger import LedgerKind
-from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.config_loader import AppConfig, TagConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.errors import AbortUpdate
+from bot.presentation.handlers._admin_utils import _extract_admin_permissions
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 logger = logging.getLogger(__name__)
@@ -27,12 +31,32 @@ router = Router(name="tag")
 _TAG_CD_PREFIX = "tag:cd:"
 
 
+async def _target_cost(bot: Bot, mute_service: MuteService, chat_id: int, target_id: int, tc: TagConfig) -> int:
+    """Цена тега другому: владельцу, админу (может удалять сообщения и банить) или участнику.
+
+    Мут бота снимает с админа админку, и для Telegram он — обычный участник; его права
+    тогда берутся из снимка, который сохранил мут.
+    """
+    member = await bot.get_chat_member(chat_id, target_id)
+    if isinstance(member, ChatMemberOwner):
+        return tc.cost_owner
+    if isinstance(member, ChatMemberAdministrator):
+        rights = _extract_admin_permissions(member)
+    else:
+        muted = await mute_service.get_mute(target_id, chat_id)
+        rights = muted.admin_permissions if muted is not None and muted.was_admin else None
+    if rights and rights.get("can_delete_messages") and rights.get("can_restrict_members"):
+        return tc.cost_admin
+    return tc.cost_member
+
+
 @router.message(Command("tag"))
 @inject
 async def cmd_tag(
     message: Message,
     command: CommandObject,
     score_service: FromDishka[ScoreService],
+    mute_service: FromDishka[MuteService],
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
@@ -96,75 +120,62 @@ async def cmd_tag(
         cost = tc.cost_self
     else:
         try:
-            member = await bot.get_chat_member(chat_id, target.id)
-        except Exception:
+            cost = await _target_cost(bot, mute_service, chat_id, target.id, tc)
+        except TelegramAPIError:
             await reply_and_delete(message, formatter._t["tag_failed"])
             return
-        if isinstance(member, ChatMemberOwner):
-            cost = tc.cost_owner
-        elif isinstance(member, ChatMemberAdministrator):
-            cost = tc.cost_admin
-        else:
-            cost = tc.cost_member
+
+    # Сначала оплата (атомарно), потом тег: раньше тег ставился до списания и при неудачном
+    # списании оставался бесплатным
+    paid = None
     if not is_free:
-        score = await score_service.get_score(message.from_user.id, chat_id)
-        if score.value < cost:
+        paid = await score_service.spend_score(
+            actor_id=message.from_user.id,
+            target_id=target.id,
+            chat_id=chat_id,
+            cost=cost,
+            emoji=SPECIAL_EMOJI["tag"],
+            kind=LedgerKind.PURCHASE,
+            bot_id=bot.id,
+        )
+        if not paid.success:
             await reply_and_delete(
                 message,
                 formatter._t["tag_not_enough"].format(
                     cost=cost,
                     score_word=p.pluralize(cost),
-                    balance=score.value,
-                    score_word_balance=p.pluralize(score.value),
+                    balance=paid.current_balance,
+                    score_word_balance=p.pluralize(paid.current_balance),
                 ),
             )
             return
+
+    tag = None if clearing else new_tag
+    # Замученному админу тег вернётся титулом при размуте, а не прежний титул из снимка
+    await mute_service.set_admin_title(target.id, chat_id, tag)
     try:
-        await bot.set_chat_member_tag(chat_id=chat_id, user_id=target.id, tag=None if clearing else new_tag)
-    except Exception:
+        await bot.set_chat_member_tag(chat_id=chat_id, user_id=target.id, tag=tag)
+    except TelegramAPIError:
         await reply_and_delete(message, formatter._t["tag_failed"])
-        return
+        raise AbortUpdate  # откатывает оплату и титул в снимке мута
 
     if not is_free and tc.cooldown_hours > 0:
-        cd_key = f"{_TAG_CD_PREFIX}{chat_id}:{target.id}"
-        await store._r.set(cd_key, "1", ex=tc.cooldown_hours * 3600)
+        await store._r.set(f"{_TAG_CD_PREFIX}{chat_id}:{target.id}", "1", ex=tc.cooldown_hours * 3600)
 
     target_link = user_link(target.username, target.full_name, target.id)
-    if is_free:
+    if paid is None:
         text = (
             formatter._t["tag_cleared_free"].format(target=target_link)
             if clearing
             else formatter._t["tag_success_free"].format(target=target_link, tag=html.escape(new_tag))
         )
-        await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)
-        return
-    result = await score_service.spend_score(
-        actor_id=message.from_user.id,
-        target_id=target.id,
-        chat_id=chat_id,
-        cost=cost,
-        emoji=SPECIAL_EMOJI["tag"],
-        kind=LedgerKind.PURCHASE,
-        bot_id=message.bot.id,
-    )
-    if not result.success:
-        await reply_and_delete(
-            message,
-            formatter._t["tag_not_enough"].format(
-                cost=cost,
-                score_word=p.pluralize(cost),
-                balance=result.current_balance,
-                score_word_balance=p.pluralize(result.current_balance),
-            ),
-        )
-        return
-    if clearing:
+    elif clearing:
         text = formatter._t["tag_cleared"].format(
             target=target_link,
             cost=cost,
             score_word=p.pluralize(cost),
-            balance=result.new_balance,
-            score_word_balance=p.pluralize(result.new_balance),
+            balance=paid.new_balance,
+            score_word_balance=p.pluralize(paid.new_balance),
         )
     else:
         text = formatter._t["tag_success"].format(
@@ -172,7 +183,7 @@ async def cmd_tag(
             tag=html.escape(new_tag),
             cost=cost,
             score_word=p.pluralize(cost),
-            balance=result.new_balance,
-            score_word_balance=p.pluralize(result.new_balance),
+            balance=paid.new_balance,
+            score_word_balance=p.pluralize(paid.new_balance),
         )
     await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)

@@ -56,22 +56,8 @@ _MODE_PERMS: dict[str, ChatPermissions] = {
     "gif": _GIF_PERMS,
 }
 
-# Поля ChatPermissions которые мы сохраняем/восстанавливаем
-_PERM_FIELDS = [
-    "can_send_messages",
-    "can_send_photos",
-    "can_send_videos",
-    "can_send_video_notes",
-    "can_send_voice_notes",
-    "can_send_audios",
-    "can_send_documents",
-    "can_send_polls",
-    "can_send_other_messages",
-    "can_add_web_page_previews",
-    "can_change_info",
-    "can_invite_users",
-    "can_pin_messages",
-]
+# Права чата сохраняются и возвращаются целиком: поле, которого нет при возврате, Telegram ставит в «нельзя»
+_PERM_FIELDS = tuple(ChatPermissions.model_fields)
 
 
 @dataclass(slots=True)

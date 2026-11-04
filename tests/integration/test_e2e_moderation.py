@@ -1,6 +1,7 @@
 """E2E модерации.
 
 Мут не теряет админку, не трогает ручные ограничения и не укорачивает более длинный мут;
+размут, /save и /restore возвращают права ровно такими, какими они были;
 режимы чата не списывают дважды и не теряют права чата; титул из /buyop — не модератор;
 админы бота — по id.
 """
@@ -15,6 +16,7 @@ from datetime import datetime, timedelta
 import pytest
 from aiogram.methods import PromoteChatMember, RestrictChatMember, SendMessage
 
+import bot.infrastructure.unmute_loop as unmute_loop
 from bot.application.mute_service import MuteService
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.bootstrap import warn_about_username_admins
@@ -104,6 +106,77 @@ async def test_roulette_or_poker_mute_does_not_shorten_longer_mute(tg, conn, app
     assert (result.outcome, result.until) == (MuteOutcome.MUTED, longer["until_at"])
     assert (await mute_row(conn))["until_at"] == longer["until_at"]
     assert tg.requests(RestrictChatMember)[-1].until_date == longer["until_at"]
+
+
+# ── Права админа: сохраняются и возвращаются целиком ────────────────────────
+
+
+def grant_full_admin(tg) -> dict:
+    """Цель — анонимный админ с правом банить и с титулом; возвращает его права до мута."""
+    tg.session.set_admin(VICTIM, is_anonymous=True, can_restrict_members=True, can_promote_members=True)
+    return dict(tg.session.admin_rights[VICTIM])
+
+
+@pytest.mark.parametrize("unmute", ["command", "expiry"])
+async def test_unmute_restores_admin_rights_exactly(tg, conn, app_container, unmute):
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
+    before = grant_full_admin(tg)
+
+    await tg.send(member(ACTOR), "/mute @user712 5")
+    assert tg.session.member_status[VICTIM] == "restricted"
+
+    if unmute == "command":
+        await tg.send(member(ACTOR), "/unmute @user712")
+    else:
+        await conn.execute("UPDATE active_mutes SET until_at = now() - interval '1 second'")
+        await unmute_loop._tick(tg.bot, app_container)
+
+    # Раньше анонимный админ после размута становился видимым: анонимность не сохранялась
+    assert tg.session.member_status[VICTIM] == "administrator"
+    assert tg.session.admin_rights[VICTIM] == before
+    assert await mute_row(conn) is None
+
+
+async def test_unmute_lifts_the_restriction_completely(tg, conn):
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
+    await tg.send(member(ACTOR), "/mute @user712 5")
+    await tg.send(member(ACTOR), "/unmute @user712")
+
+    # Раньше размут не возвращал право менять свой тег (can_edit_tag): участник оставался
+    # ограниченным навсегда, и следующий мут бот принимал за ручное ограничение админа
+    assert tg.session.member_status[VICTIM] == "member"
+    await tg.send(member(ACTOR), "/mute @user712 5")
+    assert await mute_row(conn) is not None
+
+
+async def test_failed_mute_gives_the_admin_back_rights_and_title(tg, conn):
+    await seed_users(conn, ACTOR, VICTIM)
+    grant_mute_rights(tg)
+    before = grant_full_admin(tg)
+    tg.session.errors[RestrictChatMember] = "Bad Request: not enough rights to restrict/unrestrict chat member"
+
+    await tg.send(member(ACTOR), "/mute @user712 5")
+
+    # Раньше после неудачного мута админка возвращалась без титула
+    assert tg.session.member_status[VICTIM] == "administrator"
+    assert tg.session.admin_rights[VICTIM] == before
+    assert await mute_row(conn) is None
+
+
+async def test_save_and_restore_keep_all_admin_rights(tg, conn, app_container):
+    (await app_container.get(AppConfig)).admin.users = [str(ACTOR)]
+    await seed_users(conn, ACTOR, VICTIM)
+    before = grant_full_admin(tg)
+
+    await tg.send(member(ACTOR), "/save @user712")
+    tg.session.member_status[VICTIM] = "member"  # админку сняли вручную
+    tg.session.admin_rights.pop(VICTIM)
+    await tg.send(member(ACTOR), "/restore @user712")
+
+    assert tg.session.member_status[VICTIM] == "administrator"
+    assert tg.session.admin_rights[VICTIM] == before
 
 
 # ── /silence и /gif ───────────────────────────────────────────────────────────
