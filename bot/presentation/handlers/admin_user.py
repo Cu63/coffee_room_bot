@@ -19,8 +19,8 @@ from bot.presentation.handlers._admin_utils import (
     _ADMIN_PERM_FIELDS,
     MODERATOR_PERMS,
     _extract_admin_permissions,
-    _promote_kwargs,
     _resolve_username,
+    restore_admin,
 )
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
@@ -67,7 +67,7 @@ async def cmd_save(
         )
         return
     if isinstance(member, ChatMemberOwner):
-        perms = {field: True for field in _ADMIN_PERM_FIELDS}
+        perms = {field: True for field in _ADMIN_PERM_FIELDS} | {"is_anonymous": member.is_anonymous}
         if member.custom_title:
             perms["custom_title"] = member.custom_title
     else:
@@ -110,11 +110,7 @@ async def cmd_restore(
         )
         return
     try:
-        await message.bot.promote_chat_member(chat_id=message.chat.id, user_id=target.id, **_promote_kwargs(perms))
-        if perms.get("custom_title"):
-            await message.bot.set_chat_administrator_custom_title(
-                chat_id=message.chat.id, user_id=target.id, custom_title=perms["custom_title"]
-            )
+        await restore_admin(message.bot, message.chat.id, target.id, perms)
     except Exception:
         logger.exception("Failed to restore permissions for user %d", target.id)
         await reply_and_delete(message, formatter._t["restore_failed"])

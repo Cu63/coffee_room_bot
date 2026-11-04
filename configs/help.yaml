@@ -83,7 +83,7 @@ sections:
     rows:
       - "  Себе: {cost_self}"
       - "  Участнику: {cost_member}"
-      - "  Админу: {cost_admin}"
+      - "  Админу (удаляет и банит, даже в муте): {cost_admin}"
       - "  Макс. длина: {max_length} символов"
     clear_note: "  --clear — удалить тег"
 

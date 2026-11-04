@@ -28,8 +28,9 @@ from bot.infrastructure.message_formatter import MessageFormatter, user_link
 
 logger = logging.getLogger(__name__)
 
-# Поля прав администратора (Telegram API)
+# Поля прав администратора (Telegram API), включая анонимность
 _ADMIN_PERM_FIELDS = (
+    "is_anonymous",
     "can_manage_chat",
     "can_change_info",
     "can_delete_messages",
@@ -116,6 +117,19 @@ def _extract_admin_permissions(member: ChatMemberAdministrator) -> dict:
 
 def _promote_kwargs(perms: dict) -> dict:
     return {k: v for k, v in perms.items() if k in _ADMIN_PERM_FIELDS}
+
+
+# Все права участника: только полный набор снимает ограничение, недостающее право Telegram считает запретом
+_FULL_MEMBER_PERMISSIONS = ChatPermissions(**{field: True for field in ChatPermissions.model_fields})
+
+
+async def restore_admin(bot: Bot, chat_id: int, user_id: int, perms: dict) -> None:
+    """Вернуть админку по снимку прав: права, анонимность и титул."""
+    await bot.promote_chat_member(chat_id=chat_id, user_id=user_id, **_promote_kwargs(perms))
+    if perms.get("custom_title"):
+        await bot.set_chat_administrator_custom_title(
+            chat_id=chat_id, user_id=user_id, custom_title=perms["custom_title"]
+        )
 
 
 def _parse_args_user_number(args: str | None) -> tuple[str, int] | None:
@@ -257,7 +271,7 @@ async def apply_mute(
     except TelegramAPIError:
         if now_admin and perms:
             try:
-                await bot.promote_chat_member(chat_id=chat_id, user_id=target_id, **_promote_kwargs(perms))
+                await restore_admin(bot, chat_id, target_id, perms)
             except TelegramAPIError:
                 logger.exception("Failed to restore admin rights after mute failure")
         return MuteResult(MuteOutcome.FAILED)
@@ -280,42 +294,14 @@ async def lift_mute(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> No
     """Снимает мут бота: возвращает права участника и админку по снимку."""
     try:
         await bot.restrict_chat_member(
-            chat_id=entry.chat_id,
-            user_id=entry.user_id,
-            permissions=ChatPermissions(
-                can_send_messages=True,
-                can_send_audios=True,
-                can_send_documents=True,
-                can_send_photos=True,
-                can_send_videos=True,
-                can_send_video_notes=True,
-                can_send_voice_notes=True,
-                can_send_polls=True,
-                can_send_other_messages=True,
-                can_add_web_page_previews=True,
-                can_invite_users=True,
-                can_change_info=True,
-                can_pin_messages=True,
-                can_manage_topics=True,
-            ),
+            chat_id=entry.chat_id, user_id=entry.user_id, permissions=_FULL_MEMBER_PERMISSIONS
         )
     except Exception:
         logger.exception("Failed to unrestrict user %d in chat %d", entry.user_id, entry.chat_id)
 
     if entry.was_admin and entry.admin_permissions:
         try:
-            kw = _promote_kwargs(entry.admin_permissions)
-            await bot.promote_chat_member(
-                chat_id=entry.chat_id,
-                user_id=entry.user_id,
-                **kw,
-            )
-            if entry.admin_permissions.get("custom_title"):
-                await bot.set_chat_administrator_custom_title(
-                    chat_id=entry.chat_id,
-                    user_id=entry.user_id,
-                    custom_title=entry.admin_permissions["custom_title"],
-                )
+            await restore_admin(bot, entry.chat_id, entry.user_id, entry.admin_permissions)
         except Exception:
             logger.exception(
                 "Failed to restore admin rights for user %d in chat %d",

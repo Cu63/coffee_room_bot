@@ -58,6 +58,21 @@ class PostgresMuteRepository(IMuteRepository):
         )
         return [self._to_entity(r) for r in rows]
 
+    async def set_admin_title(self, user_id: int, chat_id: int, title: str | None) -> None:
+        await self._conn.execute(
+            """
+            UPDATE active_mutes
+            SET admin_permissions = CASE
+                WHEN $3::text IS NULL THEN admin_permissions - 'custom_title'
+                ELSE COALESCE(admin_permissions, '{}'::jsonb) || jsonb_build_object('custom_title', $3::text)
+            END
+            WHERE user_id = $1 AND chat_id = $2 AND was_admin
+            """,
+            user_id,
+            chat_id,
+            title,
+        )
+
     async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
         await self._conn.execute(
             "INSERT INTO mute_history (chat_id, user_id, muted_by) VALUES ($1, $2, $3)",

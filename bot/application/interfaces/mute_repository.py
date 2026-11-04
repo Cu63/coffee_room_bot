@@ -20,6 +20,11 @@ class IMuteRepository(ABC):
         ...
 
     @abstractmethod
+    async def set_admin_title(self, user_id: int, chat_id: int, title: str | None) -> None:
+        """Титул в снимке прав замученного админа (None — без титула); не админа не трогает."""
+        ...
+
+    @abstractmethod
     async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
         """Записывает факт мута в историю для статистики."""
         ...
