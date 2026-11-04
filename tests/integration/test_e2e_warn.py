@@ -104,6 +104,38 @@ async def test_warns_lists_and_unwarn_removes_the_latest(tg, conn, texts, config
     assert await warnings(conn) == ["первое"]
 
 
+async def test_nick_without_at(tg, conn, texts, config, chat):
+    """Ник можно писать без @, как в /mute: «/unwarn ник» снимает последнее предупреждение."""
+    limit = config.warn.limit
+    await tg.send(member(MOD), f"/warn user{TARGET} первое")
+    await tg.send(member(MOD), f"/warn user{TARGET} второе")
+    assert await warnings(conn) == ["первое", "второе"]
+
+    await tg.send(member(MEMBER), f"/warns user{TARGET}")  # чужие предупреждения, а не свои
+    assert replies(tg)[-1].startswith(
+        texts._t["warns_header"].format(target=TARGET_LINK, count=2, limit=limit, days=config.warn.period_days)
+    )
+
+    await tg.send(member(MOD), f"/unwarn user{TARGET}")
+    assert replies(tg)[-1] == texts._t["unwarn_done"].format(target=TARGET_LINK, count=1, limit=limit)
+    assert await warnings(conn) == ["первое"]
+
+    await tg.send(member(MOD), "/unwarn nobody_here")
+    assert replies(tg)[-1] == texts._t["error_user_not_found"]
+
+
+async def test_reply_text_is_the_reason(tg, conn, texts, config, chat):
+    # Ответом на сообщение текст /warn — причина: «флуд» не ищут как ник
+    await tg.send(member(MOD), "/warn флуд", reply_to=member(TARGET))
+    issued = texts._t["warn_issued"].format(target=TARGET_LINK, count=1, limit=config.warn.limit)
+    assert replies(tg)[-1] == issued + texts._t["warn_reason"].format(reason="флуд")
+    assert await warnings(conn) == ["флуд"]
+
+    # У /unwarn причины нет: ник — цель, даже ответом на чужое сообщение
+    await tg.send(member(MOD), f"/unwarn user{TARGET}", reply_to=member(MEMBER))
+    assert await warnings(conn) == []
+
+
 async def test_simultaneous_warns_at_the_limit_mute_once(tg, conn, monkeypatch, texts, config, chat):
     for _ in range(config.warn.limit - 1):
         await tg.send(member(MOD), f"/warn @user{TARGET}")
