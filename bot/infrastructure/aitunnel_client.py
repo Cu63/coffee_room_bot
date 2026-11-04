@@ -42,6 +42,7 @@ class AiTunnelClient:
         self,
         messages: list[dict],
         *,
+        json_mode: bool = False,
         temperature: float | None = None,
         max_tokens: int | None = None,
         model: str | None = None,
@@ -59,6 +60,8 @@ class AiTunnelClient:
         }
         if temperature is not None:
             payload["temperature"] = temperature
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
 
         for attempt in range(self._MAX_RETRIES):
             async with session.post(f"{self._base_url}/chat/completions", json=payload) as resp:

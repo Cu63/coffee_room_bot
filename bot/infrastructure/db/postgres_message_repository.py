@@ -9,6 +9,7 @@ from bot.application.interfaces.message_repository import (
     IMessageRepository,
     MessageInfo,
 )
+from bot.domain.entities import User
 
 
 class PostgresMessageRepository(IMessageRepository):
@@ -115,6 +116,47 @@ class PostgresMessageRepository(IMessageRepository):
             )
             for row in rows
         ]
+
+    async def random_quote(self, chat_id: int, min_length: int, max_length: int, since: datetime) -> ChatMessage | None:
+        row = await self._conn.fetchrow(
+            """
+            SELECT m.message_id, m.user_id, u.username, u.full_name, m.text, m.sent_at
+            FROM messages m
+            JOIN users u ON u.id = m.user_id
+            WHERE m.chat_id = $1
+              AND m.sent_at >= $4
+              AND NOT u.is_bot
+              AND char_length(m.text) BETWEEN $2 AND $3
+              AND m.text NOT LIKE '/%'
+            ORDER BY random()
+            LIMIT 1
+            """,
+            chat_id,
+            min_length,
+            max_length,
+            since,
+        )
+        return ChatMessage(**dict(row)) if row else None
+
+    async def random_authors(self, chat_id: int, exclude_user_id: int, since: datetime, limit: int) -> list[User]:
+        rows = await self._conn.fetch(
+            """
+            SELECT u.id, u.username, u.full_name
+            FROM (
+                SELECT DISTINCT user_id FROM messages
+                WHERE chat_id = $1 AND sent_at >= $3 AND text IS NOT NULL AND user_id <> $2
+            ) a
+            JOIN users u ON u.id = a.user_id
+            WHERE NOT u.is_bot
+            ORDER BY random()
+            LIMIT $4
+            """,
+            chat_id,
+            exclude_user_id,
+            since,
+            limit,
+        )
+        return [User(id=r["id"], username=r["username"], full_name=r["full_name"]) for r in rows]
 
     async def get_active_chats(self) -> list[int]:
         rows = await self._conn.fetch("SELECT DISTINCT chat_id FROM messages WHERE text IS NOT NULL AND chat_id < 0")

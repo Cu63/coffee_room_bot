@@ -35,10 +35,12 @@ from bot.application.iq_service import IqService
 from bot.application.leaderboard_service import LeaderboardService
 from bot.application.llm_service import LlmService
 from bot.application.mute_service import MuteService
+from bot.application.quiz_service import QuizService
 from bot.application.score_service import ScoreService
 from bot.application.stake_service import StakeService
 from bot.application.think_service import ThinkService
 from bot.application.warn_service import WarnService
+from bot.application.whosaid_service import WhoSaidService
 from bot.application.xp_service import XpService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
@@ -196,6 +198,21 @@ class AppServiceProvider(Provider):
             tx=tx,
             admin_users=config.admin.users,
         )
+
+    @provide(scope=Scope.REQUEST)
+    def get_quiz_service(
+        self,
+        client: OpenAiClient,
+        llm_repo: ILlmRepository,
+        config: AppConfig,
+        formatter: MessageFormatter,
+        tx: ITransactionManager,
+    ) -> QuizService:
+        return QuizService(client=client, llm_repo=llm_repo, config=config.quiz, formatter=formatter, tx=tx)
+
+    @provide(scope=Scope.REQUEST)
+    def get_whosaid_service(self, message_repo: IMessageRepository, config: AppConfig) -> WhoSaidService:
+        return WhoSaidService(message_repo, config.whosaid)
 
     @provide(scope=Scope.REQUEST)
     def get_genai_service(

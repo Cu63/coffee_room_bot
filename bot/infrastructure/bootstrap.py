@@ -132,6 +132,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.poker import router as poker_router
     from bot.presentation.handlers.reactions import router as reactions_router
     from bot.presentation.handlers.renew import router as renew_router
+    from bot.presentation.handlers.rounds import answer_router, quiz_router, whosaid_router
     from bot.presentation.handlers.selfban import router as selfban_router
     from bot.presentation.handlers.sixtyseven import router as sixtyseven_router
     from bot.presentation.handlers.slots import router as slots_router
@@ -197,6 +198,12 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         dp.include_router(fanfic_router)
     if config.think.enabled:
         dp.include_router(think_router)
+    if config.quiz.enabled:
+        dp.include_router(quiz_router)
+    if config.whosaid.enabled:
+        dp.include_router(whosaid_router)
+    if config.quiz.enabled or config.whosaid.enabled:
+        dp.include_router(answer_router)
     if config.unsound.enabled:
         dp.include_router(unsound_router)
 

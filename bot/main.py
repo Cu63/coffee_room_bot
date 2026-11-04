@@ -134,6 +134,7 @@ async def main() -> None:
     from bot.infrastructure.ledger_audit_loop import ledger_audit_loop
     from bot.infrastructure.lot_loop import lot_loop
     from bot.infrastructure.mute_roulette_loop import mute_roulette_loop
+    from bot.infrastructure.round_loop import round_loop
     from bot.infrastructure.tax_loop import tax_loop
     from bot.infrastructure.ttt_cleanup_loop import ttt_cleanup_loop
     from bot.infrastructure.unmute_loop import unmute_loop
@@ -152,6 +153,7 @@ async def main() -> None:
     tasks.start("duel_cleanup", lambda: duel_cleanup_loop(container, bot))
     tasks.start("ttt_cleanup", lambda: ttt_cleanup_loop(container, bot))
     tasks.start("lot", lambda: lot_loop(bot, container))
+    tasks.start("rounds", lambda: round_loop(bot, container))
     tasks.start("anagram_expire", lambda: anagram_expire_loop(bot, container))
     tasks.start("anagram_auto", lambda: anagram_auto_loop(bot, container))
     tasks.start("wordgame", lambda: wordgame_loop(bot, container))
