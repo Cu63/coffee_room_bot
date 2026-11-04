@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+from dataclasses import dataclass
 
 from aiogram import Bot, Router
 from aiogram.enums import ParseMode
@@ -31,23 +32,41 @@ router = Router(name="tag")
 _TAG_CD_PREFIX = "tag:cd:"
 
 
-async def _target_cost(bot: Bot, mute_service: MuteService, chat_id: int, target_id: int, tc: TagConfig) -> int:
-    """Цена тега другому: владельцу, админу (может удалять сообщения и банить) или участнику.
+@dataclass(slots=True, frozen=True)
+class _TagPlan:
+    cost: int = 0
+    as_title: bool = False  # тег админа — это его титул
+    refusal: str | None = None  # текст отказа: этот тег боту не поменять
 
-    Мут бота снимает с админа админку, и для Telegram он — обычный участник; его права
-    тогда берутся из снимка, который сохранил мут.
+
+async def _plan(
+    bot: Bot, mute_service: MuteService, chat_id: int, target_id: int, is_self: bool, tc: TagConfig
+) -> _TagPlan:
+    """Как и за сколько поменять тег.
+
+    Тег участника Telegram ставит только обычным участникам, а титул админа бот может менять
+    лишь тем, кого назначил сам; владельцу — никак. Цена: себе, админу (может удалять сообщения
+    и банить) или участнику. Мут бота снимает с админа админку, и для Telegram он обычный
+    участник — его права тогда берутся из снимка, который сохранил мут.
     """
     member = await bot.get_chat_member(chat_id, target_id)
     if isinstance(member, ChatMemberOwner):
-        return tc.cost_owner
-    if isinstance(member, ChatMemberAdministrator):
+        return _TagPlan(refusal="tag_owner_not_editable")
+    as_title = isinstance(member, ChatMemberAdministrator)
+    if as_title:
+        if not member.can_be_edited:
+            return _TagPlan(refusal="tag_admin_not_editable")
         rights = _extract_admin_permissions(member)
     else:
         muted = await mute_service.get_mute(target_id, chat_id)
         rights = muted.admin_permissions if muted is not None and muted.was_admin else None
-    if rights and rights.get("can_delete_messages") and rights.get("can_restrict_members"):
-        return tc.cost_admin
-    return tc.cost_member
+    if is_self:
+        cost = tc.cost_self
+    elif rights and rights.get("can_delete_messages") and rights.get("can_restrict_members"):
+        cost = tc.cost_admin
+    else:
+        cost = tc.cost_member
+    return _TagPlan(cost=cost, as_title=as_title)
 
 
 @router.message(Command("tag"))
@@ -116,14 +135,20 @@ async def cmd_tag(
     if not clearing and len(new_tag) > tc.max_length:
         await reply_and_delete(message, formatter._t["tag_too_long"].format(max=tc.max_length))
         return
-    if is_self:
-        cost = tc.cost_self
-    else:
-        try:
-            cost = await _target_cost(bot, mute_service, chat_id, target.id, tc)
-        except TelegramAPIError:
-            await reply_and_delete(message, formatter._t["tag_failed"])
-            return
+    try:
+        plan = await _plan(bot, mute_service, chat_id, target.id, is_self, tc)
+    except TelegramAPIError:
+        await reply_and_delete(message, formatter._t["tag_failed"])
+        return
+    if plan.refusal is not None:
+        await reply_and_delete(
+            message,
+            formatter._t[plan.refusal].format(target=user_link(target.username, target.full_name, target.id)),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+        )
+        return
+    cost = plan.cost
 
     # Сначала оплата (атомарно), потом тег: раньше тег ставился до списания и при неудачном
     # списании оставался бесплатным
@@ -154,7 +179,10 @@ async def cmd_tag(
     # Замученному админу тег вернётся титулом при размуте, а не прежний титул из снимка
     await mute_service.set_admin_title(target.id, chat_id, tag)
     try:
-        await bot.set_chat_member_tag(chat_id=chat_id, user_id=target.id, tag=tag)
+        if plan.as_title:
+            await bot.set_chat_administrator_custom_title(chat_id=chat_id, user_id=target.id, custom_title=tag or "")
+        else:
+            await bot.set_chat_member_tag(chat_id=chat_id, user_id=target.id, tag=tag)
     except TelegramAPIError:
         await reply_and_delete(message, formatter._t["tag_failed"])
         raise AbortUpdate  # откатывает оплату и титул в снимке мута

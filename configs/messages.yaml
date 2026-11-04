@@ -47,6 +47,8 @@ tag_success: "🏷 Тег {target} изменён на «{tag}» за {cost} {sc
 tag_cleared: "🏷 Тег {target} убран за {cost} {score_word}. Баланс: {balance} {score_word_balance}."
 tag_failed: "Не удалось изменить тег. Возможно, у бота недостаточно прав."
 tag_too_long: "Тег слишком длинный. Максимум: {max} символов."
+tag_owner_not_editable: "👑 {target} — владелец чата: его тег бот поменять не может."
+tag_admin_not_editable: "🛡 {target} назначен админом не через бота — его титул бот поменять не может."
 tag_success_free: "🏷 Тег {target} изменён на «{tag}»."
 tag_cleared_free: "🏷 Тег {target} убран."
 unmute_usage: "Использование: /unmute @username или ответьте на сообщение замутённого"
