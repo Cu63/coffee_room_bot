@@ -406,7 +406,6 @@ async def cmd_limits(
         f"  Себе: {tc.cost_self} {p.pluralize(tc.cost_self)}\n"
         f"  Участнику: {tc.cost_member} {p.pluralize(tc.cost_member)}\n"
         f"  Админу: {tc.cost_admin} {p.pluralize(tc.cost_admin)}\n"
-        f"  Создателю: {tc.cost_owner} {p.pluralize(tc.cost_owner)}\n"
         f"  Макс. длина: {tc.max_length} символов\n\n"
         f"<b>Блекджек:</b>\n"
         f"  Ставка: {bjc.min_bet}–{bjc.max_bet} {p.pluralize(bjc.max_bet)}"

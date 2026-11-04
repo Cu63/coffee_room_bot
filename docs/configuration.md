@@ -56,7 +56,6 @@ tag:
   cost_self: 50
   cost_member: 100
   cost_admin: 200
-  cost_owner: 500
   max_length: 32
 ```
 

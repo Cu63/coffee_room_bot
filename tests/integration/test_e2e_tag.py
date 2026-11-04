@@ -1,9 +1,9 @@
-"""E2E /tag: цена — по правам цели, в том числе у админа, которого бот сейчас держит в муте."""
+"""E2E /tag: цена — по правам цели (и у админа в муте); админу, назначенному ботом, тег — это титул."""
 
 from __future__ import annotations
 
 import pytest
-from aiogram.methods import SendMessage, SetChatMemberTag
+from aiogram.methods import SendMessage, SetChatAdministratorCustomTitle, SetChatMemberTag
 
 from bot.application.score_service import ScoreService
 from bot.domain.entities import Score
@@ -23,6 +23,10 @@ def tags(tg) -> list[tuple[int, str | None]]:
     return [(request.user_id, request.tag) for request in tg.requests(SetChatMemberTag)]
 
 
+def titles(tg) -> list[tuple[int, str]]:
+    return [(request.user_id, request.custom_title) for request in tg.requests(SetChatAdministratorCustomTitle)]
+
+
 async def mute_target(tg) -> None:
     """Модератор мутит цель: мут снимает с неё админку, для Telegram она теперь ограниченный участник."""
     tg.session.set_admin(MOD, can_restrict_members=True)
@@ -40,6 +44,8 @@ def grant(tg, rights: str) -> None:
             tg.session.set_admin(TARGET, can_delete_messages=False, can_pin_messages=False)
         case "owner":
             tg.session.member_status[TARGET] = "creator"
+        case "foreign_admin":  # админ, которого назначил не бот: его титул боту не поменять
+            tg.session.set_admin(TARGET, can_restrict_members=True, can_be_edited=False)
 
 
 @pytest.mark.parametrize(
@@ -48,9 +54,10 @@ def grant(tg, rights: str) -> None:
         ("delete_and_ban", True, "cost_admin"),
         ("delete_and_ban", False, "cost_admin"),
         ("delete_only", True, "cost_member"),
+        ("delete_only", False, "cost_member"),
         ("title", True, "cost_member"),
+        ("title", False, "cost_member"),
         ("member", False, "cost_member"),
-        ("owner", False, "cost_owner"),
     ],
 )
 async def test_tag_price_follows_delete_and_ban_rights_even_in_mute(tg, conn, config, rights, muted, price):
@@ -65,7 +72,39 @@ async def test_tag_price_follows_delete_and_ban_rights_even_in_mute(tg, conn, co
     # Раньше мут снимал с админа админку, и тег ему стоил как обычному участнику
     cost = getattr(config.tag, price)
     assert (await balance(conn, BUYER), await balance(conn, BOT_ID)) == (1000 - cost, cost)
-    assert tags(tg) == [(TARGET, "кофеман")]
+    # В муте он для Telegram обычный участник — тег участника; админу тег — это титул
+    if muted or rights == "member":
+        assert (tags(tg), titles(tg)) == ([(TARGET, "кофеман")], [])
+    else:
+        # Раньше админу ставился тег участника, а Telegram ставит его только обычным участникам
+        assert (tags(tg), titles(tg)) == ([], [(TARGET, "кофеман")])
+        assert tg.session.admin_rights[TARGET]["custom_title"] == "кофеман"
+
+
+async def test_admin_changes_own_title_at_self_price(tg, conn, config):
+    await seed_users(conn, TARGET, balance=1000)
+    grant(tg, "delete_and_ban")
+
+    await tg.send(member(TARGET), "/tag кофеман")
+
+    assert await balance(conn, TARGET) == 1000 - config.tag.cost_self
+    assert (tags(tg), titles(tg)) == ([], [(TARGET, "кофеман")])
+
+
+@pytest.mark.parametrize(
+    ("rights", "text_key"), [("owner", "tag_owner_not_editable"), ("foreign_admin", "tag_admin_not_editable")]
+)
+async def test_tag_the_bot_cannot_change_costs_nothing(tg, conn, texts, rights, text_key):
+    await seed_users(conn, BUYER, balance=1000)
+    await seed_users(conn, TARGET)
+    grant(tg, rights)
+
+    await tg.send(member(BUYER), f"/tag @user{TARGET} кофеман")
+
+    # Раньше бот брал цену, а потом получал отказ Telegram
+    assert tg.requests(SendMessage)[-1].text == texts._t[text_key].format(target=f"<code>@user{TARGET}</code>")
+    assert (tags(tg), titles(tg)) == ([], [])
+    assert (await balance(conn, BUYER), await balance(conn, BOT_ID)) == (1000, 0)
 
 
 @pytest.mark.parametrize(("arg", "title"), [("кофеман", "кофеман"), ("--clear", None)])

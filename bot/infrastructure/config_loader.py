@@ -138,8 +138,7 @@ class TagConfig(_BaseConfig):
     cost_self: int = 50
     cost_member: int = 100
     cost_admin: int = 200
-    cost_owner: int = 500
-    max_length: int = 32
+    max_length: int = 16  # Telegram: тег участника и титул админа — до 16 символов
     cooldown_hours: int = 24
 
 
