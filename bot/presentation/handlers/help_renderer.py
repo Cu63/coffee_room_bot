@@ -198,7 +198,7 @@ class HelpRenderer:
             return s["header"] + "\n\n" + "\n".join(cmds)
 
         if section == "admin":
-            cmds = s.get("commands", [])
+            cmds = [_fmt(c) for c in s.get("commands", [])]
             return s["header"] + "\n\n" + "\n".join(cmds)
 
         if section == "tracker":
