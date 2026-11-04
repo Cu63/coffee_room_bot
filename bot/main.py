@@ -10,7 +10,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from dishka import make_async_container
 from dishka.integrations.aiogram import setup_dishka
 
-from bot.infrastructure.config_loader import BotSettings, load_config
+from bot.infrastructure.config_loader import BotSettings, load_config, load_help_config
 from bot.infrastructure.di import (
     AppServiceProvider,
     DatabaseProvider,
@@ -85,6 +85,7 @@ async def main() -> None:
         register_middlewares,
         register_post_dishka_middlewares,
         register_routers,
+        setup_bot_commands,
         warn_about_username_admins,
     )
 
@@ -96,6 +97,7 @@ async def main() -> None:
     register_routers(dp, config, settings)
     setup_dishka(container, dp)
     register_post_dishka_middlewares(dp, bot_me)
+    await setup_bot_commands(bot, dp, load_help_config().get("bot_commands", {}))
 
     # ── Стартап-лог ченджлога ────────────────────────────────────
     from bot.infrastructure.redis_store import RedisStore as _RS

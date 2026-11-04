@@ -5,7 +5,15 @@ from __future__ import annotations
 import logging
 from collections.abc import Collection
 
-from aiogram import Dispatcher
+from aiogram import Bot, Dispatcher, Router
+from aiogram.exceptions import TelegramAPIError
+from aiogram.filters import Command
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeAllChatAdministrators,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllPrivateChats,
+)
 from aiogram.types import User as TgUser
 from dishka import AsyncContainer
 
@@ -188,3 +196,43 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         dp.include_router(think_router)
     if config.unsound.enabled:
         dp.include_router(unsound_router)
+
+
+def registered_commands(router: Router) -> set[str]:
+    """Команды, на которые отвечают хендлеры роутера и всех вложенных роутеров."""
+    commands: set[str] = set()
+    for handler in router.message.handlers:
+        for flt in handler.filters or ():
+            if isinstance(flt.callback, Command):
+                commands.update(name for name in flt.callback.commands if isinstance(name, str))
+    for sub in router.sub_routers:
+        commands |= registered_commands(sub)
+    return commands
+
+
+async def setup_bot_commands(bot: Bot, dp: Dispatcher, menu: dict) -> None:
+    """Меню команд Telegram из help.yaml (bot_commands): участникам в группах, админам групп и в личке.
+
+    Команды, на которые бот не отвечает (выключенная фича, опечатка), в меню не попадают.
+    Без меню бот работает как прежде, поэтому ошибка Telegram только пишется в лог.
+    """
+    known = registered_commands(dp)
+
+    def section(name: str) -> list[BotCommand]:
+        items = menu.get(name) or {}
+        unknown = [command for command in items if command not in known]
+        if unknown:
+            logger.warning("Меню команд (%s): бот не отвечает на %s — пропускаю", name, ", ".join(unknown))
+        return [BotCommand(command=command, description=text) for command, text in items.items() if command in known]
+
+    members = section("members")
+    scopes = (
+        (BotCommandScopeAllGroupChats(), members),
+        (BotCommandScopeAllChatAdministrators(), members + section("admins")),
+        (BotCommandScopeAllPrivateChats(), section("private")),
+    )
+    for scope, commands in scopes:
+        try:
+            await bot.set_my_commands(commands, scope=scope)
+        except TelegramAPIError:
+            logger.warning("Не удалось поставить меню команд (%s)", scope.type, exc_info=True)
