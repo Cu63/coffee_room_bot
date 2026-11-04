@@ -23,19 +23,24 @@ from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 router = Router(name="warn")
 
 
-async def _target(args: str | None, message: Message, user_repo: IUserRepository) -> tuple[User | None, str, bool]:
-    """Цель и остаток аргументов: «@username …» или ответом на сообщение.
+async def _target(
+    args: str | None, message: Message, user_repo: IUserRepository, *, with_reason: bool = False
+) -> tuple[User | None, str, bool]:
+    """Цель и остаток аргументов: ник первым словом (с @ или без, как в /mute) или ответ на сообщение.
 
-    Третье значение — цель назвали по имени: если её нет в базе, это «не найден», а не «как пользоваться».
+    У /warn (with_reason) в ответ на сообщение текст без @ — причина, а не ник: «/warn флуд».
+    Третье значение — цель назвали по нику: если её нет в базе, это «не найден», а не «как пользоваться».
     """
     text = (args or "").strip()
-    if text.startswith("@"):
-        name, _, rest = text.partition(" ")
-        return await user_repo.get_by_username(name.lstrip("@")), rest.strip(), True
     reply = message.reply_to_message
-    if reply is not None and reply.from_user is not None and not reply.from_user.is_bot:
-        tg = reply.from_user
-        return User(id=tg.id, username=tg.username, full_name=tg.full_name or str(tg.id)), text, False
+    author = reply.from_user if reply is not None else None
+    if author is not None and author.is_bot:
+        author = None
+    if text and (text.startswith("@") or author is None or not with_reason):
+        name, *rest = text.split(maxsplit=1)
+        return await user_repo.get_by_username(name.lstrip("@")), "".join(rest), True
+    if author is not None:
+        return User(id=author.id, username=author.username, full_name=author.full_name or str(author.id)), text, False
     return None, text, False
 
 
@@ -58,7 +63,7 @@ async def cmd_warn(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/warn @user причина или ответом — предупреждение; набрал лимит — автомут."""
+    """/warn ник причина или ответом — предупреждение; набрал лимит — автомут."""
     if message.from_user is None or message.bot is None:
         return
     bot = message.bot
@@ -66,7 +71,7 @@ async def cmd_warn(
     if not await can_mute(bot, chat_id, message.from_user, config.admin.users):
         await reply_and_delete(message, formatter._t["mute_not_allowed"])
         return
-    target, reason, named = await _target(command.args, message, user_repo)
+    target, reason, named = await _target(command.args, message, user_repo, with_reason=True)
     if target is None:
         await reply_and_delete(message, formatter._t["error_user_not_found" if named else "warn_usage"])
         return
@@ -103,7 +108,7 @@ async def cmd_warns(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/warns — свои предупреждения; /warns @user или ответом — чужие."""
+    """/warns — свои предупреждения; /warns ник или ответом — чужие."""
     if message.from_user is None:
         return
     target, _, named = await _target(command.args, message, user_repo)
@@ -148,7 +153,7 @@ async def cmd_unwarn(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/unwarn @user или ответом — снять последнее предупреждение."""
+    """/unwarn ник или ответом — снять последнее предупреждение."""
     if message.from_user is None or message.bot is None:
         return
     chat_id = message.chat.id
