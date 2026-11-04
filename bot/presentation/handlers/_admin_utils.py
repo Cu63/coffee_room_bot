@@ -315,8 +315,12 @@ async def apply_mute(
     return MuteResult(MuteOutcome.MUTED, until)
 
 
-async def lift_mute(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> None:
-    """Снимает мут бота: возвращает права участника и админку по снимку."""
+async def lift_mute(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> int:
+    """Снимает мут бота: возвращает права участника и админку по снимку.
+
+    Возвращает штраф за этот мут — только тому, чьё снятие удалило запись. Вернуть его участнику —
+    дело /unmute: истёкший мут штраф не возвращает.
+    """
     try:
         await bot.restrict_chat_member(
             chat_id=entry.chat_id, user_id=entry.user_id, permissions=_FULL_MEMBER_PERMISSIONS
@@ -334,4 +338,4 @@ async def lift_mute(bot: Bot, mute_service: MuteService, entry: MuteEntry) -> No
                 entry.chat_id,
             )
 
-    await mute_service.delete_mute(entry.user_id, entry.chat_id)
+    return await mute_service.delete_mute(entry.user_id, entry.chat_id)

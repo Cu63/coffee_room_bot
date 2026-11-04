@@ -129,18 +129,20 @@ class AutoReactConfig(_BaseConfig):
 
 
 class MuteConfig(_BaseConfig):
-    # /mute и /unmute — только для тех, у кого есть право на муты (can_mute), бесплатно и без лимитов
+    # /mute и /unmute — только для тех, у кого есть право на муты (can_mute): им бесплатно и без лимитов
+    fine: int = 100  # штраф замученному за /mute — в кассу бота; /unmute возвращает, истёкший мут — нет
     selfmute_min_minutes: int = 1
     selfmute_max_minutes: int = 1440
 
 
 class WarnConfig(_BaseConfig):
-    """Предупреждения (/warn): набрал limit за period_days — автомут на mute_minutes."""
+    """Предупреждения (/warn): набрал limit за period_days — автомут на mute_minutes и штраф fine."""
 
     enabled: bool = True
     limit: int = 3
     period_days: int = 30
     mute_minutes: int = 60
+    fine: int = 100  # вместе с автомутом — в кассу бота; /unmute возвращает
 
 
 class TagConfig(_BaseConfig):

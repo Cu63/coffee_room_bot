@@ -114,8 +114,8 @@ class AppServiceProvider(Provider):
         )
 
     @provide(scope=Scope.REQUEST)
-    def get_mute_service(self, mute_repo: IMuteRepository) -> MuteService:
-        return MuteService(mute_repo)
+    def get_mute_service(self, mute_repo: IMuteRepository, score_repo: IScoreRepository) -> MuteService:
+        return MuteService(mute_repo, score_repo)
 
     @provide(scope=Scope.REQUEST)
     def get_warn_service(self, warn_repo: IWarnRepository, config: AppConfig) -> WarnService:

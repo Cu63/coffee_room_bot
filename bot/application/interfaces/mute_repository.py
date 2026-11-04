@@ -12,7 +12,17 @@ class IMuteRepository(ABC):
     async def get(self, user_id: int, chat_id: int) -> MuteEntry | None: ...
 
     @abstractmethod
-    async def delete(self, user_id: int, chat_id: int) -> None: ...
+    async def delete(self, user_id: int, chat_id: int) -> int:
+        """Удаляет мут и возвращает штраф, списанный за него, если мут ещё не истёк (иначе 0: отбыт).
+
+        Удаление и чтение штрафа — один запрос: из двух одновременных размутов штраф достанется одному.
+        """
+        ...
+
+    @abstractmethod
+    async def add_fine(self, user_id: int, chat_id: int, amount: int) -> None:
+        """Прибавляет штраф к действующему муту: /unmute вернёт всё, что списано за этот мут."""
+        ...
 
     @abstractmethod
     async def get_expired(self, now: datetime) -> list[MuteEntry]:

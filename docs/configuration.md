@@ -44,9 +44,21 @@ limits:
 
 ```yaml
 mute:
-  # /mute и /unmute — только для тех, у кого есть право на муты; бесплатно и без лимитов
+  # /mute и /unmute — только для тех, у кого есть право на муты; им бесплатно и без лимитов
+  fine: 100                     # штраф замученному за /mute — в кассу бота; /unmute возвращает, истёкший мут — нет
   selfmute_min_minutes: 1
   selfmute_max_minutes: 1440    # 24 часа
+```
+
+### Предупреждения
+
+```yaml
+warn:
+  enabled: true
+  limit: 3                      # столько предупреждений за срок — автомут и штраф
+  period_days: 30
+  mute_minutes: 60
+  fine: 100                     # штраф вместе с автомутом; /unmute его возвращает
 ```
 
 ### Тег
@@ -56,7 +68,7 @@ tag:
   cost_self: 50
   cost_member: 100
   cost_admin: 200
-  max_length: 32
+  max_length: 16
 ```
 
 ### Блекджек

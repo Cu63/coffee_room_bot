@@ -31,7 +31,7 @@ async def cmd_unmute(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/unmute @user или ответом на сообщение — снять мут досрочно. Бесплатно."""
+    """/unmute @user или ответом на сообщение — снять мут досрочно и вернуть штраф за него."""
     if message.from_user is None or message.bot is None:
         return
     chat_id = message.chat.id
@@ -62,17 +62,22 @@ async def cmd_unmute(
         )
         return
 
+    # Штраф достаётся тому, чьё снятие удалило запись: из двух одновременных /unmute вернёт один
+    fine = 0
     if owner_muted:
         # Владельца Telegram не ограничивает: его мут — удаление сообщений по записи в Redis
         await store.owner_mute_delete(chat_id, target.id)
         if entry is not None:
-            await mute_service.delete_mute(target.id, chat_id)
+            fine = await mute_service.delete_mute(target.id, chat_id)
     elif entry is not None:
-        await lift_mute(message.bot, mute_service, entry)
+        fine = await lift_mute(message.bot, mute_service, entry)
+    refunded = await mute_service.refund_fine(target.id, chat_id, fine, bot_id=message.bot.id)
 
-    await reply_and_delete(
-        message,
-        formatter._t["unmute_success"].format(user=display),
-        parse_mode=ParseMode.HTML,
-        link_preview_options=NO_PREVIEW,
-    )
+    text = formatter._t["unmute_success"].format(user=display)
+    if fine and refunded == fine:
+        text += "\n" + formatter._t["unmute_refund"].format(amount=formatter.amount(fine))
+    elif fine:
+        text += "\n" + formatter._t["unmute_refund_partial"].format(
+            amount=formatter.amount(refunded), fine=formatter.amount(fine)
+        )
+    await reply_and_delete(message, text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW)

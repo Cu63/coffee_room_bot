@@ -71,7 +71,11 @@ async def cmd_mute(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/mute @user <время>, ответом /mute <время> или /mute random <время>. Бесплатно."""
+    """/mute @user <время>, ответом /mute <время> или /mute random <время>.
+
+    Модератору бесплатно, а замученный платит штраф mute.fine в кассу бота: /unmute его вернёт.
+    Случайную жертву /mute random не штрафуем.
+    """
     if message.from_user is None or message.bot is None:
         return
     bot = message.bot
@@ -129,6 +133,11 @@ async def cmd_mute(
         return
 
     until = muted.until or until
+    fine = 0
+    if not is_random:
+        # Платит замученный — сколько есть на счету; касса держит штраф при муте до /unmute
+        fine = await mute_service.charge_fine(target.id, chat_id, config.mute.fine, bot_id=bot.id, ref="mute")
+    fine_note = "\n" + formatter._t["mute_fine"].format(amount=formatter.amount(fine)) if fine else ""
     actor_link = user_link(message.from_user.username, message.from_user.full_name or "", message.from_user.id)
     total_minutes = math.ceil((until - datetime.now(TZ_MSK)).total_seconds() / 60)
     stack_note = f" (итого: {total_minutes} мин)" if was_stacked else ""
@@ -137,7 +146,8 @@ async def cmd_mute(
         message,
         random_note
         + formatter._t["mute_success"].format(actor=actor_link, target=target_link, minutes=minutes)
-        + stack_note,
+        + stack_note
+        + fine_note,
         parse_mode=ParseMode.HTML,
         link_preview_options=NO_PREVIEW,
     )

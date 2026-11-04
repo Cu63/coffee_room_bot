@@ -21,6 +21,9 @@ class PostgresMuteRepository(IMuteRepository):
                 -- Повторный мут не укорачивает срок и не теряет снимок админских прав:
                 -- второй мут видит цель уже без админки
                 SET muted_by = EXCLUDED.muted_by,
+                    -- Штраф отбытого мута, который фоновая задача ещё не сняла, остаётся кассе:
+                    -- к новому муту он не переходит, и /unmute его не вернёт
+                    fine = CASE WHEN active_mutes.until_at > now() THEN active_mutes.fine ELSE 0 END,
                     until_at = GREATEST(active_mutes.until_at, EXCLUDED.until_at),
                     was_admin = active_mutes.was_admin OR EXCLUDED.was_admin,
                     admin_permissions = COALESCE(active_mutes.admin_permissions, EXCLUDED.admin_permissions),
@@ -43,11 +46,22 @@ class PostgresMuteRepository(IMuteRepository):
         )
         return self._to_entity(row) if row else None
 
-    async def delete(self, user_id: int, chat_id: int) -> None:
-        await self._conn.execute(
-            "DELETE FROM active_mutes WHERE user_id = $1 AND chat_id = $2",
+    async def delete(self, user_id: int, chat_id: int) -> int:
+        fine = await self._conn.fetchval(
+            # За отбытый мут штраф остаётся кассе, даже если запись снимает /unmute, а не фоновая задача
+            "DELETE FROM active_mutes WHERE user_id = $1 AND chat_id = $2 "
+            "RETURNING CASE WHEN until_at > now() THEN fine ELSE 0 END",
             user_id,
             chat_id,
+        )
+        return fine or 0
+
+    async def add_fine(self, user_id: int, chat_id: int, amount: int) -> None:
+        await self._conn.execute(
+            "UPDATE active_mutes SET fine = fine + $3 WHERE user_id = $1 AND chat_id = $2",
+            user_id,
+            chat_id,
+            amount,
         )
 
     async def get_expired(self, now: datetime) -> list[MuteEntry]:

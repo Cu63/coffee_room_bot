@@ -63,7 +63,7 @@ async def cmd_warn(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    """/warn ник причина или ответом — предупреждение; набрал лимит — автомут."""
+    """/warn ник причина или ответом — предупреждение; набрал лимит — автомут и штраф."""
     if message.from_user is None or message.bot is None:
         return
     bot = message.bot
@@ -90,9 +90,13 @@ async def cmd_warn(
             bot, mute_service, target_id=target.id, chat_id=chat_id, muted_by=message.from_user.id, until=until
         )
         if muted.outcome == MuteOutcome.MUTED:
-            # Предупреждения «сгорают»: за них выдан мут
+            # Предупреждения «сгорают»: за них выдан мут и штраф. Штраф лежит при муте, как за /mute,
+            # и /unmute его вернёт
             await warn_service.clear(chat_id, target.id)
+            fine = await mute_service.charge_fine(target.id, chat_id, cfg.fine, bot_id=bot.id, ref="warn")
             text += "\n" + formatter._t["warn_muted"].format(minutes=cfg.mute_minutes)
+            if fine:
+                text += "\n" + formatter._t["mute_fine"].format(amount=formatter.amount(fine))
         else:
             text += "\n" + formatter._t["warn_mute_impossible"]
     await _reply(message, text)
