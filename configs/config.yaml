@@ -41,6 +41,12 @@ mute:
   selfmute_min_minutes: 1           # лимиты /selfmute
   selfmute_max_minutes: 1440        # 24 часа
 
+warn:
+  enabled: true                 # false — отключить /warn, /warns, /unwarn
+  limit: 3                      # столько предупреждений за срок — автомут
+  period_days: 30               # предупреждения старше не считаются
+  mute_minutes: 60              # длительность автомута
+
 tag:
   cost_self: 50                 # сменить тег себе
   cost_member: 100              # сменить тег обычному участнику

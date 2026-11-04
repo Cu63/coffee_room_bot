@@ -134,6 +134,15 @@ class MuteConfig(_BaseConfig):
     selfmute_max_minutes: int = 1440
 
 
+class WarnConfig(_BaseConfig):
+    """Предупреждения (/warn): набрал limit за period_days — автомут на mute_minutes."""
+
+    enabled: bool = True
+    limit: int = 3
+    period_days: int = 30
+    mute_minutes: int = 60
+
+
 class TagConfig(_BaseConfig):
     cost_self: int = 50
     cost_member: int = 100
@@ -536,6 +545,7 @@ class AppConfig(_BaseConfig):
     history: HistoryConfig = HistoryConfig()
     admin: AdminConfig = AdminConfig()
     mute: MuteConfig = MuteConfig()
+    warn: WarnConfig = WarnConfig()
     xp: XpConfig = XpConfig()
     iq: IqConfig = IqConfig()
     auto_react: AutoReactConfig = AutoReactConfig()

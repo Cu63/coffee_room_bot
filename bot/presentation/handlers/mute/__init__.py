@@ -1,8 +1,9 @@
-"""Обработчики команд мута: /mute (/amute), /unmute (/aunmute), /selfmute, /unstuck."""
+"""Обработчики команд мута: /mute (/amute), /unmute (/aunmute), /selfmute, /unstuck, /mutelist."""
 
 from aiogram import Router
 
 from bot.presentation.handlers.mute.mute_cmd import router as mute_cmd_router
+from bot.presentation.handlers.mute.mutelist_cmd import router as mutelist_router
 from bot.presentation.handlers.mute.selfmute_cmd import router as selfmute_router
 from bot.presentation.handlers.mute.unmute_cmd import router as unmute_router
 from bot.presentation.handlers.mute.unstuck_cmd import router as unstuck_router
@@ -12,3 +13,4 @@ router.include_router(mute_cmd_router)
 router.include_router(selfmute_router)
 router.include_router(unmute_router)
 router.include_router(unstuck_router)
+router.include_router(mutelist_router)
