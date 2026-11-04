@@ -46,6 +46,3 @@ class IGiveawayRepository(ABC):
 
     @abstractmethod
     async def save_winners(self, winners: list[GiveawayWinner]) -> None: ...
-
-    @abstractmethod
-    async def get_winners(self, giveaway_id: int) -> list[GiveawayWinner]: ...

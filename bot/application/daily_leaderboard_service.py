@@ -139,7 +139,7 @@ class DailyLeaderboardService:
         if yesterday is not None and not yesterday.is_empty():
             date_str = yesterday.date.strftime("%d.%m.%Y")
             parts.append(f"📅 <b>Итоги вчера ({date_str}):</b>")
-            parts.extend(_leaderboard_lines(yesterday, with_value=True))
+            parts.extend(_leaderboard_lines(yesterday))
             parts.append("")
 
         # ── Сегодня ───────────────────────────────────────────────────────────
@@ -148,12 +148,12 @@ class DailyLeaderboardService:
         if today.is_empty():
             parts.append("<i>Данных пока нет.</i>")
         else:
-            parts.extend(_leaderboard_lines(today, with_value=True))
+            parts.extend(_leaderboard_lines(today))
 
         return "\n".join(parts)
 
 
-def _leaderboard_lines(lb: DailyLeaderboard, *, with_value: bool) -> list[str]:
+def _leaderboard_lines(lb: DailyLeaderboard) -> list[str]:
     categories = [
         ("messages", lb.top_messages),
         ("reactions_given", lb.top_reactions_given),

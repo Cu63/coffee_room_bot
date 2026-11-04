@@ -57,14 +57,6 @@ class TrackerStoreMixin:
         entries = entries[: self._CHANGELOG_MAX]
         await self._r.set(key, json.dumps(entries, ensure_ascii=False))
 
-    async def changelog_remove(self, tracker_chat_id: int, message_id: int) -> None:
-        key = f"changelog:{tracker_chat_id}"
-        raw = await self._r.get(key)
-        if raw is None:
-            return
-        entries = [e for e in json.loads(raw) if e["message_id"] != message_id]
-        await self._r.set(key, json.dumps(entries, ensure_ascii=False))
-
     async def changelog_get_all(self, tracker_chat_id: int) -> list[dict]:
         raw = await self._r.get(f"changelog:{tracker_chat_id}")
         return json.loads(raw) if raw else []

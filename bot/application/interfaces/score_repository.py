@@ -93,11 +93,6 @@ class IScoreRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_all_user_ids(self, chat_id: int) -> list[int]:
-        """Все user_id с ненулевым счётом в чате (без ботов)."""
-        ...
-
-    @abstractmethod
     async def get_rich_users(self, chat_id: int, min_balance: int) -> list[Score]:
         """Все пользователи чата с балансом >= min_balance (без ботов)."""
         ...

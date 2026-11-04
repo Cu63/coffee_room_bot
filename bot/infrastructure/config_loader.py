@@ -188,7 +188,6 @@ class SystemConfig(_BaseConfig):
     cleanup_interval_hours: int = 6
     messages_retention_days: int = 30
     unmute_check_interval_seconds: int = 60
-    auto_delete_seconds: int = 120
     history_page_size: int = 30
 
 
@@ -251,7 +250,6 @@ class RwordgameConfig(_BaseConfig):
     max_bet: int = 50  # максимальная ставка (лимит N)
     min_word_length: int = 4  # минимальная длина загадываемого слова
     max_word_length: int = 9  # максимальная длина загадываемого слова
-    words_file: str = "configs/words_ru.txt"
     max_games_per_window: int = 5  # макс. игр за окно
     game_window_hours: int = 2  # окно лимита в часах
     cooldown_minutes: int = 15  # задержка между играми /rword
@@ -340,7 +338,6 @@ class DonotbuyConfig(_BaseConfig):
     enabled: bool = True
     max_price: int = 5000  # верхняя граница случайной цены за нажатие
     daily_limit: int = 2  # нажатий в сутки на пользователя (в т.ч. неудачных)
-    grid_size: int = 9  # сколько ячеек в сетке (кнопка стоит в случайной)
 
 
 class SelfbanConfig(_BaseConfig):

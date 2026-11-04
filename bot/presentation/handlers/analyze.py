@@ -15,6 +15,7 @@ from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.bot_utils import parse_duration
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.middlewares.llm_busy import OneLlmRequestPerUserMiddleware
 from bot.presentation.utils import send_html_parts
 
@@ -70,6 +71,7 @@ async def cmd_analyze(
     command: CommandObject,
     analyze_service: FromDishka[AnalyzeService],
     user_repo: FromDishka[IUserRepository],
+    formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
     """/analyze [N | duration] [@user1 @user2 ...]"""
@@ -109,14 +111,14 @@ async def cmd_analyze(
                 unknown.append(f"@{uname}")
 
         if not resolved:
-            await message.reply(f"Не найдено ни одного из указанных пользователей: {', '.join(unknown)}")
+            await message.reply(formatter._t["analyze_unknown_users"].format(users=", ".join(unknown)))
             return
 
         user_ids = resolved
         if unknown:
-            await message.reply(f"⚠️ Не нашёл в базе: {', '.join(unknown)} — они не учитываются.")
+            await message.reply(formatter._t["analyze_partial_users"].format(users=", ".join(unknown)))
 
-    thinking = await message.reply("🔍 Анализирую...")
+    thinking = await message.reply(formatter._t["analyze_thinking"])
 
     try:
         result = await analyze_service.analyze(
@@ -135,7 +137,7 @@ async def cmd_analyze(
         return
     except Exception:
         logger.exception("analyze: LLM request failed")
-        await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")
+        await thinking.edit_text(formatter._t["analyze_error"])
         return
 
     await send_html_parts(message, thinking, result.text)
@@ -147,6 +149,7 @@ async def cmd_wir(
     message: Message,
     command: CommandObject,
     analyze_service: FromDishka[AnalyzeService],
+    formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
     """/wir [N | duration] — Who Is Right."""
@@ -176,7 +179,7 @@ async def cmd_wir(
     else:
         limit = 10_000
 
-    thinking = await message.reply("⚖️ Разбираю ситуацию...")
+    thinking = await message.reply(formatter._t["analyze_wir_thinking"])
 
     try:
         result = await analyze_service.wir(
@@ -194,7 +197,7 @@ async def cmd_wir(
         return
     except Exception:
         logger.exception("wir: LLM request failed")
-        await thinking.edit_text("❌ Что-то пошло не так. Спросите у администраторов.")
+        await thinking.edit_text(formatter._t["analyze_error"])
         return
 
     await send_html_parts(message, thinking, result.text)

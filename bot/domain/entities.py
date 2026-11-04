@@ -94,6 +94,5 @@ class MuteEntry:
     chat_id: int
     muted_by: int
     until_at: datetime
-    soft_mute: bool = False
     was_admin: bool = False
     admin_permissions: dict | None = None

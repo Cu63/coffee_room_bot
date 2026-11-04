@@ -104,7 +104,7 @@ async def cmd_wordgame(
         return
 
     window_secs = wg.game_window_hours * 3600
-    created = await store.wg_rate_check(user_id, wg.max_games_per_window, window_secs)
+    created = await store.wg_rate_check(user_id, window_secs)
     if created >= wg.max_games_per_window:
         await reply_and_delete(
             message,
@@ -255,7 +255,7 @@ async def cmd_random_wordgame(
 
     # Лимит на создание игр — отдельный от /word
     window_secs = rwg.game_window_hours * 3600
-    created = await store.wg_rate_check_rword(user_id, rwg.max_games_per_window, window_secs)
+    created = await store.wg_rate_check_rword(user_id, window_secs)
     if created >= rwg.max_games_per_window:
         await reply_and_delete(
             message,

@@ -16,12 +16,7 @@ class XpResult:
     """Результат начисления XP."""
 
     new_xp: int
-    old_level: int
     new_level: int
-
-    @property
-    def leveled_up(self) -> bool:
-        return self.new_level > self.old_level
 
 
 class XpService:
@@ -59,7 +54,7 @@ class XpService:
                 old_xp,
                 new_xp,
             )
-        return XpResult(new_xp=new_xp, old_level=old_level, new_level=new_level)
+        return XpResult(new_xp=new_xp, new_level=new_level)
 
     async def get_xp(self, user_id: int, chat_id: int) -> int:
         return await self._repo.get_xp(user_id, chat_id)

@@ -53,9 +53,6 @@ class WordgameStoreMixin:
         raw = await self._r.getdel(f"{self._WG_PENDING}{game_id}")
         return json.loads(raw) if raw else None
 
-    async def wg_pending_delete(self, game_id: str) -> None:
-        await self._r.delete(f"{self._WG_PENDING}{game_id}")
-
     async def wg_awaiting_set(self, user_id: int, game_id: str) -> None:
         await self._r.set(f"{self._WG_AWAITING}{user_id}", game_id, ex=self._WG_TTL)
 
@@ -65,7 +62,7 @@ class WordgameStoreMixin:
     async def wg_awaiting_delete(self, user_id: int) -> None:
         await self._r.delete(f"{self._WG_AWAITING}{user_id}")
 
-    async def wg_rate_check(self, user_id: int, max_games: int, window_seconds: int) -> int:
+    async def wg_rate_check(self, user_id: int, window_seconds: int) -> int:
         key = f"{self._WG_RATE}{user_id}"
         now = time.time()
         await self._r.zremrangebyscore(key, 0, now - window_seconds)
@@ -84,7 +81,7 @@ class WordgameStoreMixin:
     async def wg_rword_cooldown_set(self, chat_id: int, seconds: int) -> None:
         await self._r.set(f"{self._WG_RWORD_CD}{chat_id}", "1", ex=seconds)
 
-    async def wg_rate_check_rword(self, user_id: int, max_games: int, window_seconds: int) -> int:
+    async def wg_rate_check_rword(self, user_id: int, window_seconds: int) -> int:
         key = f"{self._WG_RATE}rword:{user_id}"
         now = time.time()
         await self._r.zremrangebyscore(key, 0, now - window_seconds)
@@ -115,10 +112,6 @@ class WordgameStoreMixin:
         ttl = int(game.ends_at - time.time()) + 120
         await self._r.set(key, json.dumps(data), ex=max(ttl, 60))
 
-    async def wg_game_get(self, game_id: str) -> dict | None:
-        raw = await self._r.get(f"{self._WG_GAME}{game_id}")
-        return json.loads(raw) if raw else None
-
     async def wg_game_save_raw(self, game_id: str, data: dict) -> bool:
         """Сохраняет игру, только если она ещё идёт. False — игру уже завершили.
 
@@ -146,16 +139,6 @@ class WordgameStoreMixin:
 
     async def wg_chat_remove(self, chat_id: int, game_id: str) -> None:
         await self._r.srem(f"{self._WG_CHAT}{chat_id}", game_id)
-
-    async def wg_chat_games(self, chat_id: int) -> list[str]:
-        members = await self._r.smembers(f"{self._WG_CHAT}{chat_id}")
-        active = []
-        for gid in members:
-            if await self._r.exists(f"{self._WG_GAME}{gid}"):
-                active.append(gid)
-            else:
-                await self._r.srem(f"{self._WG_CHAT}{chat_id}", gid)
-        return active
 
     async def wg_game_by_message_id(self, chat_id: int, message_id: int) -> dict | None:
         members = await self._r.smembers(f"{self._WG_CHAT}{chat_id}")
