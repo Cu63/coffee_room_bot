@@ -191,8 +191,3 @@ async def tg(app_container):
     register_post_dishka_middlewares(dp, BOT_USER)
     session = FakeTelegramSession()
     yield TelegramHarness(dp, Bot(token=f"{BOT_ID}:TEST", session=session), session)
-
-    # Роутеры хендлеров — синглтоны модулей: отцепляем их, чтобы следующий тест собрал свой Dispatcher
-    for router in dp.sub_routers:
-        router._parent_router = None
-    dp.sub_routers.clear()

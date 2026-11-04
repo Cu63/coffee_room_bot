@@ -13,12 +13,13 @@ uv sync                                    # dependencies (the dev group is inst
 uv run python -m bot                       # run locally: needs PostgreSQL, Redis and .env
 uv run pytest tests/unit                   # unit tests
 uv run pytest tests/integration            # integration + e2e: needs TEST_DATABASE_URL and TEST_REDIS_URL, see Tests
+uv run pytest tests                        # everything in one run (integration is skipped without the TEST_* URLs)
 uv run ruff check . && uv run ruff format --check .   # lint, exactly as CI runs it
 docker compose up --build -d               # full stack
 just migrate                               # Flyway migrations (see Justfile)
 ```
 
-CI (`.github/workflows/ci.yml`) runs four jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`), `integration` (pytest `tests/integration` against Postgres 16 and Redis 7 service containers) and `docker` (builds the image, checks it runs as non-root and imports). Keep all four green: `scripts/deploy.sh` on the server deploys `master` only after they pass, then waits up to 3 minutes for the bot container to become `healthy`.
+CI (`.github/workflows/ci.yml`) runs four jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`), `integration` (the whole `tests` suite in one run against Postgres 16 and Redis 7 service containers) and `docker` (builds the image, checks it runs as non-root and imports). Keep all four green: `scripts/deploy.sh` on the server deploys `master` only after they pass, then waits up to 3 minutes for the bot container to become `healthy`.
 
 ## Architecture
 
@@ -99,6 +100,7 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 - `tests/unit` — pure logic, no services.
 - `tests/integration` — real PostgreSQL and Redis from `TEST_DATABASE_URL` / `TEST_REDIS_URL`; without them the tests are skipped. Every test truncates all tables and flushes the Redis db, so point both at a dedicated database and Redis db number. Migrations are applied automatically; `tests/integration/conftest.py` shows how to start throwaway containers.
 - E2E tests use the `tg` fixture: a real `Dispatcher` assembled by the same `bootstrap.py` functions as `main.py`, the full DI container, and `FakeTelegramSession` (`tests/integration/fake_telegram.py`) in place of the Bot API. It answers like Telegram and records every request.
+- Handler routers are module singletons. `register_routers()` moves each one to the Dispatcher it builds, so any test may build its own Dispatcher, and unit and integration tests run in one process in any order.
 - Make races deterministic with a barrier or event inside a monkeypatched method (see `test_e2e.py`), not with sleeps, and check that the test fails when the protection it covers is removed.
 
 ## Conventions
