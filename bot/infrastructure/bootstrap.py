@@ -142,6 +142,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.tracker import router as tracker_router
     from bot.presentation.handlers.transfer import router as transfer_router
     from bot.presentation.handlers.unsound import router as unsound_router
+    from bot.presentation.handlers.warn import router as warn_router
     from bot.presentation.handlers.wordgame import router as wordgame_router
 
     dp.include_router(commands_router)
@@ -157,6 +158,8 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         dp.include_router(slots_router)
     dp.include_router(giveaway_router)
     dp.include_router(mute_router)
+    if config.warn.enabled:
+        dp.include_router(warn_router)
     dp.include_router(tag_router)
     dp.include_router(transfer_router)
     dp.include_router(renew_router)

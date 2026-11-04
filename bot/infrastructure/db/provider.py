@@ -26,6 +26,7 @@ from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.interfaces.warn_repository import IWarnRepository
 from bot.application.interfaces.xp_repository import IXpRepository
 from bot.infrastructure.config_loader import DatabaseConfig
 from bot.infrastructure.db.postgres_chatmode_repository import PostgresChatmodeRepository
@@ -45,6 +46,7 @@ from bot.infrastructure.db.postgres_saved_permissions_repository import Postgres
 from bot.infrastructure.db.postgres_score_repository import PostgresScoreRepository
 from bot.infrastructure.db.postgres_user_repository import PostgresUserRepository
 from bot.infrastructure.db.postgres_user_stats_repository import PostgresUserStatsRepository
+from bot.infrastructure.db.postgres_warn_repository import PostgresWarnRepository
 from bot.infrastructure.db.postgres_xp_repository import PostgresXpRepository
 from bot.infrastructure.db.transaction_manager import PostgresTransactionManager
 
@@ -104,6 +106,10 @@ class DatabaseProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_saved_perms_repo(self, tm: ITransactionManager) -> ISavedPermissionsRepository:
         return PostgresSavedPermissionsRepository(tm.get_connection())
+
+    @provide(scope=Scope.REQUEST)
+    def get_warn_repo(self, tm: ITransactionManager) -> IWarnRepository:
+        return PostgresWarnRepository(tm.get_connection())
 
     @provide(scope=Scope.REQUEST)
     def get_user_stats_repo(self, tm: ITransactionManager) -> IUserStatsRepository:

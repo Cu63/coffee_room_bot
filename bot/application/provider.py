@@ -29,6 +29,7 @@ from bot.application.interfaces.per_target_limits_repository import IPerTargetLi
 from bot.application.interfaces.score_repository import IScoreRepository
 from bot.application.interfaces.transaction_manager import ITransactionManager
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
+from bot.application.interfaces.warn_repository import IWarnRepository
 from bot.application.interfaces.xp_repository import IXpRepository
 from bot.application.iq_service import IqService
 from bot.application.leaderboard_service import LeaderboardService
@@ -37,6 +38,7 @@ from bot.application.mute_service import MuteService
 from bot.application.score_service import ScoreService
 from bot.application.stake_service import StakeService
 from bot.application.think_service import ThinkService
+from bot.application.warn_service import WarnService
 from bot.application.xp_service import XpService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
@@ -112,6 +114,10 @@ class AppServiceProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def get_mute_service(self, mute_repo: IMuteRepository) -> MuteService:
         return MuteService(mute_repo)
+
+    @provide(scope=Scope.REQUEST)
+    def get_warn_service(self, warn_repo: IWarnRepository, config: AppConfig) -> WarnService:
+        return WarnService(warn_repo, config.warn)
 
     @provide(scope=Scope.REQUEST)
     def get_dice_service(

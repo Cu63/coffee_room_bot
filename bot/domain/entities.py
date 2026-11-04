@@ -89,6 +89,27 @@ class ApplyResult:
 
 
 @dataclass(slots=True)
+class WarnEntry:
+    """Предупреждение модератора (/warn)."""
+
+    id: int
+    chat_id: int
+    user_id: int
+    issued_by: int
+    reason: str
+    created_at: datetime
+
+
+@dataclass(slots=True)
+class ActiveMute:
+    """Действующий мут для /mutelist: кто, до какого времени и кем выдан."""
+
+    user: User
+    muted_by: User | None
+    until_at: datetime
+
+
+@dataclass(slots=True)
 class MuteEntry:
     user_id: int
     chat_id: int

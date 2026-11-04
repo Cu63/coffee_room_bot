@@ -4,7 +4,7 @@ from datetime import datetime
 import asyncpg
 
 from bot.application.interfaces.mute_repository import IMuteRepository
-from bot.domain.entities import MuteEntry, User
+from bot.domain.entities import ActiveMute, MuteEntry, User
 
 
 class PostgresMuteRepository(IMuteRepository):
@@ -72,6 +72,30 @@ class PostgresMuteRepository(IMuteRepository):
             chat_id,
             title,
         )
+
+    async def active_in_chat(self, chat_id: int) -> list[ActiveMute]:
+        rows = await self._conn.fetch(
+            """
+            SELECT m.until_at, u.id, u.username, u.full_name,
+                   b.id AS by_id, b.username AS by_username, b.full_name AS by_full_name
+            FROM active_mutes m
+            JOIN users u ON u.id = m.user_id
+            LEFT JOIN users b ON b.id = m.muted_by
+            WHERE m.chat_id = $1 AND m.until_at > now()
+            ORDER BY m.until_at
+            """,
+            chat_id,
+        )
+        return [
+            ActiveMute(
+                user=User(id=r["id"], username=r["username"], full_name=r["full_name"]),
+                muted_by=None
+                if r["by_id"] is None
+                else User(id=r["by_id"], username=r["by_username"], full_name=r["by_full_name"]),
+                until_at=r["until_at"],
+            )
+            for r in rows
+        ]
 
     async def released_users(self, chat_id: int) -> list[User]:
         rows = await self._conn.fetch(
