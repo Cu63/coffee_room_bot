@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from bot.application.interfaces.mute_repository import IMuteRepository
-from bot.domain.entities import MuteEntry
+from bot.domain.entities import MuteEntry, User
 from bot.domain.tz import TZ_MSK
 
 
@@ -24,6 +24,10 @@ class MuteService:
     async def set_admin_title(self, user_id: int, chat_id: int, title: str | None) -> None:
         """Титул, который замученный админ получит обратно при размуте (None — без титула)."""
         await self._repo.set_admin_title(user_id, chat_id, title)
+
+    async def released_users(self, chat_id: int) -> list[User]:
+        """Все, кого бот когда-либо мутил в чате и кто сейчас не в муте."""
+        return await self._repo.released_users(chat_id)
 
     async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
         await self._repo.log_mute(user_id, muted_by, chat_id)

@@ -14,7 +14,7 @@ from bot.domain.entities import User
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.handlers._admin_utils import _resolve_username, can_mute, lift_mute
+from bot.presentation.handlers._admin_utils import _resolve_username, can_mute, lift_leftover_restriction, lift_mute
 from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 
 router = Router(name="unmute_cmd")
@@ -52,7 +52,8 @@ async def cmd_unmute(
 
     owner_muted = await store.owner_mute_active(chat_id, target.id)
     entry = await mute_service.get_mute(target.id, chat_id)
-    if not owner_muted and entry is None:
+    # Мута бота нет — но мог остаться след старого размута: его снимаем, а ручное ограничение не трогаем
+    if not owner_muted and entry is None and not await lift_leftover_restriction(message.bot, chat_id, target.id):
         await reply_and_delete(
             message,
             formatter._t["unmute_not_muted"].format(user=display),
@@ -66,7 +67,7 @@ async def cmd_unmute(
         await store.owner_mute_delete(chat_id, target.id)
         if entry is not None:
             await mute_service.delete_mute(target.id, chat_id)
-    else:
+    elif entry is not None:
         await lift_mute(message.bot, mute_service, entry)
 
     await reply_and_delete(

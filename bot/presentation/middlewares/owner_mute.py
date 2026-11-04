@@ -29,6 +29,7 @@ _OWNER_ALLOWED_COMMANDS = frozenset(
         "amute",
         "unmute",
         "aunmute",
+        "unstuck",
         "giveaway",
         "giveaway_end",
         "giveaway_period",

@@ -123,6 +123,30 @@ def _promote_kwargs(perms: dict) -> dict:
 _FULL_MEMBER_PERMISSIONS = ChatPermissions(**{field: True for field in ChatPermissions.model_fields})
 
 
+def is_leftover_restriction(member: ChatMember) -> bool:
+    """Ограничение, оставшееся от старого размута бота: разрешено всё, кроме смены своего тега.
+
+    Размут раньше не передавал can_edit_tag, а непереданное право Telegram считает запретом —
+    участник оставался ограниченным без срока. Это не ручное ограничение админа: его можно снять.
+    """
+    if not isinstance(member, ChatMemberRestricted) or member.can_edit_tag:
+        return False
+    return all(getattr(member, field) for field in ChatPermissions.model_fields if field != "can_edit_tag")
+
+
+async def lift_leftover_restriction(bot: Bot, chat_id: int, user_id: int) -> bool:
+    """Снять ограничение, оставшееся от старого размута. False — его нет или Telegram не дал."""
+    try:
+        member = await bot.get_chat_member(chat_id, user_id)
+        if not is_leftover_restriction(member):
+            return False
+        await bot.restrict_chat_member(chat_id=chat_id, user_id=user_id, permissions=_FULL_MEMBER_PERMISSIONS)
+    except TelegramAPIError:
+        logger.warning("Не удалось снять старое ограничение с %d в чате %d", user_id, chat_id)
+        return False
+    return True
+
+
 async def restore_admin(bot: Bot, chat_id: int, user_id: int, perms: dict) -> None:
     """Вернуть админку по снимку прав: права, анонимность и титул."""
     await bot.promote_chat_member(chat_id=chat_id, user_id=user_id, **_promote_kwargs(perms))
@@ -236,7 +260,8 @@ async def apply_mute(
     - Повторный мут не затирает снимок админских прав: второй мут видит цель уже
       без админки, а права после размута нужно вернуть по снимку первого.
     - Не трогает ограничения, наложенные админом вручную: restrict заменил бы их,
-      а размут снял бы совсем — их снимет только админ.
+      а размут снял бы совсем — их снимет только админ. След старого размута бота
+      (is_leftover_restriction) — не ручное ограничение.
 
     НЕ списывает баллы и НЕ шлёт сообщений в чат. Владельца (OWNER) вызывающий
     может «мутить» мягко — удалением сообщений (owner_mute).
@@ -249,7 +274,7 @@ async def apply_mute(
         return MuteResult(MuteOutcome.OWNER)
 
     existing = await mute_service.get_mute(target_id, chat_id)
-    if existing is None and isinstance(member, ChatMemberRestricted):
+    if existing is None and isinstance(member, ChatMemberRestricted) and not is_leftover_restriction(member):
         return MuteResult(MuteOutcome.RESTRICTED_BY_ADMIN)
     if existing is not None and existing.until_at > until:
         until = existing.until_at
