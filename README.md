@@ -64,27 +64,8 @@ LOG_LEVEL=ERROR
 /setjoingroups → Enable
 ```
 
-<details>
-<summary>Список команд для /setcommands</summary>
-
-```
-score - Мой счёт
-top - Топ участников
-history - История начислений
-bj - Блекджек (/bj <ставка>)
-slots - Слоты (/slots <ставка>)
-dice - Кости (/dice <ставка> <время>)
-mute - Замутить пользователя (админы с правом блокировки)
-unmute - Снять мут (админы с правом блокировки)
-selfmute - Замутить себя
-tag - Изменить тег
-transfer - Перевести очки
-giveaway - Создать розыгрыш
-llm - Вопрос к AI
-search - Поиск с AI-ответом
-help - Справка
-```
-</details>
+Меню команд (кнопку «/» у поля ввода) бот ставит сам при старте из `configs/help.yaml` → `bot_commands`:
+участникам групп, админам групп и в личке. В BotFather `/setcommands` больше не нужен.
 
 ### 4. Запустить
 

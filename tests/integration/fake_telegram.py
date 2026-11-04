@@ -31,6 +31,7 @@ from aiogram.methods import (
     SetChatMemberTag,
     SetChatPermissions,
     SetMessageReaction,
+    SetMyCommands,
     TelegramMethod,
     UnpinChatMessage,
 )
@@ -191,7 +192,14 @@ class FakeTelegramSession(BaseSession):
             case RestrictChatMember():
                 self._restrict(method)
                 return True
-            case AnswerCallbackQuery() | PinChatMessage() | UnpinChatMessage() | DeleteMessage() | SetMessageReaction():
+            case (
+                AnswerCallbackQuery()
+                | PinChatMessage()
+                | UnpinChatMessage()
+                | DeleteMessage()
+                | SetMessageReaction()
+                | SetMyCommands()
+            ):
                 return True
         raise NotImplementedError(f"фейковый Telegram не умеет {type(method).__name__}")
 

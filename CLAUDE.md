@@ -80,7 +80,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
 
 - `configs/config.yaml` — features and their parameters (pydantic models in `config_loader.py`). Unknown keys are an error (`extra="forbid"`): a typo fails startup and `tests/unit/test_config.py`. Admins are `admin.users`: numeric Telegram ids (preferred: a username can be changed and taken by someone else) or usernames, matched by `is_admin()`; at startup the bot logs the id for every admin still listed by username. `admin.prefix` only filters admin messages out of chat summaries.
 - `configs/messages.yaml` — user-facing texts. New texts go here (plenty of older code still has hardcoded strings). `tests/unit/test_smoke.py` checks that every `_t["key"]` used in code exists.
-- `configs/help.yaml` — `/help` menu structure and texts.
+- `configs/help.yaml` — `/help` menu structure and texts, and `bot_commands`: the Telegram command menu that `setup_bot_commands()` sets at startup for group members, group admins and private chats; a command no handler answers (a disabled feature, a typo) is skipped with a warning.
 - `configs/words_ru.txt` — word list for `/rword` and `/anagram`. It is gitignored and has to be put on the server by hand; without it the bot logs a warning at startup.
 - `.env` — secrets and settings, see `.env.example`: `BOT_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `AITUNNEL_API_KEY`, `OPENAI_API_KEY`, `GIGACHAT_API_KEY`, `OPENSERP_URL`, `LOG_CHAT_ID`, `LOG_LEVEL`; optionally `TELEGRAM_PROXY`.
 
