@@ -21,6 +21,10 @@ class MessageFormatter:
         self._t = templates
         self._p = pluralizer
 
+    def amount(self, n: int) -> str:
+        """Сумма с валютой в нужной форме: «100 кирчиков»."""
+        return f"{n} {self._p.pluralize(n)}"
+
     def score_info(self, user: str, total: int) -> str:
         if total == 0:
             return self._t["score_info_zero"].format(

@@ -37,7 +37,9 @@ _history_pages: TTLCache = TTLCache(maxsize=100, ttl=120)
 # Эмодзи операции в истории: по ref (что именно), иначе по типу операции
 _REF_EMOJI = {
     **SPECIAL_EMOJI,
+    "mute": "🔇",
     "unmute": "🔊",
+    "warn": "⚠️",
     "renew": "🔁",
     "anon": "🕵",
     "donotbuy": "🚫",

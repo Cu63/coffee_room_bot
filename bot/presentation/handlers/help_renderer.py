@@ -80,6 +80,8 @@ class HelpRenderer:
             warn_limit=config.warn.limit,
             warn_days=config.warn.period_days,
             warn_mute=config.warn.mute_minutes,
+            warn_fine=f"{config.warn.fine} {p.pluralize(config.warn.fine)}",
+            mute_fine=f"{mc.fine} {p.pluralize(mc.fine)}",
             selfmute_max=mc.selfmute_max_minutes,
             cost_self=f"{tc.cost_self} {p.pluralize(tc.cost_self)}",
             cost_member=f"{tc.cost_member} {p.pluralize(tc.cost_member)}",
