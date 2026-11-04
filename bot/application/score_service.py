@@ -425,6 +425,20 @@ class ScoreService:
 
         return TransferResult(success=True, amount=amount, sender_balance=sender_new)
 
+    async def pay_from_house(self, bot_id: int, user_id: int, chat_id: int, amount: int, ref: str) -> bool:
+        """Приз из кассы бота: атомарно списать с бота и начислить игроку. False — в кассе не хватает."""
+        if amount <= 0:
+            return False
+        debited = await self._score_repo.try_debit(
+            bot_id, chat_id, amount, kind=LedgerKind.PRIZE, ref=ref, counterparty_id=user_id
+        )
+        if debited is None:
+            return False
+        await self._score_repo.add_delta(
+            user_id, chat_id, amount, kind=LedgerKind.PRIZE, ref=ref, counterparty_id=bot_id
+        )
+        return True
+
     async def award_burst(self, user_id: int, chat_id: int, reward: int) -> int:
         """Тихое начисление за burst-активность. Возвращает новый баланс."""
         new_value = await self._score_repo.add_delta(user_id, chat_id, reward, kind=LedgerKind.BONUS, ref="burst")

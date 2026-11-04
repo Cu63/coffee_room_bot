@@ -14,6 +14,7 @@ from bot.infrastructure.redis._llm import LlmStoreMixin
 from bot.infrastructure.redis._lot import LotStoreMixin
 from bot.infrastructure.redis._moderation import ModerationStoreMixin
 from bot.infrastructure.redis._mute_roulette import MuteRouletteStoreMixin
+from bot.infrastructure.redis._rounds import RoundStoreMixin
 from bot.infrastructure.redis._scan import ScanStoreMixin
 from bot.infrastructure.redis._slots import SlotsStoreMixin
 from bot.infrastructure.redis._tracker import TrackerStoreMixin
@@ -27,6 +28,7 @@ class RedisStore(
     ModerationStoreMixin,
     BonusStoreMixin,
     MuteRouletteStoreMixin,
+    RoundStoreMixin,
     GiveawayStoreMixin,
     WordgameStoreMixin,
     AnagramStoreMixin,

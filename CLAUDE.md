@@ -64,6 +64,7 @@ One Postgres transaction per update (or per loop scope), opened lazily by the fi
   - finishing or claiming elsewhere: `DEL`/`GETDEL` — only the caller whose delete succeeded pays out;
   - saving a move elsewhere: `SET … XX` (`KEEPTTL` where the TTL must not move) — never recreate a finished game;
   - multi-field compare-and-set: Lua or WATCH (`RedisStore.game_patch_if_state`, `lot_game_save_if_unchanged`).
+- Rounds of `/quiz` and `/whosaid` (`presentation/handlers/rounds/common.py`, `RoundStoreMixin`): one round per chat (`round:chat:` with NX), one answer per member (SADD), and the first right answer claims the round with GETDEL and gets the prize from the house through `ScoreService.pay_from_house()` (an atomic `try_debit` of the bot; an empty house means a win without a prize). `round_loop` reveals the answer of rounds nobody solved.
 - A game started from `/duel` keeps the invite's ledger ref (`data["ref"] = "duel:<invite_id>"`): stakes, prizes and refunds of one game share one ref.
 - Cleanup loops take expired games one at a time (Lua "delete if expired"), settle each in its own short transaction and edit the Telegram message after the commit.
 - Timeouts: a lobby nobody accepted → refund the creator; an abandoned started game → both stakes go to the bot.
@@ -91,7 +92,7 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 
 ### Background Tasks
 
-19 loops in `bot/infrastructure/*_loop.py` plus the heartbeat, started in `bot/main.py` through `BackgroundTasks` (`bot/infrastructure/background.py`): a loop that crashes or returns is logged and restarted after 30 s. They cover event and message cleanup (`system.messages_retention_days`), unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, auto-delete, daily summary and leaderboard, chat modes, tax and the ledger audit. The heartbeat (`heartbeat.py`) checks Postgres and Redis every 30 s and touches a file; the Docker `HEALTHCHECK` (`python -m bot.infrastructure.heartbeat`) reads its age.
+20 loops in `bot/infrastructure/*_loop.py` plus the heartbeat, started in `bot/main.py` through `BackgroundTasks` (`bot/infrastructure/background.py`): a loop that crashes or returns is logged and restarted after 30 s. They cover event and message cleanup (`system.messages_retention_days`), unmute, giveaways, dice, mute roulette, BJ/TTT/duel cleanup, lot, anagram, word game, `/quiz` and `/whosaid` rounds, auto-delete, daily summary and leaderboard, chat modes, tax and the ledger audit. The heartbeat (`heartbeat.py`) checks Postgres and Redis every 30 s and touches a file; the Docker `HEALTHCHECK` (`python -m bot.infrastructure.heartbeat`) reads its age.
 
 ### Tests
 

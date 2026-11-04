@@ -523,6 +523,32 @@ class TaxConfig(_BaseConfig):
     ]
 
 
+class RoundConfig(_BaseConfig):
+    """Раунд с вариантами ответа: первый правильный ответ получает приз из кассы бота."""
+
+    enabled: bool = True
+    prize: int = 20  # из кассы бота; пуста — победа без приза
+    answer_seconds: int = 60  # на ответ, потом бот показывает верный
+    cooldown_minutes: int = 3  # пауза между раундами этой игры в чате
+    daily_limit: int = 20  # раундов этой игры в чат в сутки
+
+
+class QuizConfig(RoundConfig):
+    """/quiz — вопрос придумывает LLM, сложность — по IQ вызвавшего."""
+
+    model: str = "gpt-4.1-nano"
+    max_output_tokens: int = 400
+    temperature: float = 1.0
+
+
+class WhoSaidConfig(RoundConfig):
+    """/whosaid — угадать автора сообщения из чата."""
+
+    min_length: int = 20  # длина цитаты, символов
+    max_length: int = 300
+    days: int = 30  # цитаты — из сообщений за последние N дней
+
+
 class ThinkConfig(_BaseConfig):
     """Настройки /think — случайная мысль участника по его IQ и свежей переписке.
 
@@ -581,6 +607,8 @@ class AppConfig(_BaseConfig):
     genai: GenaiConfig = GenaiConfig()
     fanfic: FanficConfig = FanficConfig()
     think: ThinkConfig = ThinkConfig()
+    quiz: QuizConfig = QuizConfig()
+    whosaid: WhoSaidConfig = WhoSaidConfig()
     unsound: UnsoundConfig = UnsoundConfig()
 
 

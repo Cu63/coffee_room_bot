@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 
+from bot.domain.entities import User
+
 
 @dataclass(slots=True)
 class MessageInfo:
@@ -51,6 +53,16 @@ class IMessageRepository(ABC):
         Если ``since`` указан — только сообщения новее этого момента.
         Результат в хронологическом порядке (старые → новые).
         """
+        ...
+
+    @abstractmethod
+    async def random_quote(self, chat_id: int, min_length: int, max_length: int, since: datetime) -> ChatMessage | None:
+        """Случайное сообщение не бота длиной min_length..max_length, отправленное после since."""
+        ...
+
+    @abstractmethod
+    async def random_authors(self, chat_id: int, exclude_user_id: int, since: datetime, limit: int) -> list[User]:
+        """До limit случайных авторов (не ботов), писавших в чат после since, кроме exclude_user_id."""
         ...
 
     @abstractmethod

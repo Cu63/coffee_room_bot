@@ -88,6 +88,17 @@ class ApplyResult:
     reason: IgnoreReason | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class RoundQuestion:
+    """Вопрос раунда (/quiz, /whosaid): текст в HTML, варианты ответа и индекс верного."""
+
+    text: str
+    options: tuple[str, ...]
+    correct: int
+    explanation: str = ""  # показывается вместе с ответом
+    author_id: int | None = None  # /whosaid: автор цитаты не отвечает
+
+
 @dataclass(slots=True)
 class WarnEntry:
     """Предупреждение модератора (/warn)."""

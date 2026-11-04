@@ -334,6 +334,26 @@ think:
   messages_count: 30               # сколько последних сообщений чата берётся в контекст
   daily_limit_per_user: 2          # мыслей на пользователя в сутки (0 = без лимита, админам не считается)
 
+quiz:
+  enabled: true
+  model: "gpt-4.1-nano"            # провайдер тот же, что у /think и /ff
+  max_output_tokens: 400
+  temperature: 1.0
+  prize: 30                        # первому правильному ответу — из кассы бота
+  answer_seconds: 60               # на ответ, потом бот показывает верный
+  cooldown_minutes: 3              # пауза между викторинами в чате
+  daily_limit: 20                  # викторин в чат в сутки
+
+whosaid:
+  enabled: true
+  prize: 20                        # первому, кто угадал автора, — из кассы бота
+  answer_seconds: 60
+  cooldown_minutes: 3
+  daily_limit: 20
+  min_length: 20                   # длина цитаты, символов
+  max_length: 300
+  days: 30                         # цитаты из сообщений за последние N дней (хранятся system.messages_retention_days)
+
 genai:
   enabled: true                    # false — полностью отключить /genai
   cost: 100                        # стоимость одной генерации (кирчиков)
