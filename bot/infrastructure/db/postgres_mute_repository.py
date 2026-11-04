@@ -4,7 +4,7 @@ from datetime import datetime
 import asyncpg
 
 from bot.application.interfaces.mute_repository import IMuteRepository
-from bot.domain.entities import MuteEntry
+from bot.domain.entities import MuteEntry, User
 
 
 class PostgresMuteRepository(IMuteRepository):
@@ -72,6 +72,20 @@ class PostgresMuteRepository(IMuteRepository):
             chat_id,
             title,
         )
+
+    async def released_users(self, chat_id: int) -> list[User]:
+        rows = await self._conn.fetch(
+            """
+            SELECT DISTINCT u.id, u.username, u.full_name
+            FROM mute_history h
+            JOIN users u ON u.id = h.user_id
+            WHERE h.chat_id = $1
+              AND NOT EXISTS (SELECT 1 FROM active_mutes m WHERE m.user_id = h.user_id AND m.chat_id = h.chat_id)
+            ORDER BY u.id
+            """,
+            chat_id,
+        )
+        return [User(id=r["id"], username=r["username"], full_name=r["full_name"]) for r in rows]
 
     async def log_mute(self, user_id: int, muted_by: int, chat_id: int) -> None:
         await self._conn.execute(

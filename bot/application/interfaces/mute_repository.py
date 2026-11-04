@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from bot.domain.entities import MuteEntry
+from bot.domain.entities import MuteEntry, User
 
 
 class IMuteRepository(ABC):
@@ -22,6 +22,11 @@ class IMuteRepository(ABC):
     @abstractmethod
     async def set_admin_title(self, user_id: int, chat_id: int, title: str | None) -> None:
         """Титул в снимке прав замученного админа (None — без титула); не админа не трогает."""
+        ...
+
+    @abstractmethod
+    async def released_users(self, chat_id: int) -> list[User]:
+        """Все, кого бот когда-либо мутил в чате и кто сейчас не в муте."""
         ...
 
     @abstractmethod
