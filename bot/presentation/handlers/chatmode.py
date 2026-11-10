@@ -13,17 +13,16 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.chatmode_service import ChatmodeService
 from bot.domain.pluralizer import ScorePluralizer
 from bot.infrastructure.config_loader import AppConfig
-from bot.infrastructure.message_formatter import user_link
+from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.presentation.handlers._admin_utils import can_moderate
 from bot.presentation.utils import reply_and_delete
 
 logger = logging.getLogger(__name__)
 router = Router(name="chatmode")
 
-_MODE_LABEL = {
-    "silence": "🤫 Тишина",
-    "gif": "🎭 Только гифки и стикеры",
-}
+
+def _label(t: dict[str, str], mode: str) -> str:
+    return {"silence": t["chatmode_label_silence"], "gif": t["chatmode_label_gif"]}.get(mode, mode)
 
 
 def _format_remaining(entry) -> str:
@@ -42,17 +41,19 @@ async def _cmd_mode(
     service: ChatmodeService,
     config: AppConfig,
     pluralizer: ScorePluralizer,
+    formatter: MessageFormatter,
     mode: str,
 ) -> None:
+    t = formatter._t
     if message.from_user is None or message.bot is None:
         return
     if message.chat.type not in ("group", "supergroup"):
-        await reply_and_delete(message, "❌ Команда доступна только в групповых чатах.")
+        await reply_and_delete(message, t["chatmode_groups_only"])
         return
 
     cfg = config.chatmode
     if not cfg.enabled:
-        await reply_and_delete(message, "❌ Режимы чата отключены.")
+        await reply_and_delete(message, t["chatmode_disabled"])
         return
 
     mode_cfg = cfg.silence if mode == "silence" else cfg.gif
@@ -63,14 +64,14 @@ async def _cmd_mode(
         try:
             minutes = int(command.args.strip())
         except ValueError:
-            await reply_and_delete(message, f"❌ Укажи количество минут числом. Например: /{mode} 10")
+            await reply_and_delete(message, t["chatmode_bad_minutes"].format(mode=mode))
             return
 
     if minutes < 1:
-        await reply_and_delete(message, "❌ Минимум 1 минута.")
+        await reply_and_delete(message, t["chatmode_min_minutes"])
         return
     if minutes > mode_cfg.max_minutes:
-        await reply_and_delete(message, f"❌ Максимальная длительность — {mode_cfg.max_minutes} мин.")
+        await reply_and_delete(message, t["chatmode_max_minutes"].format(max=mode_cfg.max_minutes))
         return
 
     chat_id = message.chat.id
@@ -91,29 +92,32 @@ async def _cmd_mode(
         if result.error == "already_active":
             existing = await service.get_active(chat_id)
             if existing:
-                remaining = _format_remaining(existing)
-                label = _MODE_LABEL.get(existing.mode, existing.mode)
                 await reply_and_delete(
                     message,
-                    f"❌ Уже активен режим <b>{label}</b>.\nОсталось: <b>{remaining}</b>",
+                    t["chatmode_already_active"].format(
+                        label=_label(t, existing.mode), remaining=_format_remaining(existing)
+                    ),
                     parse_mode=ParseMode.HTML,
                 )
             else:
-                await reply_and_delete(message, "❌ Режим уже активен.")
+                await reply_and_delete(message, t["chatmode_already_active_short"])
         elif result.error == "not_enough":
-            score_word = pluralizer.pluralize(total_cost)
             await reply_and_delete(
                 message,
-                f"❌ Недостаточно кирчиков. Нужно <b>{total_cost} {score_word}</b>, "
-                f"у тебя <b>{result.new_balance}</b>.",
+                t["chatmode_not_enough"].format(
+                    currency=pluralizer.pluralize(0),
+                    cost=total_cost,
+                    score_word=pluralizer.pluralize(total_cost),
+                    balance=result.new_balance,
+                ),
                 parse_mode=ParseMode.HTML,
             )
         else:
-            await reply_and_delete(message, f"❌ Ошибка: {result.error}")
+            await reply_and_delete(message, t["chatmode_error"].format(error=result.error))
         return
 
     # Успех
-    label = _MODE_LABEL.get(mode, mode)
+    label = _label(t, mode)
     score_word = pluralizer.pluralize(result.cost)
     initiator = user_link(
         message.from_user.username,
@@ -129,11 +133,15 @@ async def _cmd_mode(
 
     await message.bot.send_message(
         chat_id,
-        f"{label} — режим активирован на <b>{minutes} мин.</b>\n\n"
-        f"Инициатор: {initiator}\n"
-        f"Списано: <b>{result.cost} {score_word}</b> "
-        f"(осталось {result.new_balance} {balance_word})\n\n"
-        f"Отключить раньше времени: /chatmode off",
+        t["chatmode_activated"].format(
+            label=label,
+            minutes=minutes,
+            initiator=initiator,
+            cost=result.cost,
+            score_word=score_word,
+            balance=result.new_balance,
+            balance_word=balance_word,
+        ),
         parse_mode=ParseMode.HTML,
     )
 
@@ -146,8 +154,9 @@ async def cmd_silence(
     service: FromDishka[ChatmodeService],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
-    await _cmd_mode(message, command, service, config, pluralizer, "silence")
+    await _cmd_mode(message, command, service, config, pluralizer, formatter, "silence")
 
 
 @router.message(Command("gif"))
@@ -158,8 +167,9 @@ async def cmd_gif(
     service: FromDishka[ChatmodeService],
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
-    await _cmd_mode(message, command, service, config, pluralizer, "gif")
+    await _cmd_mode(message, command, service, config, pluralizer, formatter, "gif")
 
 
 @router.message(Command("chatmode"))
@@ -169,23 +179,19 @@ async def cmd_chatmode(
     command: CommandObject,
     service: FromDishka[ChatmodeService],
     config: FromDishka[AppConfig],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
     """Управление активным режимом. Сейчас только: /chatmode off"""
+    t = formatter._t
     if message.from_user is None or message.bot is None:
         return
     if message.chat.type not in ("group", "supergroup"):
-        await reply_and_delete(message, "❌ Команда доступна только в групповых чатах.")
+        await reply_and_delete(message, t["chatmode_groups_only"])
         return
 
     arg = (command.args or "").strip().lower()
     if arg != "off":
-        await reply_and_delete(
-            message,
-            "ℹ️ Использование:\n"
-            "/chatmode off — отключить активный режим\n"
-            "/silence [мин] — запретить всё\n"
-            "/gif [мин] — только гифки и стикеры",
-        )
+        await reply_and_delete(message, t["chatmode_usage"])
         return
 
     chat_id = message.chat.id
@@ -193,19 +199,19 @@ async def cmd_chatmode(
 
     entry = await service.get_active(chat_id)
     if entry is None:
-        await reply_and_delete(message, "ℹ️ Нет активного режима.")
+        await reply_and_delete(message, t["chatmode_none"])
         return
 
     # Отменить может инициатор, админ бота или модератор чата (не купленный /buyop титул)
     if entry.activated_by != user_id and not await can_moderate(
         message.bot, chat_id, message.from_user, config.admin.users
     ):
-        await reply_and_delete(message, "❌ Отменить режим может только его инициатор или администратор.")
+        await reply_and_delete(message, t["chatmode_cancel_not_allowed"])
         return
 
     await service.deactivate(message.bot, entry)
 
-    label = _MODE_LABEL.get(entry.mode, entry.mode)
+    label = _label(t, entry.mode)
     try:
         await message.delete()
     except Exception:
@@ -213,6 +219,6 @@ async def cmd_chatmode(
 
     await message.bot.send_message(
         chat_id,
-        f"✅ Режим <b>{label}</b> отключён досрочно.",
+        t["chatmode_cancelled"].format(label=label),
         parse_mode=ParseMode.HTML,
     )

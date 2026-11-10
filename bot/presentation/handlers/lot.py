@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import random
 import time
@@ -62,6 +63,8 @@ from bot.presentation.utils import (
 logger = logging.getLogger(__name__)
 router = Router(name="lot")
 
+_DESCRIPTION_LIMIT = 200  # символов в описании лота
+
 
 def _make_lot_id() -> str:
     return f"{int(time.time() * 1000)}{random.randint(100, 999)}"
@@ -70,30 +73,19 @@ def _make_lot_id() -> str:
 # ── Рендер текста лота ───────────────────────────────────────────────────
 
 
-def _lot_text(data: dict, p: ScorePluralizer) -> str:
-    ends_at = data["expires_at"]
-    ends_str = datetime.fromtimestamp(ends_at, tz=TZ_MSK).strftime("%H:%M:%S")
-    cur = data["current_price"]
-    sw = p.pluralize(cur)
-
-    leader_line = ""
+def _lot_text(data: dict, p: ScorePluralizer, t: dict[str, str]) -> str:
+    ends_str = datetime.fromtimestamp(data["expires_at"], tz=TZ_MSK).strftime("%H:%M:%S")
     if data["leader_id"]:
-        leader_line = f"\n👑 Лидер: {data['leader_display']} — <b>{cur} {sw}</b>"
+        cur = data["current_price"]
+        leader_line = t["lot_leader"].format(leader=data["leader_display"], price=cur, score_word=p.pluralize(cur))
     else:
         start = data["start_price"]
-        sw_start = p.pluralize(start)
-        leader_line = f"\n💰 Стартовая цена: <b>{start} {sw_start}</b>"
-
+        leader_line = t["lot_start_price"].format(price=start, score_word=p.pluralize(start))
     bids_count = data["bids_count"]
-    bids_line = f"🔢 Ставок: <b>{bids_count}</b>" if bids_count else "Ставок пока нет"
-
-    return (
-        f"🔨 <b>Аукцион!</b>\n\n"
-        f"📦 <b>{data['description']}</b>"
-        f"{leader_line}\n\n"
-        f"{bids_line}\n"
-        f"⏰ Завершение: <b>{ends_str}</b>\n\n"
-        f"<i>Нажми кнопку, чтобы сделать ставку</i>"
+    bids_line = t["lot_bids"].format(count=bids_count) if bids_count else t["lot_no_bids"]
+    # Описание пишет админ: экранируем, иначе «<3» ломает разметку и лот не публикуется
+    return t["lot_text"].format(
+        description=html.escape(data["description"]), leader_line=leader_line, bids_line=bids_line, ends=ends_str
     )
 
 
@@ -129,42 +121,30 @@ async def cmd_lot(
     if message.from_user is None or message.bot is None:
         return
 
+    t = formatter._t
     cfg = config.lot
     if not cfg.enabled:
-        await reply_and_delete(message, "❌ Аукционы отключены.")
+        await reply_and_delete(message, t["lot_disabled"])
         return
 
     # Только конфиг-администраторы
     if not is_admin(message.from_user, config.admin.users):
-        await reply_and_delete(message, "❌ Только администраторы могут выставлять лоты.")
+        await reply_and_delete(message, t["lot_admins_only"])
         return
 
+    duration_range = {"min_minutes": cfg.min_duration_sec // 60, "max_hours": cfg.max_duration_sec // 3600}
     args = (message.text or "").split(None, 3)[1:]  # [время, цена, описание]
     if len(args) < 3:
-        await reply_and_delete(
-            message,
-            "🔨 <b>Аукцион</b>\n\n"
-            "Использование: <code>/lot &lt;время&gt; &lt;стартовая_цена&gt; &lt;описание&gt;</code>\n"
-            "Пример: <code>/lot 10m 50 Кастомный тег «Король»</code>\n\n"
-            f"Время: {cfg.min_duration_sec // 60}м – {cfg.max_duration_sec // 3600}ч",
-            parse_mode=ParseMode.HTML,
-        )
+        await reply_and_delete(message, t["lot_usage"].format(**duration_range), parse_mode=ParseMode.HTML)
         return
 
     # Парсим длительность
     duration_sec = parse_duration(args[0])
     if duration_sec is None:
-        await reply_and_delete(
-            message,
-            "❌ Неверный формат времени. Используй <code>Xm</code> или <code>Xh</code>.",
-            parse_mode=ParseMode.HTML,
-        )
+        await reply_and_delete(message, t["lot_bad_duration"], parse_mode=ParseMode.HTML)
         return
     if not (cfg.min_duration_sec <= duration_sec <= cfg.max_duration_sec):
-        await reply_and_delete(
-            message,
-            f"❌ Длительность: от {cfg.min_duration_sec // 60}м до {cfg.max_duration_sec // 3600}ч.",
-        )
+        await reply_and_delete(message, t["lot_duration_range"].format(**duration_range))
         return
 
     # Парсим стартовую цену
@@ -173,21 +153,20 @@ async def cmd_lot(
         if start_price < 0:
             raise ValueError
     except ValueError:
-        await reply_and_delete(message, "❌ Стартовая цена должна быть неотрицательным числом.")
+        await reply_and_delete(message, t["lot_bad_price"])
         return
     if not (cfg.min_start_price <= start_price <= cfg.max_start_price):
         await reply_and_delete(
-            message,
-            f"❌ Стартовая цена: от {cfg.min_start_price} до {cfg.max_start_price}.",
+            message, t["lot_price_range"].format(min_price=cfg.min_start_price, max_price=cfg.max_start_price)
         )
         return
 
     description = args[2].strip()
     if not description:
-        await reply_and_delete(message, "❌ Описание лота не может быть пустым.")
+        await reply_and_delete(message, t["lot_empty_description"])
         return
-    if len(description) > 200:
-        await reply_and_delete(message, "❌ Описание слишком длинное (макс. 200 символов).")
+    if len(description) > _DESCRIPTION_LIMIT:
+        await reply_and_delete(message, t["lot_long_description"].format(limit=_DESCRIPTION_LIMIT))
         return
 
     chat_id = message.chat.id
@@ -196,7 +175,7 @@ async def cmd_lot(
     existing = await store.lot_active_get(chat_id)
     if existing:
         if await store.lot_game_exists(chat_id, existing):
-            await reply_and_delete(message, "❌ В этом чате уже идёт аукцион. Дождитесь завершения.")
+            await reply_and_delete(message, t["lot_already_running"])
             return
         await store.lot_active_delete(chat_id)
 
@@ -219,7 +198,7 @@ async def cmd_lot(
         "created_at": time.time(),
     }
 
-    lot_text = _lot_text(data, p)
+    lot_text = _lot_text(data, p, t)
     sent = await message.answer(
         lot_text,
         parse_mode=ParseMode.HTML,
@@ -259,7 +238,9 @@ async def cb_lot_bid(
     pluralizer: FromDishka[ScorePluralizer],
     user_repo: FromDishka[IUserRepository],
     config: FromDishka[AppConfig],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
+    t = formatter._t
     parts = (cb.data or "").split(":")
     message = callback_message(cb)
     bot = cb.bot
@@ -280,17 +261,13 @@ async def cb_lot_bid(
     # ── Mutex: один ход за раз ───────────────────────────────────────────
     acquired = await store.lot_lock_acquire(chat_id, lot_id)
     if not acquired:
-        await cb.answer("⏳ Подожди секунду…")
+        await cb.answer(t["lot_wait"])
         return
 
     try:
         data = await store.lot_game_get(chat_id, lot_id)
-        if data is None:
-            await cb.answer("⏰ Аукцион завершён.", show_alert=True)
-            return
-
-        if data["expires_at"] < time.time():
-            await cb.answer("⏰ Аукцион завершён.", show_alert=True)
+        if data is None or data["expires_at"] < time.time():
+            await cb.answer(t["lot_finished"], show_alert=True)
             return
 
         p = pluralizer
@@ -298,7 +275,7 @@ async def cb_lot_bid(
 
         # Валидация шага
         if step not in cfg.bid_steps:
-            await cb.answer("❌ Недопустимый шаг ставки.", show_alert=True)
+            await cb.answer(t["lot_bad_step"], show_alert=True)
             return
 
         new_price = data["current_price"] + step
@@ -331,9 +308,10 @@ async def cb_lot_bid(
             bot_id=bot.id,
         )
         if not result.success:
-            sw = p.pluralize(charge)
             await cb.answer(
-                f"❌ Недостаточно баллов. Нужно {charge} {sw}, у тебя {result.current_balance}.",
+                t["lot_not_enough"].format(
+                    charge=charge, score_word=p.pluralize(charge), balance=result.current_balance
+                ),
                 show_alert=True,
             )
             return
@@ -365,11 +343,11 @@ async def cb_lot_bid(
         if not saved:
             # Пока ждали БД, лот перебили или завершили (лок на 5 с мог истечь).
             # Откатываем списание и возврат: деньги двигаются только вместе с состоянием лота.
-            await cb.answer("⏳ Ставку уже перебили — попробуй ещё раз.", show_alert=True)
+            await cb.answer(t["lot_outbid"], show_alert=True)
             raise AbortUpdate
 
         # Обновляем сообщение
-        new_text = _lot_text(data, p)
+        new_text = _lot_text(data, p, t)
         try:
             await message.edit_text(
                 new_text,
@@ -380,8 +358,7 @@ async def cb_lot_bid(
         except TelegramBadRequest:
             pass
 
-        sw_new = p.pluralize(new_price)
-        await cb.answer(f"✅ Твоя ставка: {new_price} {sw_new}!")
+        await cb.answer(t["lot_your_bid"].format(price=new_price, score_word=p.pluralize(new_price)))
 
     finally:
         await store.lot_lock_release(chat_id, lot_id)
@@ -396,6 +373,7 @@ async def finish_lot(
     lot_id: str,
     store: RedisStore,
     p: ScorePluralizer,
+    t: dict[str, str],
     delete_delay: int = 120,
 ) -> None:
     """Завершает аукцион: редактирует сообщение с итогом, анпинит, планирует удаление."""
@@ -417,24 +395,16 @@ async def finish_lot(
             pass
 
     winner_id = data["leader_id"]
-    description = data["description"]
+    description = html.escape(data["description"])
 
     if winner_id:
-        winner_display = data["leader_display"]
         prize = data["current_price"]
-        sw = p.pluralize(prize)
-        result_text = (
-            f"🏆 <b>Аукцион завершён!</b>\n\n"
-            f"📦 <b>{description}</b>\n\n"
-            f"Победитель: {winner_display}\n"
-            f"Финальная ставка: <b>{prize} {sw}</b>\n\n"
-            f"Поздравляем! 🎉"
+        result_text = t["lot_won"].format(
+            description=description, winner=data["leader_display"], price=prize, score_word=p.pluralize(prize)
         )
         logger.info("lot: лот %s в чате %d выиграл user %d за %d", lot_id, chat_id, winner_id, prize)
     else:
-        result_text = (
-            f"🔨 <b>Аукцион завершён</b>\n\n📦 <b>{description}</b>\n\n<i>Никто не сделал ставку. Лот снят.</i>"
-        )
+        result_text = t["lot_no_bids_result"].format(description=description)
         logger.info("lot: лот %s в чате %d завершён без ставок", lot_id, chat_id)
 
     if msg_id:

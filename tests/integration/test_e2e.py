@@ -147,6 +147,13 @@ async def test_lot_auction(tg, conn, redis, app_container, config, texts, lot):
     assert await balances(conn) == {BORIS: 100, VERA: 25, GLEB: 100, BOT_ID: 75}
 
 
+async def test_lot_description_is_escaped(tg, config):
+    # Описание пишет админ: «<3» без экранирования ломал разметку, и лот не публиковался
+    await tg.send(member(ADMIN, username=config.admin.users[0]), "/lot 10m 50 Я <3 кофе")
+    [post] = tg.requests(SendMessage)
+    assert "<b>Я &lt;3 кофе</b>" in post.text
+
+
 async def test_lot_only_for_admins(tg, redis):
     await tg.send(member(BORIS), "/lot 10m 50 Тег")
     [reply] = tg.requests(SendMessage)
