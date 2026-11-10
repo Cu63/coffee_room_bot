@@ -18,6 +18,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.methods import (
     AnswerCallbackQuery,
     DeleteMessage,
+    EditMessageReplyMarkup,
     EditMessageText,
     GetChat,
     GetChatAdministrators,
@@ -157,6 +158,8 @@ class FakeTelegramSession(BaseSession):
                 return _message_json(next(self._message_ids), method.text)
             case EditMessageText():
                 return _message_json(method.message_id, method.text)
+            case EditMessageReplyMarkup():
+                return _message_json(method.message_id or 0, "…")
             case GetMe():
                 return BOT_USER.model_dump(mode="json", exclude_none=True)
             case GetChatMember():

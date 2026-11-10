@@ -46,31 +46,31 @@ def _parse_period(token: str) -> int | None:
     return secs if secs >= 60 else None
 
 
-def _period_label(period_seconds: int) -> str:
+def _period_label(period_seconds: int, t: dict[str, str]) -> str:
     """Человекочитаемое название периода."""
     if period_seconds % 604800 == 0:
         n = period_seconds // 604800
-        return f"{n}н" if n > 1 else "еженедельно"
+        return t["giveaway_unit_weeks"].format(n=n) if n > 1 else t["giveaway_weekly"]
     if period_seconds % 86400 == 0:
         n = period_seconds // 86400
-        return f"{n}д" if n > 1 else "ежедневно"
+        return t["giveaway_unit_days"].format(n=n) if n > 1 else t["giveaway_daily"]
     if period_seconds % 3600 == 0:
         n = period_seconds // 3600
-        return f"{n}ч" if n > 1 else "ежечасно"
+        return t["giveaway_unit_hours"].format(n=n) if n > 1 else t["giveaway_hourly"]
     if period_seconds % 60 == 0:
-        return f"{period_seconds // 60}м"
-    return f"{period_seconds}с"
+        return t["giveaway_unit_minutes"].format(n=period_seconds // 60)
+    return t["giveaway_unit_seconds"].format(n=period_seconds)
 
 
 # is_admin imported from bot.domain.bot_utils
 
 
-def _join_kb(giveaway_id: int, count: int) -> InlineKeyboardMarkup:
+def _join_kb(giveaway_id: int, count: int, t: dict[str, str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"🎟 Участвовать ({count})",
+                    text=t["giveaway_join_button"].format(count=count),
                     callback_data=f"giveaway:join:{giveaway_id}",
                 )
             ]
@@ -87,9 +87,9 @@ def _format_prizes(prizes: list[int], pluralizer: ScorePluralizer) -> str:
     return "\n".join(parts)
 
 
-def _format_end_time(ends_at: datetime | None) -> str:
+def _format_end_time(ends_at: datetime | None, t: dict[str, str]) -> str:
     if ends_at is None:
-        return "вручную"
+        return t["giveaway_manual"]
     return ends_at.strftime("%d.%m %H:%M")
 
 
@@ -102,13 +102,14 @@ async def _post_results(
     winners: list[tuple[int, int]],
     participants_count: int,
     pluralizer: ScorePluralizer,
+    t: dict[str, str],
 ) -> None:
     medals = ["🥇", "🥈", "🥉"]
 
     if not winners:
-        text = "🎰 Розыгрыш завершён, но никто не участвовал 😔"
+        text = t["giveaway_no_participants"]
     else:
-        lines = [f"🎊 <b>Розыгрыш завершён!</b> Участников: {participants_count}\n"]
+        lines = [t["giveaway_results"].format(count=participants_count)]
         for i, (user_id, prize) in enumerate(winners):
             medal = medals[i] if i < len(medals) else f"{i + 1}."
             prize_str = f"{prize} {pluralizer.pluralize(prize)}"
@@ -117,7 +118,7 @@ async def _post_results(
                 mention = f'<a href="tg://user?id={user_id}">{html.escape(chat_member.user.full_name)}</a>'
             except Exception:
                 mention = f"<code>{user_id}</code>"
-            lines.append(f"{medal} {mention} — +{prize_str}")
+            lines.append(t["giveaway_result_row"].format(medal=medal, mention=mention, prize=prize_str))
         text = "\n".join(lines)
 
     result_msg = await bot.send_message(giveaway.chat_id, text, parse_mode="HTML")
