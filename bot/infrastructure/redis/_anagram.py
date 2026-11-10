@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
 
-class AnagramStoreMixin:
+
+class AnagramStoreMixin(RedisMixin):
     _ANAGRAM_CD = "anagram:cd:"
     _ANAGRAM_GAME = "anagram:game:"
     _ANAGRAM_MSG = "anagram:msg:"

@@ -33,7 +33,7 @@ async def heartbeat_loop(pool: asyncpg.Pool, redis: aioredis.Redis, path: Path =
     while True:
         try:
             await pool.fetchval("SELECT 1")
-            await redis.ping()
+            await redis.ping()  # pyright: ignore[reportGeneralTypeIssues] — redis-py: «Awaitable[bool] | bool»
             path.touch()
             loop_pass()
         except Exception:

@@ -40,7 +40,7 @@ from bot.presentation.handlers.blackjack.helpers import (
     _side_of,
     _turn_text,
 )
-from bot.presentation.utils import check_gameban, safe_callback_answer, schedule_delete
+from bot.presentation.utils import callback_message, check_gameban, safe_callback_answer, schedule_delete
 from bot.presentation.utils import edit_callback_message as _edit
 
 router = Router(name="blackjack_callbacks")
@@ -68,11 +68,12 @@ async def cb_bj_accept(
     formatter: FromDishka[MessageFormatter],
 ) -> None:
     game_id = _game_id(cb)
-    if game_id is None:
+    message = callback_message(cb)
+    if game_id is None or message is None:
         await safe_callback_answer(cb)
         return
 
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     # Проверка самозапрета на игры
@@ -130,7 +131,7 @@ async def cb_bj_accept(
     data["p2_id"] = user_id
     data["p2_name"] = cb.from_user.full_name or ""
     data["p2_username"] = cb.from_user.username or ""
-    data["message_id"] = cb.message.message_id
+    data["message_id"] = message.message_id
 
     # Случайно назначаем, кто p1 и p2 (кто ходит первым)
     if random.choice([True, False]):
@@ -147,7 +148,7 @@ async def cb_bj_accept(
         await safe_callback_answer(cb, formatter._t["bj_expired"], show_alert=True)
         return
 
-    side = _side_of(data, user_id)
+    side = "p1" if data["p1_id"] == user_id else "p2"  # стороны только что перемешали
     if data["p1_done"] and data["p2_done"]:
         # Натуральный блекджек — сразу вскрытие
         if await _finish(cb, store, snapshot, stakes, stats_repo, p):
@@ -164,11 +165,12 @@ async def cb_bj_accept(
 async def _load_turn(cb: CallbackQuery, store: RedisStore) -> tuple[GameSnapshot, str] | None:
     """Игра и сторона нажавшего, если сейчас его ход. Иначе отвечает сам и возвращает None."""
     game_id = _game_id(cb)
-    if game_id is None:
+    message = callback_message(cb)
+    if game_id is None or message is None:
         await safe_callback_answer(cb)
         return None
 
-    snapshot = await store.game_load(_bj_key(cb.message.chat.id, game_id))
+    snapshot = await store.game_load(_bj_key(message.chat.id, game_id))
     if snapshot is None:
         await safe_callback_answer(cb, _NOT_FOUND, show_alert=True)
         return None
@@ -196,13 +198,16 @@ async def _finish(
     p: ScorePluralizer,
 ) -> bool:
     """Забрать игру и рассчитать. False — её уже рассчитал другой запрос или цикл истечения."""
+    message = callback_message(cb)
+    if message is None:  # вызывающие уже проверили; без сообщения не знаем чата — и не забираем игру
+        return False
     if not await store.game_claim(snapshot):
         await _answer_stale(cb, store, snapshot)
         return False
-    text = await _settle_game(snapshot.data, stakes, stats_repo, p, cb.message.chat.id)
+    text = await _settle_game(snapshot.data, stakes, stats_repo, p, message.chat.id)
     await _edit(cb, text, None)
-    if cb.message.bot:
-        schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+    if message.bot:
+        schedule_delete(message.bot, message, delay=_DELETE_DELAY)
     return True
 
 
@@ -302,7 +307,8 @@ async def cb_bj_stand(
 @inject
 async def cb_bj_peek(cb: CallbackQuery, store: FromDishka[RedisStore]) -> None:
     game_id = _game_id(cb)
-    snapshot = await store.game_load(_bj_key(cb.message.chat.id, game_id)) if game_id else None
+    message = callback_message(cb)
+    snapshot = await store.game_load(_bj_key(message.chat.id, game_id)) if game_id and message else None
     if snapshot is None or snapshot.data["state"] != "playing":
         await safe_callback_answer(cb, _NOT_FOUND, show_alert=True)
         return

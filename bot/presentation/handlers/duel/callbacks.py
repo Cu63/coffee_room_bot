@@ -27,6 +27,7 @@ from bot.presentation.handlers.duel.helpers import (
 )
 from bot.presentation.utils import (
     NO_PREVIEW,
+    callback_message,
     check_gameban,
     safe_callback_answer,
 )
@@ -49,13 +50,14 @@ async def cb_duel_accept(
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
+    parts = (cb.data or "").split(":")
+    message = callback_message(cb)
+    if len(parts) < 3 or message is None:
         await safe_callback_answer(cb)
         return
 
     invite_id = parts[2]
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     key = _duel_key(chat_id, invite_id)
@@ -116,9 +118,9 @@ async def cb_duel_accept(
     game_id = _make_invite_id()
 
     if game == "ttt":
-        await _start_ttt_from_duel(cb, data, game_id, chat_id, bet, store, p)
+        await _start_ttt_from_duel(cb, message, data, game_id, chat_id, bet, store, p)
     else:
-        await _start_bj_from_duel(cb, data, game_id, chat_id, bet, store, stakes, stats_repo, p)
+        await _start_bj_from_duel(cb, message, data, game_id, chat_id, bet, store, stakes, stats_repo, p)
 
 
 # ── Callback: Отказаться от дуэли ───────────────────────────────────────
@@ -133,13 +135,14 @@ async def cb_duel_decline(
     pluralizer: FromDishka[ScorePluralizer],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
+    parts = (cb.data or "").split(":")
+    message = callback_message(cb)
+    if len(parts) < 3 or message is None:
         await safe_callback_answer(cb)
         return
 
     invite_id = parts[2]
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     key = _duel_key(chat_id, invite_id)
@@ -182,16 +185,16 @@ async def cb_duel_decline(
     )
 
     try:
-        await cb.message.edit_text(
+        await message.edit_text(
             f"❌ {decliner_display} отказался от дуэли с {challenger_display}.\n\nСтавка возвращена.",
             parse_mode=ParseMode.HTML,
             link_preview_options=NO_PREVIEW,
             reply_markup=None,
         )
-        if cb.message.bot:
+        if message.bot:
             from bot.presentation.utils import schedule_delete
 
-            schedule_delete(cb.message.bot, cb.message, delay=30)
+            schedule_delete(message.bot, message, delay=30)
     except Exception:
         pass
 

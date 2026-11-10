@@ -77,13 +77,12 @@ class AiTunnelClient:
             if finish_reason == "error" and attempt < self._MAX_RETRIES - 1:
                 logger.warning("LLM returned error, retrying (attempt %d)", attempt + 1)
                 continue
-            break
-
-        return LlmResponse(
-            text=choice.get("content") or "",
-            input_tokens=usage.get("prompt_tokens", 0),
-            output_tokens=usage.get("completion_tokens", 0),
-        )
+            return LlmResponse(
+                text=choice.get("content") or "",
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        raise RuntimeError("_MAX_RETRIES должен быть больше нуля")
 
     async def close(self) -> None:
         if self._session and not self._session.closed:

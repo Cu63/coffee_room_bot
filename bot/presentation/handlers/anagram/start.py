@@ -83,9 +83,9 @@ async def cmd_anagram(
         )
         return
 
-    bet, bet_error = check_bet(args[0], cfg.min_bet, cfg.max_bet, formatter)
-    if bet_error:
-        await reply_and_delete(message, bet_error)
+    bet = check_bet(args[0], cfg.min_bet, cfg.max_bet, formatter)
+    if isinstance(bet, str):
+        await reply_and_delete(message, bet)
         return
 
     # Проверяем, нет ли уже активной игры в чате
@@ -174,4 +174,4 @@ async def cmd_anagram(
         pass
 
     # Удаляем исходную команду
-    schedule_delete(sent.bot, message, delay=5)
+    schedule_delete(message.bot, message, delay=5)

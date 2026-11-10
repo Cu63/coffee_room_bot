@@ -24,6 +24,8 @@ class PostgresGiveawayRepository(IGiveawayRepository):
             giveaway.prizes,
             giveaway.ends_at,
         )
+        if row is None:
+            raise RuntimeError("INSERT в giveaways не вернул строку")
         giveaway.id = row["id"]
         giveaway.created_at = row["created_at"]
         return giveaway

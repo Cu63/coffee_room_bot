@@ -19,7 +19,7 @@ class Giveaway:
     message_id: int | None = None
     ends_at: datetime | None = None
     created_at: datetime | None = None
-    id: int | None = None
+    id: int = 0  # задаёт INSERT … RETURNING
 
 
 @dataclass(slots=True)

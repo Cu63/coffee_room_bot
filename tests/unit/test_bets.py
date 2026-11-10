@@ -18,21 +18,20 @@ def formatter() -> MessageFormatter:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("50", (50, None)),
-        ("10", (10, None)),
-        ("100", (100, None)),
-        ("abc", (None, "bet_not_positive")),
-        ("0", (None, "bet_not_positive")),
-        ("-5", (None, "bet_not_positive")),
-        ("9", (None, "bet_too_small")),
-        ("101", (None, "bet_too_large")),
+        ("50", 50),
+        ("10", 10),
+        ("100", 100),
+        ("abc", "bet_not_positive"),
+        ("0", "bet_not_positive"),
+        ("-5", "bet_not_positive"),
+        ("9", "bet_too_small"),
+        ("101", "bet_too_large"),
     ],
 )
 def test_check_bet(formatter, raw, expected):
-    bet, error = check_bet(raw, 10, 100, formatter)
-    expected_bet, error_key = expected
-    assert bet == expected_bet
-    if error_key is None:
-        assert error is None
+    bet = check_bet(raw, 10, 100, formatter)
+    if isinstance(expected, int):
+        assert bet == expected
     else:
-        assert error.startswith(formatter._t[error_key].split("{")[0])
+        # Отказ — текст для ответа
+        assert isinstance(bet, str) and bet.startswith(formatter._t[expected].split("{")[0])

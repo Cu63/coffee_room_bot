@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
 
-class LotStoreMixin:
+
+class LotStoreMixin(RedisMixin):
     _LOT_GAME = "lot:game:"
     _LOT_ACTIVE = "lot:active:"
     _LOT_LOCK = "lot:lock:"

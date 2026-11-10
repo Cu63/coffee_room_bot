@@ -66,9 +66,9 @@ async def cmd_blackjack(
         )
         return
 
-    bet, bet_error = check_bet(args[0], bjc.min_bet, bjc.max_bet, formatter)
-    if bet_error:
-        await reply_and_delete(message, bet_error)
+    bet = check_bet(args[0], bjc.min_bet, bjc.max_bet, formatter)
+    if isinstance(bet, str):
+        await reply_and_delete(message, bet)
         return
 
     user_id = message.from_user.id

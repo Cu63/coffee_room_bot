@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import secrets
 
+from bot.infrastructure.redis._base import RedisMixin
+
 _LLM_BUSY = "llm:busy:"
 
 # Отпускаем лок, только если он ещё наш: после истечения TTL его мог занять новый запрос
@@ -15,7 +17,7 @@ return 0
 """
 
 
-class LlmStoreMixin:
+class LlmStoreMixin(RedisMixin):
     async def llm_busy_acquire(self, user_id: int, ttl: int) -> str | None:
         """Занять LLM-слот пользователя. Возвращает токен владельца или None, если слот занят."""
         token = secrets.token_hex(8)

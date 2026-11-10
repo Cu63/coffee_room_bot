@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
+
 _SLOTS_LAST = "slots:last:"
 _SLOTS_ALL_DAILY = "slots:all:"
 
 
-class SlotsStoreMixin:
+class SlotsStoreMixin(RedisMixin):
     async def slots_cooldown_check(self, user_id: int, chat_id: int, cooldown_seconds: int) -> bool:
         key = f"{_SLOTS_LAST}{user_id}:{chat_id}"
         raw = await self._r.get(key)

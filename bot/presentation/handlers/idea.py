@@ -27,7 +27,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
+from bot.presentation.utils import NO_PREVIEW, callback_message, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 router = Router(name="idea")
@@ -132,7 +132,7 @@ async def cb_idea_vote(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    if callback.data is None or callback.message is None:
+    if callback.data is None or callback.message is None or callback.bot is None:
         await safe_callback_answer(callback)
         return
 
@@ -200,15 +200,18 @@ async def cb_idea_vote(
         up=up_count,
         down=down_count,
     )
-    try:
-        await callback.message.edit_text(
-            new_text,
-            parse_mode=ParseMode.HTML,
-            link_preview_options=NO_PREVIEW,
-            reply_markup=_idea_kb(idea_id, up_count, down_count),
-        )
-    except Exception:
-        pass
+    # Голосовать можно и спустя 48 часов: такое сообщение Telegram отдаёт без текста — счётчик не обновить
+    message = callback_message(callback)
+    if message is not None:
+        try:
+            await message.edit_text(
+                new_text,
+                parse_mode=ParseMode.HTML,
+                link_preview_options=NO_PREVIEW,
+                reply_markup=_idea_kb(idea_id, up_count, down_count),
+            )
+        except Exception:
+            pass
 
     await safe_callback_answer(callback, formatter._t["idea_voted"])
 

@@ -44,7 +44,7 @@ from bot.presentation.handlers.tictactoe.game_logic import (
     _render_board,
     _ttt_key,
 )
-from bot.presentation.utils import check_gameban, safe_callback_answer, schedule_delete
+from bot.presentation.utils import callback_message, check_gameban, safe_callback_answer, schedule_delete
 from bot.presentation.utils import edit_callback_message as _edit
 
 logger = logging.getLogger(__name__)
@@ -70,13 +70,14 @@ async def cb_ttt_accept(
     user_repo: FromDishka[IUserRepository],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 3:
+    parts = (cb.data or "").split(":")
+    message = callback_message(cb)
+    if len(parts) < 3 or message is None:
         await safe_callback_answer(cb)
         return
 
     game_id = parts[2]
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     # Проверка самозапрета на игры
@@ -142,7 +143,7 @@ async def cb_ttt_accept(
     data["state"] = "playing"
     data["turn"] = "x"
     data["moves"] = 0
-    data["message_id"] = cb.message.message_id
+    data["message_id"] = message.message_id
     data["expires_at"] = time.time() + _TTT_GAME_TTL
 
     # Лобби → игра, только если лобби ещё ждёт: если его уже забрал цикл истечения
@@ -189,8 +190,9 @@ async def cb_ttt_move(
     formatter: FromDishka[MessageFormatter],
     config: FromDishka[AppConfig],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 4:
+    parts = (cb.data or "").split(":")
+    message = callback_message(cb)
+    if len(parts) < 4 or message is None:
         await safe_callback_answer(cb)
         return
 
@@ -205,7 +207,7 @@ async def cb_ttt_move(
         await safe_callback_answer(cb)
         return
 
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     snapshot = await store.game_load(_ttt_key(chat_id, game_id))
@@ -284,8 +286,8 @@ async def cb_ttt_move(
             )
 
         await _edit(cb, text, None)
-        if cb.message.bot:
-            schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+        if message.bot:
+            schedule_delete(message.bot, message, delay=_DELETE_DELAY)
         await safe_callback_answer(cb)
         return
 

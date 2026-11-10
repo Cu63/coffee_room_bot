@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
 from aiogram.exceptions import TelegramNetworkError
-from aiogram.methods import GetUpdates
 from aiogram.methods.base import TelegramType
 
 if TYPE_CHECKING:
@@ -38,8 +37,8 @@ class RetryIdempotentRequestsMiddleware(BaseRequestMiddleware):
         method: TelegramMethod[TelegramType],
     ) -> Response[TelegramType]:
         name = type(method).__name__
-        # GetUpdates повторяет сам цикл polling
-        if isinstance(method, GetUpdates) or name.startswith(_NON_IDEMPOTENT_PREFIXES):
+        # GetUpdates повторяет сам цикл polling. Сравнение по имени, а не isinstance: тот сужал бы тип method
+        if name == "GetUpdates" or name.startswith(_NON_IDEMPOTENT_PREFIXES):
             return await make_request(bot, method)
 
         for attempt, delay in enumerate(_DELAYS, start=1):

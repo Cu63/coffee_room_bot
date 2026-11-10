@@ -86,7 +86,8 @@ async def post_round(
         posted = await placeholder.edit_text(
             text, parse_mode=ParseMode.HTML, reply_markup=keyboard, link_preview_options=NO_PREVIEW
         )
-        message_id = placeholder.message_id if posted is True else posted.message_id
+        # edit_text отдаёт True вместо сообщения, если правили не своё (inline) — тогда id прежний
+        message_id = posted.message_id if isinstance(posted, Message) else placeholder.message_id
     else:
         sent = await message.answer(
             text, parse_mode=ParseMode.HTML, reply_markup=keyboard, link_preview_options=NO_PREVIEW
@@ -142,6 +143,10 @@ async def cb_round_answer(
     config: FromDishka[AppConfig],
 ) -> None:
     """Ответ кнопкой: одна попытка на участника, приз — первому правильному."""
+    bot = cb.bot
+    if bot is None:
+        await safe_callback_answer(cb)
+        return
     try:
         _, round_id, raw_index = (cb.data or "").split(":")
         index = int(raw_index)
@@ -170,9 +175,7 @@ async def cb_round_answer(
     await store.round_release_chat(won["chat_id"], round_id)
 
     chat_id = won["chat_id"]
-    paid = await score_service.pay_from_house(
-        cb.bot.id, user.id, chat_id, won["prize"], ref=f"{won['kind']}:{round_id}"
-    )
+    paid = await score_service.pay_from_house(bot.id, user.id, chat_id, won["prize"], ref=f"{won['kind']}:{round_id}")
     reward = (
         formatter._t["round_prize"].format(prize=won["prize"], score_word=formatter._p.pluralize(won["prize"]))
         if paid
@@ -194,5 +197,5 @@ async def cb_round_answer(
         answer=html.escape(won["options"][won["correct"]]),
         reward=reward,
     )
-    await _edit(cb.bot, won, text + _explanation(formatter, won))
+    await _edit(bot, won, text + _explanation(formatter, won))
     await safe_callback_answer(cb, formatter._t["round_right"])

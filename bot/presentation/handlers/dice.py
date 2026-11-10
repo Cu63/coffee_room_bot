@@ -21,7 +21,13 @@ from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import check_bet, check_gameban, reply_and_delete, safe_callback_answer
+from bot.presentation.utils import (
+    callback_message,
+    check_bet,
+    check_gameban,
+    reply_and_delete,
+    safe_callback_answer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +86,9 @@ async def cmd_dice(
         )
         return
 
-    bet, bet_error = check_bet(args[0], config.dice.min_bet, config.dice.max_bet, formatter)
-    if bet_error:
-        await reply_and_delete(message, bet_error)
+    bet = check_bet(args[0], config.dice.min_bet, config.dice.max_bet, formatter)
+    if isinstance(bet, str):
+        await reply_and_delete(message, bet)
         return
 
     # Парсим время ожидания
@@ -167,11 +173,15 @@ async def cb_dice_join(
     store: FromDishka[RedisStore],
     formatter: FromDishka[MessageFormatter],
 ) -> None:
+    message = callback_message(cb)
+    if cb.data is None or message is None:
+        await safe_callback_answer(cb)
+        return
     game_id = int(cb.data.split(":")[2])
     user_id = cb.from_user.id
 
     # Проверка самозапрета на игры
-    ban_msg = await check_gameban(store, user_id, cb.message.chat.id, formatter._t)
+    ban_msg = await check_gameban(store, user_id, message.chat.id, formatter._t)
     if ban_msg:
         await safe_callback_answer(cb, ban_msg, show_alert=True)
         return
@@ -213,6 +223,6 @@ async def cb_dice_join(
     await cb.answer("✅ Ты в игре! Удачи 🎲", show_alert=False)
 
     try:
-        await cb.message.edit_reply_markup(reply_markup=_join_kb(game_id, count))
+        await message.edit_reply_markup(reply_markup=_join_kb(game_id, count))
     except Exception:
         pass

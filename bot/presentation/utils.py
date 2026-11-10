@@ -7,7 +7,7 @@ import html
 import logging
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 from aiogram import Bot
@@ -102,7 +102,8 @@ async def delete_loop(bot: Bot, redis: aioredis.Redis) -> None:
 
     while True:
         try:
-            members: list[str] = await pop_due(keys=[_DELETE_KEY], args=[time.time()])
+            # redis-py типизирует вызов скрипта как «Awaitable | значение»
+            members = cast(list[str], await pop_due(keys=[_DELETE_KEY], args=[time.time()]))
             if members:
                 for member in members:
                     try:
@@ -145,15 +146,20 @@ async def check_gameban(
     return templates["selfban_blocked"].format(remaining=format_duration(remaining))
 
 
+def callback_message(cb: CallbackQuery) -> Message | None:
+    """Сообщение с кнопкой. None — его нет или оно старше 48 часов (InaccessibleMessage): править нечего."""
+    return cb.message if isinstance(cb.message, Message) else None
+
+
 async def edit_callback_message(cb: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None = None) -> None:
     """Обновить сообщение с кнопками (HTML). Состояние уже сохранено — сбой Telegram только логируем."""
+    message = callback_message(cb)
+    if message is None:
+        return
     try:
-        await cb.message.edit_text(
-            text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=markup
-        )
+        await message.edit_text(text, parse_mode=ParseMode.HTML, link_preview_options=NO_PREVIEW, reply_markup=markup)
     except TelegramAPIError as e:
         if "message is not modified" not in str(e):
-            message = cb.message
             logger.warning("Не удалось обновить сообщение %s в чате %s: %s", message.message_id, message.chat.id, e)
 
 
@@ -168,20 +174,20 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = "", show_ale
 TG_MESSAGE_LIMIT = 4096
 
 
-def check_bet(raw: str, min_bet: int, max_bet: int, formatter: MessageFormatter) -> tuple[int | None, str | None]:
-    """Ставка из аргумента команды: (ставка, None) или (None, текст отказа для ответа)."""
+def check_bet(raw: str, min_bet: int, max_bet: int, formatter: MessageFormatter) -> int | str:
+    """Ставка из аргумента команды или текст отказа для ответа: ``if isinstance(bet, str)`` — отказ."""
     try:
         bet = int(raw)
     except ValueError:
         bet = 0
     p = formatter._p
     if bet <= 0:
-        return None, formatter._t["bet_not_positive"]
+        return formatter._t["bet_not_positive"]
     if bet < min_bet:
-        return None, formatter._t["bet_too_small"].format(min_bet=min_bet, score_word=p.pluralize(min_bet))
+        return formatter._t["bet_too_small"].format(min_bet=min_bet, score_word=p.pluralize(min_bet))
     if bet > max_bet:
-        return None, formatter._t["bet_too_large"].format(max_bet=max_bet, score_word=p.pluralize(max_bet))
-    return bet, None
+        return formatter._t["bet_too_large"].format(max_bet=max_bet, score_word=p.pluralize(max_bet))
+    return bet
 
 
 async def send_html_parts(message: Message, thinking: Message, text: str) -> None:

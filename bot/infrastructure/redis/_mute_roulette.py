@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
 
-class MuteRouletteStoreMixin:
+
+class MuteRouletteStoreMixin(RedisMixin):
     _MUTE_ROULETTE = "mutegiveaway:"
 
     def _mg_key(self, chat_id: int, roulette_id: str) -> str:

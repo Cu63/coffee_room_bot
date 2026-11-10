@@ -8,6 +8,7 @@ from bot.application.giveaway_service import GiveawayService
 from bot.application.interfaces.user_repository import IUserRepository
 from bot.domain.entities import User
 from bot.presentation.handlers.giveaway.helpers import _join_kb
+from bot.presentation.utils import callback_message
 
 router = Router(name="giveaway_callbacks")
 
@@ -22,6 +23,9 @@ async def cb_join(
     service: FromDishka[GiveawayService],
     user_repo: FromDishka[IUserRepository],
 ) -> None:
+    if cb.data is None:
+        await cb.answer()
+        return
     giveaway_id = int(cb.data.split(":")[2])
     user_id = cb.from_user.id
 
@@ -42,7 +46,10 @@ async def cb_join(
     count = await service.count_participants(giveaway_id)
     await cb.answer("✅ Ты в игре!", show_alert=False)
 
-    try:
-        await cb.message.edit_reply_markup(reply_markup=_join_kb(giveaway_id, count))
-    except Exception:
-        pass
+    # Розыгрыш может идти дольше 48 часов: такое сообщение Telegram отдаёт без кнопок — счётчик не обновить
+    message = callback_message(cb)
+    if message is not None:
+        try:
+            await message.edit_reply_markup(reply_markup=_join_kb(giveaway_id, count))
+        except Exception:
+            pass

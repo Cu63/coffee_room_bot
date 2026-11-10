@@ -155,7 +155,7 @@ async def cmd_wordgame(
         f"💰 Ставка: <b>{bet} {bet_str}</b>  |  ⏰ Время: <b>{dur_str}</b>\n\n"
         f"<i>Ожидаем слово от автора</i>"
     )
-    kb = None if dm_sent else open_dm_kb(bot_me.username)
+    kb = None if dm_sent or not bot_me.username else open_dm_kb(bot_me.username)
     lobby_msg = await message.answer(lobby_text, parse_mode=ParseMode.HTML, reply_markup=kb)
 
     await store.wg_pending_set_lobby_msg(game_id, lobby_msg.message_id)

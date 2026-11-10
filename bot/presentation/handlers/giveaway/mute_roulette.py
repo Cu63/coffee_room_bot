@@ -21,7 +21,7 @@ from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import MuteOutcome, apply_mute
-from bot.presentation.utils import reply_and_delete, schedule_delete, schedule_delete_id
+from bot.presentation.utils import callback_message, reply_and_delete, schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def cmd_mute_roulette(
     config: FromDishka[AppConfig],
     store: FromDishka[RedisStore],
 ) -> None:
-    if not is_admin(message.from_user, config.admin.users):
+    if message.from_user is None or not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "Только администраторы могут запускать мут-гивэвей.")
         return
 
@@ -120,6 +120,9 @@ async def cb_mute_roulette_join(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
 ) -> None:
+    if cb.data is None:
+        await cb.answer()
+        return
     parts = cb.data.split(":")
     chat_id = int(parts[2])
     roulette_id = parts[3]
@@ -133,10 +136,12 @@ async def cb_mute_roulette_join(
     count = await store.mute_roulette_count(chat_id, roulette_id)
     await cb.answer("Ты в игре! Удачи...", show_alert=False)
 
-    try:
-        await cb.message.edit_reply_markup(reply_markup=_mute_roulette_kb(chat_id, roulette_id, count))
-    except Exception:
-        pass
+    message = callback_message(cb)
+    if message is not None:
+        try:
+            await message.edit_reply_markup(reply_markup=_mute_roulette_kb(chat_id, roulette_id, count))
+        except Exception:
+            pass
 
 
 @router.message(Command("mutegiveaway_end"))
@@ -148,7 +153,7 @@ async def cmd_mute_roulette_end(
     store: FromDishka[RedisStore],
     mute_service: FromDishka[MuteService],
 ) -> None:
-    if not is_admin(message.from_user, config.admin.users):
+    if message.from_user is None or not is_admin(message.from_user, config.admin.users):
         await reply_and_delete(message, "Только администраторы.")
         return
 

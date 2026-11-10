@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 import time
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from bot.application.interfaces.user_stats_repository import IUserStatsRepository
 from bot.application.stake_service import StakeService
@@ -25,7 +25,6 @@ from bot.presentation.handlers.blackjack.helpers import (
     _hand_alert,
     _play_kb,
     _settle_game,
-    _side_of,
     _turn_text,
 )
 from bot.presentation.handlers.tictactoe.game_logic import (
@@ -53,6 +52,7 @@ def _players(invite: dict) -> list[tuple[int, str, str]]:
 
 async def _start_ttt_from_duel(
     cb: CallbackQuery,
+    message: Message,
     invite: dict,
     game_id: str,
     chat_id: int,
@@ -80,7 +80,7 @@ async def _start_ttt_from_duel(
         "turn": "x",
         "bet": bet,
         "chat_id": chat_id,
-        "message_id": cb.message.message_id,
+        "message_id": message.message_id,
         "created_at": time.time(),
         "expires_at": time.time() + _TTT_GAME_TTL,
     }
@@ -104,6 +104,7 @@ async def _start_ttt_from_duel(
 
 async def _start_bj_from_duel(
     cb: CallbackQuery,
+    message: Message,
     invite: dict,
     game_id: str,
     chat_id: int,
@@ -131,7 +132,7 @@ async def _start_bj_from_duel(
         "p2_busted": False,
         "bet": bet,
         "chat_id": chat_id,
-        "message_id": cb.message.message_id,
+        "message_id": message.message_id,
         "created_at": time.time(),
     }
     _deal(data)
@@ -141,12 +142,12 @@ async def _start_bj_from_duel(
         # уже забрано: рассчитать её больше некому
         text = await _settle_game(data, stakes, stats_repo, p, chat_id)
         await edit_callback_message(cb, text)
-        if cb.message.bot:
-            schedule_delete(cb.message.bot, cb.message, delay=_DELETE_DELAY)
+        if message.bot:
+            schedule_delete(message.bot, message, delay=_DELETE_DELAY)
         await safe_callback_answer(cb, "\U0001f3b0 Блекджек!")
         return
 
     await store.game_create(_bj_key(chat_id, game_id), data, _BJ_GAME_TTL + _BJ_REDIS_BUFFER)
     await edit_callback_message(cb, _turn_text(data, p), _play_kb(game_id))
-    side = _side_of(data, cb.from_user.id)
+    side = "p1" if data["p1_id"] == cb.from_user.id else "p2"  # нажавший — один из двух игроков
     await safe_callback_answer(cb, "⚔️ Игра началась!\n\n" + _hand_alert(data, side), show_alert=True)

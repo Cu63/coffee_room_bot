@@ -187,6 +187,8 @@ async def cmd_slots(
 
     # ── Запускаем анимацию ────────────────────────────────────────
     dice_msg = await message.answer_dice(emoji="🎰")
+    if dice_msg.dice is None:  # Telegram всегда отдаёт кубик в ответ на sendDice
+        raise RuntimeError("sendDice вернул сообщение без кубика")
     value = dice_msg.dice.value  # 1–64
 
     await asyncio.sleep(3)

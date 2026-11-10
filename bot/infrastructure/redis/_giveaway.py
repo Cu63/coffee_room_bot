@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
+
 _GIVEAWAY_PERIOD = "giveaway_period:"
 
 
-class GiveawayStoreMixin:
+class GiveawayStoreMixin(RedisMixin):
     def _gp_key(self, chat_id: int, gp_id: str) -> str:
         return f"{_GIVEAWAY_PERIOD}{chat_id}:{gp_id}"
 

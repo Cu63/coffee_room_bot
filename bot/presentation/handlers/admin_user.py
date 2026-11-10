@@ -67,7 +67,7 @@ async def cmd_save(
         )
         return
     if isinstance(member, ChatMemberOwner):
-        perms = {field: True for field in _ADMIN_PERM_FIELDS} | {"is_anonymous": member.is_anonymous}
+        perms: dict = {field: True for field in _ADMIN_PERM_FIELDS} | {"is_anonymous": member.is_anonymous}
         if member.custom_title:
             perms["custom_title"] = member.custom_title
     else:

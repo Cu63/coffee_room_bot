@@ -98,9 +98,9 @@ async def cmd_duel(
             await reply_and_delete(message, "❌ Блекджек отключён.")
             return
 
-    bet, bet_error = check_bet(bet_raw, cfg.min_bet, cfg.max_bet, formatter)
-    if bet_error:
-        await reply_and_delete(message, bet_error)
+    bet = check_bet(bet_raw, cfg.min_bet, cfg.max_bet, formatter)
+    if isinstance(bet, str):
+        await reply_and_delete(message, bet)
         return
 
     user_id = message.from_user.id

@@ -16,7 +16,7 @@ class DiceGame:
     bet: int
     ends_at: datetime
     created_by: int
-    id: int | None = None
+    id: int = 0  # задаёт INSERT … RETURNING
     message_id: int | None = None
     status: DiceGameStatus = DiceGameStatus.PENDING
     created_at: datetime | None = None

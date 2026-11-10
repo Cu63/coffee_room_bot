@@ -21,8 +21,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.414",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=7.1.0",
     "ruff>=0.8",
 ]
 docs = [
@@ -34,6 +36,22 @@ docs = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.pyright]
+# Код бота; тесты с их фейками и monkeypatch не проверяем
+include = ["bot"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.coverage.run]
+source = ["bot"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+fail_under = 55  # сейчас ~57%: заметное падение покрытия валит CI
 
 [tool.ruff]
 target-version = "py312"

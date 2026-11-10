@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
+from bot.infrastructure.redis._scan import ScanStoreMixin
+
 # Отпустить чат, только если его держит этот раунд
 _RELEASE_IF_OWNER = """
 if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
@@ -12,7 +14,7 @@ return 0
 """
 
 
-class RoundStoreMixin:
+class RoundStoreMixin(ScanStoreMixin):
     _ROUND = "round:game:"
     _ROUND_CHAT = "round:chat:"
     _ROUND_ANSWERED = "round:answered:"

@@ -18,6 +18,8 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # Типы кода бота (настройки — tool.pyright в pyproject.toml)
+      - run: uv run pyright
 
   test:
     runs-on: ubuntu-latest
@@ -58,8 +60,14 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      # Все тесты одним прогоном: юнит-тесты и интеграционные уживаются в одном процессе
-      - run: uv run pytest tests -v
+      # Все тесты одним прогоном: юнит-тесты и интеграционные уживаются в одном процессе.
+      # Покрытие ниже tool.coverage.report.fail_under (pyproject.toml) — джоб красный
+      - run: uv run pytest tests -v --cov --cov-report=
+      - name: Покрытие в сводку запуска
+        if: always()
+        run: |
+          uv run coverage report --format=total
+          uv run coverage report --format=markdown --skip-covered >> "$GITHUB_STEP_SUMMARY"
 
   docker:
     runs-on: ubuntu-latest

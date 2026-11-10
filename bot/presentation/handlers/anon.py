@@ -29,6 +29,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.application.score_service import ScoreService
 from bot.domain.ledger import LedgerKind
 from bot.infrastructure.redis_store import RedisStore
+from bot.presentation.utils import callback_message
 
 ANON_MESSAGE_PAYMENT = 100
 
@@ -78,8 +79,10 @@ async def _ask_for_text(target: Message | CallbackQuery, chat_title: str) -> Non
         f"✏️ Отправь мне текст, который я перешлю анонимно в <b>{html.escape(chat_title)}</b>.\n\n"
         "<i>Напиши /cancel, чтобы отменить.</i>"
     )
-    if isinstance(target, CallbackQuery) and target.message:
-        await target.message.edit_text(text, parse_mode=ParseMode.HTML)
+    if isinstance(target, CallbackQuery):
+        message = callback_message(target)
+        if message is not None:
+            await message.edit_text(text, parse_mode=ParseMode.HTML)
     elif isinstance(target, Message):
         await target.answer(text, parse_mode=ParseMode.HTML)
 
@@ -145,10 +148,12 @@ async def cb_select_chat(
 
     if state is None or state.get("step") != "select_chat":
         await callback.answer("Сессия устарела. Начни заново: /anon", show_alert=True)
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
+        message = callback_message(callback)
+        if message is not None:
+            try:
+                await message.delete()
+            except Exception:
+                pass
         return
 
     chat_id_str = (callback.data or "").removeprefix(_CB_PREFIX)
@@ -181,9 +186,10 @@ async def cb_cancel(
         return
     await store.anon_clear_state(callback.from_user.id)
     await callback.answer("Отменено.")
-    if callback.message:
+    message = callback_message(callback)
+    if message is not None:
         try:
-            await callback.message.delete()
+            await message.delete()
         except Exception:
             pass
 

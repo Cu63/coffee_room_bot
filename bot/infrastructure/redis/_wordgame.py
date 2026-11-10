@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
 
-class WordgameStoreMixin:
+
+class WordgameStoreMixin(RedisMixin):
     _WG_PENDING = "wg:pending:"
     _WG_AWAITING = "wg:awaiting:"
     _WG_GAME = "wg:game:"
