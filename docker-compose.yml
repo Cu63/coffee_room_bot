@@ -1,3 +1,11 @@
+# Ротация логов у всех сервисов: без неё json-логи Docker растут без ограничений,
+# забивают диск, и Postgres останавливается с PANIC «No space left on device».
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
@@ -17,6 +25,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging: *logging
 
   redis:
     image: redis:7-alpine
@@ -29,6 +38,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    logging: *logging
 
   flyway:
     image: flyway/flyway:11
@@ -42,6 +52,7 @@ services:
       FLYWAY_URL: jdbc:postgresql://db:5432/scorebot
       FLYWAY_USER: scorebot
       FLYWAY_PASSWORD: scorebot
+    logging: *logging
 
   openserp:
     image: karust/openserp
@@ -49,6 +60,7 @@ services:
     command: serve -a 0.0.0.0 -p 7000
     ports:
       - "127.0.0.1:7000:7000"
+    logging: *logging
 
   bot:
     build:
@@ -71,11 +83,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./configs:/app/configs:ro,z
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *logging
 
   db-backup:
     image: prodrigestivill/postgres-backup-local
@@ -95,6 +103,7 @@ services:
       HEALTHCHECK_PORT: 8080
     volumes:
       - /var/backups/scorebot:/backups
+    logging: *logging
 
   # Копия бэкапов вне сервера: если диск сервера умрёт, локальные бэкапы умрут вместе с ним.
   # Включается профилем: COMPOSE_PROFILES=offsite и BACKUP_REMOTE в .env, настройки rclone —
@@ -116,6 +125,7 @@ services:
     volumes:
       - /var/backups/scorebot:/backups:ro
       - ./rclone:/config/rclone:ro
+    logging: *logging
 
 volumes:
   pgdata:

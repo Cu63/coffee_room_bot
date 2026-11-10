@@ -82,6 +82,24 @@ Docker Compose запустит:
 Копирование идёт через `rclone copy`: удалённые на сервере старые бэкапы в хранилище остаются,
 срок хранения задайте правилами самого хранилища.
 
+### Логи и место на диске
+
+Docker пишет логи контейнеров в json-файлы, и без ограничения они растут, пока не кончится место.
+На полном диске Postgres останавливается с `PANIC: … No space left on device`, и бот становится
+`unhealthy`. Поэтому у каждого сервиса в `docker-compose.yml` включена ротация (`x-logging`:
+три файла по 10 МБ на контейнер); новому сервису тоже добавьте `logging: *logging`.
+
+Журнал systemd на сервере ограничьте отдельно:
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=200M\n' | sudo tee /etc/systemd/journald.conf.d/size.conf
+sudo systemctl restart systemd-journald
+```
+
+Свободное место — `df -h /`, сколько занимает Docker — `docker system df`. Кэш сборки копится
+с каждым деплоем, `docker builder prune` его удаляет.
+
 ### Полезные команды
 
 ```bash
