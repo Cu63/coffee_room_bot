@@ -1,6 +1,8 @@
 """Smoke-тесты: роутеры регистрируются, тексты из кода есть в messages.yaml."""
 
+import ast
 import re
+import string
 from pathlib import Path
 
 from aiogram import Dispatcher
@@ -40,3 +42,39 @@ def test_message_keys_used_in_code_exist():
             used.setdefault(key, str(path.relative_to(BOT_DIR.parent)))
     missing = {key: where for key, where in used.items() if key not in messages}
     assert not missing, f"Ключи из кода отсутствуют в configs/messages.yaml: {missing}"
+
+
+def _format_calls(tree: ast.AST):
+    """Вызовы вида <...>["key"].format(...): ключ и имена аргументов (None — есть *args/**kwargs)."""
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "format"
+            and isinstance(node.func.value, ast.Subscript)
+            and isinstance(node.func.value.slice, ast.Constant)
+            and isinstance(node.func.value.slice.value, str)
+        ):
+            continue
+        target = node.func.value.value
+        name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
+        if name not in ("_t", "t", "templates"):
+            continue
+        dynamic = bool(node.args) or any(kw.arg is None for kw in node.keywords)
+        yield node.func.value.slice.value, None if dynamic else {kw.arg for kw in node.keywords}, node.lineno
+
+
+def test_message_placeholders_are_passed():
+    # Плейсхолдер шаблона, который код не передаёт, — KeyError в момент, когда текст понадобится
+    messages = load_messages()
+    missing = []
+    for path in BOT_DIR.rglob("*.py"):
+        for key, passed, line in _format_calls(ast.parse(path.read_text(encoding="utf-8"))):
+            if passed is None or key not in messages:
+                continue
+            needed = {
+                field.split(".")[0].split("[")[0] for _, field, _, _ in string.Formatter().parse(messages[key]) if field
+            }
+            if needed - passed:
+                missing.append(f"{path.relative_to(BOT_DIR.parent)}:{line} {key}: нет {sorted(needed - passed)}")
+    assert not missing, "\n".join(missing)

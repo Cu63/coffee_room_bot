@@ -26,6 +26,7 @@ async def lot_loop(bot: Bot, container) -> None:
 async def _tick(bot: Bot, container) -> None:
     from bot.domain.pluralizer import ScorePluralizer
     from bot.infrastructure.config_loader import AppConfig
+    from bot.infrastructure.message_formatter import MessageFormatter
     from bot.infrastructure.redis_store import RedisStore
     from bot.presentation.handlers.lot import finish_lot
 
@@ -33,6 +34,7 @@ async def _tick(bot: Bot, container) -> None:
         store: RedisStore = await scope.get(RedisStore)
         p: ScorePluralizer = await scope.get(ScorePluralizer)
         cfg: AppConfig = await scope.get(AppConfig)
+        formatter: MessageFormatter = await scope.get(MessageFormatter)
 
         for data in await store.lot_scan_expired():
             chat_id = data["chat_id"]
@@ -45,5 +47,6 @@ async def _tick(bot: Bot, container) -> None:
                 lot_id=lot_id,
                 store=store,
                 p=p,
+                t=formatter._t,
                 delete_delay=cfg.lot.delete_delay,
             )
