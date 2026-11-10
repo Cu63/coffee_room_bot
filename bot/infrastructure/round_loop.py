@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.infrastructure.background import loop_pass
+
 logger = logging.getLogger(__name__)
 
 _INTERVAL = 5
@@ -30,5 +32,6 @@ async def round_loop(bot: Bot, container) -> None:
         await asyncio.sleep(_INTERVAL)
         try:
             await _tick(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("round loop failed")

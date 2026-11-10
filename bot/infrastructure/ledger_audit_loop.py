@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from bot.application.interfaces.game_pot_repository import GamePot, IGamePotRepository
 from bot.application.interfaces.ledger_repository import ILedgerRepository, LedgerMismatch
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ async def ledger_audit_loop(container) -> None:
     while True:
         try:
             await run_audit(container)
+            loop_pass()
         except Exception:
             logger.exception("ledger: сверка не удалась")
         await asyncio.sleep(_INTERVAL)

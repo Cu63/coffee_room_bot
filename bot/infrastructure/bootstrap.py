@@ -150,6 +150,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
     from bot.presentation.handlers.selfban import router as selfban_router
     from bot.presentation.handlers.sixtyseven import router as sixtyseven_router
     from bot.presentation.handlers.slots import router as slots_router
+    from bot.presentation.handlers.status import router as status_router
     from bot.presentation.handlers.summary_admin import router as summary_admin_router
     from bot.presentation.handlers.tag import router as tag_router
     from bot.presentation.handlers.think import router as think_router
@@ -200,6 +201,7 @@ def register_routers(dp: Dispatcher, config: AppConfig, settings: BotSettings | 
         _include(dp, donotbuy_router)
     _include(dp, selfban_router)
     _include(dp, summary_admin_router)
+    _include(dp, status_router)
     _include(dp, tracker_router)
     _include(dp, anon_router)
     _include(dp, daily_router)

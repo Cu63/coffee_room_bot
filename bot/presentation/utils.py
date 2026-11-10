@@ -15,6 +15,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, LinkPreviewOptions, Message
 
+from bot.infrastructure.background import loop_pass
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.html import sanitize_html, split_html
 
@@ -115,6 +116,7 @@ async def delete_loop(bot: Bot, redis: aioredis.Redis) -> None:
             else:
                 # Нет созревших элементов — ждём секунду
                 await asyncio.sleep(1.0)
+            loop_pass()
         except Exception:
             logger.exception("delete_loop: необработанная ошибка")
             await asyncio.sleep(5.0)

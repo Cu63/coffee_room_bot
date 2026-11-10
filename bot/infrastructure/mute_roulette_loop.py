@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.infrastructure.background import loop_pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,5 +26,6 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
                 for chat_id, roulette_id, finished in await store.mute_roulette_pop_expired():
                     logger.info("Auto-finishing mutegiveaway %s in chat %d", roulette_id, chat_id)
                     await _finish_mute_roulette(bot, chat_id, finished, mute_service)
+            loop_pass()
         except Exception:
             logger.exception("Mute roulette loop failed")

@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.infrastructure.background import loop_pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,5 +33,6 @@ async def unmute_loop(container, bot: Bot, interval_seconds: int) -> None:
         await asyncio.sleep(interval_seconds)
         try:
             await _tick(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("Unmute task failed")

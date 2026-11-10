@@ -9,6 +9,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.domain.ledger import LedgerKind
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ async def wordgame_loop(bot: Bot, container) -> None:
                             pass
                         except Exception:
                             logger.exception("wordgame_loop: failed to edit message")
+            loop_pass()
 
         except Exception:
             logger.exception("wordgame_loop: unexpected error")

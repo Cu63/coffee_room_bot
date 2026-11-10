@@ -41,6 +41,7 @@ class BotSettings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     log_chat_id: int = 0  # Telegram chat ID для отправки логов (0 = отключено)
     log_level: str = "ERROR"  # уровень логов для Telegram: ERROR, WARNING, INFO
+    bot_version: str = ""  # коммит, из которого собран образ: BOT_VERSION задаёт Dockerfile, показывает /status
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

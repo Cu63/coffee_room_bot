@@ -11,6 +11,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from bot.domain.tz import TZ_MSK
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,7 @@ async def daily_summary_loop(bot: Bot, container) -> None:
 
         try:
             await _run_once(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("daily_summary: unexpected error in _run_once")
 

@@ -9,6 +9,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
 from bot.domain.ledger import LedgerKind
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ async def ttt_cleanup_loop(container, bot: Bot) -> None:
                     await _settle_expired(container, bot, data)
                 except Exception:
                     logger.exception("TTT cleanup: failed to settle game %s", data.get("game_id"))
+            loop_pass()
         except Exception:
             logger.exception("TTT cleanup loop failed")
 

@@ -425,3 +425,15 @@ genai_system_prompt: |
   Ты — художник. На ЛЮБОЙ запрос пользователя вызывай функцию text2image
   и рисуй картинку по его описанию. Не задавай уточняющих вопросов и не
   отвечай текстом — результатом должна быть только картинка.
+
+# /status — состояние бота для админов бота
+status_header: "🩺 <b>Состояние бота</b>\nВерсия: <code>{version}</code> · работает {uptime}"
+status_version_unknown: "неизвестна"
+status_db_ok: "{name}: ✅ {ms} мс"
+status_db_down: "{name}: ❌ не отвечает ({error})"
+status_loops_header: "<b>Фоновые задачи</b>"
+status_no_loops: "Фоновые задачи не запущены."
+status_loop_pass: "✅ {name} — {ago} назад"
+status_loop_no_pass: "⏳ {name} — удачных проходов ещё не было"
+status_loop_restarts: ", перезапусков: {count}"
+status_loop_error: "    ⚠️ ошибка {ago} назад: {error}"
