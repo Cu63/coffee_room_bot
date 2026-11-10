@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
+
 _BURST_WINDOW = "burst:win:"
 _BURST_COOLDOWN = "burst:cd:"
 _SPARK_ACTIVE = "spark:act:"
@@ -15,7 +17,7 @@ _CHAIN_LAST = "chain:last:"
 _CHAIN_COOLDOWN = "chain:cd:"
 
 
-class BonusStoreMixin:
+class BonusStoreMixin(RedisMixin):
     # ── Burst ──────────────────────────────────────────────
 
     async def burst_cooldown_active(self, user_id: int, chat_id: int) -> bool:

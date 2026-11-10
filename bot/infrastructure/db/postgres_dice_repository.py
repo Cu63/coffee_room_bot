@@ -24,6 +24,8 @@ class PostgresDiceRepository(IDiceRepository):
             game.ends_at,
             game.created_by,
         )
+        if row is None:
+            raise RuntimeError("INSERT в dice_games не вернул строку")
         game.id = row["id"]
         game.created_at = row["created_at"]
         return game

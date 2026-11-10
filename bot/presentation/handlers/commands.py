@@ -27,7 +27,7 @@ from bot.domain.ledger import LedgerEntry
 from bot.domain.tz import to_msk
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
+from bot.presentation.utils import NO_PREVIEW, callback_message, reply_and_delete, safe_callback_answer
 
 router = Router(name="commands")
 
@@ -350,7 +350,7 @@ async def cb_history(
     if callback.data == "hist:noop":
         await safe_callback_answer(callback)
         return
-    parts = callback.data.split(":")
+    parts = (callback.data or "").split(":")
     if len(parts) != 4:
         await safe_callback_answer(callback)
         return
@@ -369,12 +369,12 @@ async def cb_history(
         return
     text = formatter.history(pages[page], config.history.retention_days)
     kb = _history_kb(page, len(pages), chat_id, uid)
-    try:
-        await callback.message.edit_text(
-            text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW
-        )
-    except Exception:
-        pass
+    message = callback_message(callback)
+    if message is not None:
+        try:
+            await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW)
+        except Exception:
+            pass
     await safe_callback_answer(callback)
 
 
@@ -507,7 +507,7 @@ async def cb_uhistory(
         await safe_callback_answer(callback)
         return
 
-    parts = callback.data.split(":")
+    parts = (callback.data or "").split(":")
     if len(parts) != 5:
         await safe_callback_answer(callback)
         return
@@ -540,15 +540,12 @@ async def cb_uhistory(
     text = f"{title}\n<blockquote expandable>{body}</blockquote>"
 
     kb = _uhistory_kb(page, len(pages), chat_id, uid, target_id)
-    try:
-        await callback.message.edit_text(
-            text,
-            parse_mode=ParseMode.HTML,
-            reply_markup=kb,
-            link_preview_options=NO_PREVIEW,
-        )
-    except Exception:
-        pass
+    message = callback_message(callback)
+    if message is not None:
+        try:
+            await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW)
+        except Exception:
+            pass
     await safe_callback_answer(callback)
 
 

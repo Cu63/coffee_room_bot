@@ -13,7 +13,7 @@ from dishka.integrations.aiogram import FromDishka, inject
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.presentation.handlers.help_renderer import HelpRenderer
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, safe_callback_answer
+from bot.presentation.utils import NO_PREVIEW, callback_message, reply_and_delete, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 router = Router(name="help")
@@ -50,7 +50,7 @@ async def cb_help(
     config: FromDishka[AppConfig],
     renderer: FromDishka[HelpRenderer],
 ) -> None:
-    parts = callback.data.split(":")
+    parts = (callback.data or "").split(":")
     if len(parts) != 3:
         await safe_callback_answer(callback)
         return
@@ -78,11 +78,11 @@ async def cb_help(
         await safe_callback_answer(callback)
         return
 
-    try:
-        await callback.message.edit_text(
-            text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW
-        )
-    except Exception:
-        pass
+    message = callback_message(callback)
+    if message is not None:
+        try:
+            await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb, link_preview_options=NO_PREVIEW)
+        except Exception:
+            pass
 
     await safe_callback_answer(callback)

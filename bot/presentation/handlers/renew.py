@@ -28,7 +28,7 @@ async def cmd_renew(
     config: FromDishka[AppConfig],
 ) -> None:
     """Сброс лимитов слотов и блекджека за {cost} кирчиков. До {daily_limit} раз в сутки."""
-    if message.from_user is None:
+    if message.from_user is None or message.bot is None:
         return
 
     rc = config.renew

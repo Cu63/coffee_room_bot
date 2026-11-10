@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -48,7 +49,7 @@ class ScoreEvent:
 class DailyLimits:
     user_id: int
     chat_id: int
-    date: datetime
+    date: dt.date
     reactions_given: int = 0
     score_received: int = 0
 

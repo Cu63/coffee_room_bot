@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 import asyncpg
 
@@ -32,7 +32,8 @@ class PostgresTransactionManager(ITransactionManager):
         if self._conn is None:
             async with self._opening:
                 if self._conn is None:
-                    conn = await self._pool.acquire()
+                    # PoolConnectionProxy проксирует все методы Connection
+                    conn = cast(asyncpg.Connection, await self._pool.acquire())
                     try:
                         tx = conn.transaction()
                         await tx.start()

@@ -60,7 +60,7 @@ class AutoReactMiddleware(BaseMiddleware):
             await message.bot.set_message_reaction(
                 chat_id=message.chat.id,
                 message_id=message.message_id,
-                reaction=[ReactionTypeEmoji(type="emoji", emoji=emoji)],
+                reaction=[ReactionTypeEmoji(emoji=emoji)],
             )
         except Exception as e:
             logger.debug("auto_react: failed to set reaction: %s", e)

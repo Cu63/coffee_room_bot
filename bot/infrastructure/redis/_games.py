@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 from redis.exceptions import WatchError
 
+from bot.infrastructure.redis._base import RedisMixin
+
 # Записать, только если ключ всё ещё содержит прочитанный снимок
 _SAVE_IF_UNCHANGED = """
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
@@ -47,7 +49,7 @@ class GameSnapshot:
     data: dict
 
 
-class GameStoreMixin:
+class GameStoreMixin(RedisMixin):
     async def game_create(self, key: str, data: dict, ttl: int) -> GameSnapshot | None:
         """Новая игра; None — ключ уже занят."""
         raw = json.dumps(data)

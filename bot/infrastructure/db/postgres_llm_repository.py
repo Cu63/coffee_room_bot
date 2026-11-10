@@ -8,7 +8,7 @@ class PostgresLlmRepository(ILlmRepository):
         self._conn = conn
 
     async def count_today(self, user_id: int, commands: tuple[str, ...]) -> int:
-        return await self._conn.fetchval(
+        count = await self._conn.fetchval(
             """
             SELECT COUNT(*) FROM llm_requests
             WHERE user_id = $1 AND command = ANY($2) AND created_at >= CURRENT_DATE
@@ -16,6 +16,7 @@ class PostgresLlmRepository(ILlmRepository):
             user_id,
             list(commands),
         )
+        return count or 0
 
     async def log_request(
         self,
@@ -45,7 +46,7 @@ class PostgresLlmRepository(ILlmRepository):
         commands: tuple[str, ...],
     ) -> int:
         """Сумма input_tokens пользователя за сегодня по указанным командам."""
-        return await self._conn.fetchval(
+        total = await self._conn.fetchval(
             """
             SELECT COALESCE(SUM(input_tokens), 0) FROM llm_requests
             WHERE user_id = $1
@@ -55,3 +56,4 @@ class PostgresLlmRepository(ILlmRepository):
             user_id,
             list(commands),
         )
+        return total or 0

@@ -69,7 +69,8 @@ class PostgresLedgerRepository(ILedgerRepository):
         ]
 
     async def count_unknown_since(self, since: datetime) -> int:
-        return await self._conn.fetchval(
+        count = await self._conn.fetchval(
             "SELECT count(*) FROM ledger WHERE kind = 'unknown' AND created_at >= $1",
             since,
         )
+        return count or 0

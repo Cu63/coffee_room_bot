@@ -115,7 +115,7 @@ class SearchEngine:
             tasks = [fetch_page_text(url) for _, url in fetchable]
             texts = await asyncio.gather(*tasks, return_exceptions=True)
             for (idx, _url), text in zip(fetchable, texts):
-                if isinstance(text, Exception):
+                if isinstance(text, BaseException):
                     logger.warning("Failed to fetch %s: %s", _url, text)
                     continue
                 if text and len(text.strip()) >= 100:

@@ -29,7 +29,7 @@ from bot.domain.ledger import LedgerKind
 from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
-from bot.presentation.utils import safe_callback_answer
+from bot.presentation.utils import callback_message, safe_callback_answer
 
 logger = logging.getLogger(__name__)
 router = Router(name="donotbuy")
@@ -117,12 +117,14 @@ async def cb_donotbuy_hit(
         )
 
     # Кнопка меняет цвет — обновляем только клавиатуру (текст сообщения не трогаем)
-    try:
-        await callback.message.edit_reply_markup(
-            reply_markup=_build_kb(formatter._t["donotbuy_button"], random.choice(_STYLES)),
-        )
-    except Exception:
-        pass
+    message = callback_message(callback)
+    if message is not None:
+        try:
+            await message.edit_reply_markup(
+                reply_markup=_build_kb(formatter._t["donotbuy_button"], random.choice(_STYLES)),
+            )
+        except Exception:
+            pass
 
     # Сколько списалось — видит только нажавший
     if charged > 0:

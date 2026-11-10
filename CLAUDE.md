@@ -15,11 +15,13 @@ uv run pytest tests/unit                   # unit tests
 uv run pytest tests/integration            # integration + e2e: needs TEST_DATABASE_URL and TEST_REDIS_URL, see Tests
 uv run pytest tests                        # everything in one run (integration is skipped without the TEST_* URLs)
 uv run ruff check . && uv run ruff format --check .   # lint, exactly as CI runs it
+uv run pyright                             # type check of bot/, as CI runs it
+uv run pytest tests --cov                  # coverage; below tool.coverage.report.fail_under fails, as in CI
 docker compose up --build -d               # full stack
 just migrate                               # Flyway migrations (see Justfile)
 ```
 
-CI (`.github/workflows/ci.yml`) runs four jobs: `lint` (ruff check + ruff format --check), `test` (pytest `tests/unit`), `integration` (the whole `tests` suite in one run against Postgres 16 and Redis 7 service containers) and `docker` (builds the image, checks it runs as non-root and imports). Keep all four green: `scripts/deploy.sh` on the server deploys `master` only after they pass, then waits up to 3 minutes for the bot container to become `healthy`.
+CI (`.github/workflows/ci.yml`) runs four jobs: `lint` (ruff check + ruff format --check + pyright), `test` (pytest `tests/unit`), `integration` (the whole `tests` suite in one run against Postgres 16 and Redis 7 service containers, with coverage: below `fail_under` in `pyproject.toml` the job fails) and `docker` (builds the image, checks it runs as non-root and imports). Keep all four green: `scripts/deploy.sh` on the server deploys `master` only after they pass, then waits up to 3 minutes for the bot container to become `healthy`.
 
 ## Architecture
 
@@ -107,6 +109,7 @@ PostgreSQL 16 with Flyway migrations in `migrations/` (naming: `V001__descriptio
 
 - Python 3.12+, async throughout, uv, ruff (line length 120). Formatting-only commits go to `.git-blame-ignore-revs`.
 - Messages are sent with HTML parse mode: escape anything user-provided (names, chat titles, free text, RSS fields) with `html.escape` or `user_link()`. Forward a user's own text with `message.html_text`. Text you don't control but want to keep formatted (LLM answers) goes through `sanitize_html` / `send_html_parts` (`bot/presentation/html.py`): only Telegram tags survive, tags are balanced, and long text is split without cutting a tag.
-- Bets in game commands are validated with `check_bet()` (`bot/presentation/utils.py`).
+- Bets in game commands are validated with `check_bet()` (`bot/presentation/utils.py`): it returns the bet or the refusal text (`if isinstance(bet, str)`).
+- pyright (standard mode, `bot/` only) must stay at zero errors. aiogram types are honest about `None`: guard `message.from_user`, `message.bot`, `callback.data`; take the message of a button press with `callback_message(cb)` — for a message older than 48 hours Telegram sends an `InaccessibleMessage` that can't be edited. Guard before any state change: an early return after money or game state has moved loses it.
 - Don't silently swallow exceptions around money or game state — log them.
 - Commit messages in Russian with `fix:` / `feat:` / `chore:` / `style:` prefixes.

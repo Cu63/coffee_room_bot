@@ -64,6 +64,8 @@ async def msg_reply_guess(
     iq_service: FromDishka[IqService],
     tx: FromDishka[ITransactionManager],
 ) -> None:
+    if message.from_user is None:
+        return
     user_id = message.from_user.id
     chat_id = message.chat.id
 

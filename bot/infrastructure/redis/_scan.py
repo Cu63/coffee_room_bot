@@ -6,6 +6,8 @@ import json
 import time
 from collections.abc import AsyncIterator
 
+from bot.infrastructure.redis._base import RedisMixin
+
 # Атомарно: удалить ключ и вернуть значение, только если в нём JSON с expires_at <= now.
 # Цикл не заберёт игру по устаревшему снимку, если ход только что продлил expires_at.
 _POP_IF_EXPIRED = """
@@ -20,7 +22,7 @@ return raw
 """
 
 
-class ScanStoreMixin:
+class ScanStoreMixin(RedisMixin):
     async def _iter_pop_expired(self, pattern: str, *, skip_prefix: str | None = None) -> AsyncIterator[dict]:
         """По одной забирает просроченные игры. Ключ удаляется только вместе с выдачей данных:
         параллельный хендлер, который удаляет ключ при завершении, и цикл не обработают игру дважды.

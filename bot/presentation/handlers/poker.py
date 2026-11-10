@@ -62,7 +62,7 @@ async def cmd_poker(
     iq_service: FromDishka[IqService],
     store: FromDishka[RedisStore],
 ) -> None:
-    if message.from_user is None:
+    if message.from_user is None or message.bot is None:
         return
 
     cfg = config.poker
@@ -157,11 +157,8 @@ async def cmd_poker(
         debuffs.remove(DEBUFF_MUTE)
     debuff = random.choice(debuffs)
 
-    if backfire:
-        backfire_text = formatter._t["poker_backfire"].format(
-            actor=actor_link,
-            target=target_link,
-        )
+    backfire_text = formatter._t["poker_backfire"].format(actor=actor_link, target=target_link) if backfire else ""
+    text: str | None = None
 
     if debuff == DEBUFF_MUTE:
         success = await _apply_mute_debuff(
@@ -265,6 +262,9 @@ async def cmd_poker(
             amount=iq_loss,
             new_iq=new_iq,
         )
+
+    if text is None:  # дебафф выбран из известных выше: сюда не попасть; до кулдауна — откат не оставит его в Redis
+        raise RuntimeError(f"/poker: неизвестный дебафф {debuff}")
 
     # Устанавливаем кулдаун
     await store._r.set(cd_key, "1", ex=cfg.cooldown_hours * 3600)

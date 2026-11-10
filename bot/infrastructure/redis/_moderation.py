@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+from bot.infrastructure.redis._base import RedisMixin
 from bot.infrastructure.redis._slots import _SLOTS_ALL_DAILY, _SLOTS_LAST
 
 _OWNER_MUTE = "owner_mute:"
@@ -13,7 +14,7 @@ _UNSOUND_NAME = "unsound:name:"
 _UNSOUND_NOTICE = "unsound:notice:"
 
 
-class ModerationStoreMixin:
+class ModerationStoreMixin(RedisMixin):
     _RENEW_DAILY = "renew:daily:"
     _DONOTBUY_DAILY = "donotbuy:daily:"
     _SIXTYSEVEN_DAILY = "six7:daily:"

@@ -32,6 +32,8 @@ async def cmd_start_private(
     message: Message,
     store: FromDishka[RedisStore],
 ) -> None:
+    if message.from_user is None:
+        return
     user_id = message.from_user.id
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:
@@ -65,6 +67,8 @@ async def msg_private_word(
     config: FromDishka[AppConfig],
     pluralizer: FromDishka[ScorePluralizer],
 ) -> None:
+    if message.from_user is None:
+        return
     user_id = message.from_user.id
     game_id = await store.wg_awaiting_get(user_id)
     if game_id is None:

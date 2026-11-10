@@ -41,6 +41,13 @@ uv run pytest tests/integration/   # интеграционные и e2e: нас
 uv run pytest tests/               # всё одним прогоном (интеграционные без TEST_* пропускаются)
 ```
 
+Как в CI проверяются типы и покрытие:
+
+```bash
+uv run pyright                     # типы кода бота (tool.pyright в pyproject.toml), должно быть 0 ошибок
+uv run pytest tests --cov          # покрытие; ниже fail_under из pyproject.toml — ошибка, как в CI
+```
+
 Интеграционные тесты берут адреса из `TEST_DATABASE_URL` и `TEST_REDIS_URL`, без них они пропускаются.
 Перед каждым тестом все таблицы очищаются, а Redis — `FLUSHDB`, поэтому нужны отдельная БД и отдельный
 номер Redis. Миграции применяются автоматически. Например:

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 
+from bot.infrastructure.redis._base import RedisMixin
 
-class TrackerStoreMixin:
+
+class TrackerStoreMixin(RedisMixin):
     # ── Анонимные сообщения ───────────────────────────────
 
     async def anon_register_chat(self, chat_id: int, title: str) -> None:

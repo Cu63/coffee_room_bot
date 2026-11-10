@@ -51,7 +51,13 @@ from bot.infrastructure.config_loader import AppConfig
 from bot.infrastructure.message_formatter import MessageFormatter, user_link
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.errors import AbortUpdate
-from bot.presentation.utils import NO_PREVIEW, reply_and_delete, schedule_delete, schedule_delete_id
+from bot.presentation.utils import (
+    NO_PREVIEW,
+    callback_message,
+    reply_and_delete,
+    schedule_delete,
+    schedule_delete_id,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="lot")
@@ -254,8 +260,10 @@ async def cb_lot_bid(
     user_repo: FromDishka[IUserRepository],
     config: FromDishka[AppConfig],
 ) -> None:
-    parts = cb.data.split(":")
-    if len(parts) < 4:
+    parts = (cb.data or "").split(":")
+    message = callback_message(cb)
+    bot = cb.bot
+    if len(parts) < 4 or message is None or bot is None:
         await cb.answer()
         return
 
@@ -266,7 +274,7 @@ async def cb_lot_bid(
         await cb.answer()
         return
 
-    chat_id = cb.message.chat.id
+    chat_id = message.chat.id
     user_id = cb.from_user.id
 
     # ── Mutex: один ход за раз ───────────────────────────────────────────
@@ -320,7 +328,7 @@ async def cb_lot_bid(
             cost=charge,
             kind=LedgerKind.STAKE,
             ref=f"lot:{lot_id}",
-            bot_id=cb.bot.id,
+            bot_id=bot.id,
         )
         if not result.success:
             sw = p.pluralize(charge)
@@ -334,10 +342,10 @@ async def cb_lot_bid(
         if prev_leader_id and not is_self_raise:
             ref = f"lot:{lot_id}"
             await score_repo.add_delta(
-                prev_leader_id, chat_id, prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=cb.bot.id
+                prev_leader_id, chat_id, prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=bot.id
             )
             await score_repo.add_delta(
-                cb.bot.id, chat_id, -prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=prev_leader_id
+                bot.id, chat_id, -prev_price, kind=LedgerKind.REFUND, ref=ref, counterparty_id=prev_leader_id
             )
 
         display = user_link(
@@ -363,7 +371,7 @@ async def cb_lot_bid(
         # Обновляем сообщение
         new_text = _lot_text(data, p)
         try:
-            await cb.message.edit_text(
+            await message.edit_text(
                 new_text,
                 parse_mode=ParseMode.HTML,
                 link_preview_options=NO_PREVIEW,
