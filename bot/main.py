@@ -121,7 +121,7 @@ async def main() -> None:
 
     # ── Фоновые задачи ───────────────────────────────────────────
     from bot.infrastructure.anagram_loop import anagram_auto_loop, anagram_expire_loop
-    from bot.infrastructure.background import BackgroundTasks
+    from bot.infrastructure.background import BackgroundTasks, LoopRegistry
     from bot.infrastructure.bj_cleanup_loop import bj_cleanup_loop
     from bot.infrastructure.chatmode_loop import chatmode_loop
     from bot.infrastructure.cleanup_loop import cleanup_loop
@@ -142,7 +142,7 @@ async def main() -> None:
     from bot.presentation.utils import delete_loop
 
     sys_cfg = config.system
-    tasks = BackgroundTasks()
+    tasks = BackgroundTasks(await container.get(LoopRegistry))
     tasks.start("cleanup", lambda: cleanup_loop(container, sys_cfg.cleanup_interval_hours))
     tasks.start("unmute", lambda: unmute_loop(container, bot, sys_cfg.unmute_check_interval_seconds))
     tasks.start("giveaway", lambda: giveaway_loop(bot, container))

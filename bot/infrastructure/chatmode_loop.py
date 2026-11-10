@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.infrastructure.background import loop_pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,5 +29,6 @@ async def chatmode_loop(bot: Bot, container) -> None:
                         entry.mode,
                     )
                     await service.deactivate(bot, entry)
+            loop_pass()
         except Exception:
             logger.exception("chatmode_loop: error")

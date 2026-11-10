@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from bot.infrastructure.background import loop_pass
+
 if TYPE_CHECKING:
     import asyncpg
     import redis.asyncio as aioredis
@@ -33,6 +35,7 @@ async def heartbeat_loop(pool: asyncpg.Pool, redis: aioredis.Redis, path: Path =
             await pool.fetchval("SELECT 1")
             await redis.ping()
             path.touch()
+            loop_pass()
         except Exception:
             logger.warning("heartbeat: Postgres или Redis не отвечает", exc_info=True)
         await asyncio.sleep(INTERVAL)

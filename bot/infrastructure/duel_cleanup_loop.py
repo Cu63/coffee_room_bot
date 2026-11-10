@@ -9,6 +9,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
 from bot.domain.ledger import LedgerKind
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def duel_cleanup_loop(container, bot: Bot) -> None:
                     await _refund_expired(container, bot, data)
                 except Exception:
                     logger.exception("Duel cleanup: failed to refund invite %s", data.get("invite_id"))
+            loop_pass()
         except Exception:
             logger.exception("Duel cleanup loop failed")
 

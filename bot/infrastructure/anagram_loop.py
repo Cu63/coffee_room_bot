@@ -16,6 +16,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.domain.ledger import LedgerKind
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ async def anagram_expire_loop(bot: Bot, container) -> None:
         await asyncio.sleep(10)
         try:
             await _expire_tick(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("anagram_expire_loop: неожиданная ошибка")
 
@@ -38,6 +40,7 @@ async def anagram_auto_loop(bot: Bot, container) -> None:
         await asyncio.sleep(60)
         try:
             await _auto_tick(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("anagram_auto_loop: неожиданная ошибка")
 

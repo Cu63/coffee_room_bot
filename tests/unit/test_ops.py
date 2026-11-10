@@ -57,3 +57,11 @@ async def test_heartbeat_beats_only_while_dependencies_answer(tmp_path, db_ok):
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     assert beat.exists() is db_ok
+
+
+def test_version_comes_from_the_image(monkeypatch):
+    # Dockerfile кладёт коммит в BOT_VERSION, /status показывает его
+    from bot.infrastructure.config_loader import BotSettings
+
+    monkeypatch.setenv("BOT_VERSION", "82a3fab")
+    assert BotSettings(_env_file=None).bot_version == "82a3fab"

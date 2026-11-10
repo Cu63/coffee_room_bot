@@ -51,6 +51,11 @@ COPY --from=builder /app ./
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin bot
 USER bot
 
+# Коммит, из которого собран образ: /status показывает его как версию. GIT_COMMIT передаёт deploy.sh;
+# аргумент объявлен в конце, чтобы новый коммит не сбрасывал кеш слоёв выше
+ARG GIT_COMMIT=""
+ENV BOT_VERSION=$GIT_COMMIT
+
 # Пульс обновляется раз в 30 с, пока живы цикл событий, Postgres и Redis
 # (bot/infrastructure/heartbeat.py); deploy.sh ждёт healthy после пересборки
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

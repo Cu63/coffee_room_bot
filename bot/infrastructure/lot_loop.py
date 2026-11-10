@@ -7,6 +7,8 @@ import logging
 
 from aiogram import Bot
 
+from bot.infrastructure.background import loop_pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,6 +18,7 @@ async def lot_loop(bot: Bot, container) -> None:
         await asyncio.sleep(5)
         try:
             await _tick(bot, container)
+            loop_pass()
         except Exception:
             logger.exception("lot_loop: неожиданная ошибка")
 

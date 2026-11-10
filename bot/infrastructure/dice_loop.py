@@ -11,6 +11,7 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramMigrateToChat
 
 from bot.domain.tz import TZ_MSK
+from bot.infrastructure.background import loop_pass
 from bot.presentation.utils import schedule_delete, schedule_delete_id
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ async def dice_loop(bot: Bot, container) -> None:
                     logger.exception("Failed to resolve dice game %d in chat %d", game.id, game.chat_id)
                     if _is_unreachable_chat(e):
                         await _refund_unreachable(container, game)
+            loop_pass()
         except Exception:
             logger.exception("Error in dice_loop")
 

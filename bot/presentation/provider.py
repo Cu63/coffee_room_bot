@@ -6,6 +6,7 @@ from dishka import Provider, Scope, provide
 
 from bot.domain.pluralizer import ScorePluralizer
 from bot.domain.reaction_registry import ReactionRegistry
+from bot.infrastructure.background import LoopRegistry
 from bot.infrastructure.config_loader import (
     AppConfig,
     BotSettings,
@@ -53,3 +54,8 @@ class PresentationProvider(Provider):
     @provide(scope=Scope.APP)
     def get_help_renderer(self) -> HelpRenderer:
         return HelpRenderer(load_help_config())
+
+    @provide(scope=Scope.APP)
+    def get_loop_registry(self) -> LoopRegistry:
+        """Фоновые циклы процесса: их ведёт BackgroundTasks, показывает /status."""
+        return LoopRegistry()

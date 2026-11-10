@@ -150,6 +150,10 @@ wait_bot_healthy() {
     return 1
 }
 
+# Версия для /status: коммит попадает в образ build-аргументом (docker-compose.yml)
+GIT_COMMIT="$(git rev-parse --short "$TARGET")"
+export GIT_COMMIT
+
 log "rebuilding all services..."
 if docker compose up -d --build; then
     echo "$TARGET" > "$STATE_FILE"

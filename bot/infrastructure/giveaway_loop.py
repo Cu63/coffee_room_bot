@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot
 
 from bot.domain.tz import TZ_MSK
+from bot.infrastructure.background import loop_pass
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ async def giveaway_loop(bot: Bot, container) -> None:
                     result.giveaway.chat_id,
                     len(result.winners),
                 )
+            loop_pass()
         except Exception:
             logger.exception("Error in giveaway_loop")
 
@@ -102,6 +104,7 @@ async def giveaway_period_loop(bot: Bot, container) -> None:
 
                     # Обновляем next_run независимо от успеха (чтобы не зациклиться)
                     await store.giveaway_period_update_next_run(chat_id, gp_id, now + period_seconds)
+            loop_pass()
 
         except Exception:
             logger.exception("Error in giveaway_period_loop")

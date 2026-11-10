@@ -51,7 +51,10 @@ services:
       - "127.0.0.1:7000:7000"
 
   bot:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-}  # версия для /status: её задаёт deploy.sh
     restart: unless-stopped
     depends_on:
       flyway:
