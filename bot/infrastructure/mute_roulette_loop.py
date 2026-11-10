@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 async def mute_roulette_loop(container, bot: Bot) -> None:
     from bot.application.mute_service import MuteService
+    from bot.infrastructure.message_formatter import MessageFormatter
     from bot.infrastructure.redis_store import RedisStore
     from bot.presentation.handlers.giveaway import _finish_mute_roulette
 
@@ -23,9 +24,10 @@ async def mute_roulette_loop(container, bot: Bot) -> None:
             async with container() as scope:
                 store = await scope.get(RedisStore)
                 mute_service = await scope.get(MuteService)
+                t = (await scope.get(MessageFormatter))._t
                 for chat_id, roulette_id, finished in await store.mute_roulette_pop_expired():
                     logger.info("Auto-finishing mutegiveaway %s in chat %d", roulette_id, chat_id)
-                    await _finish_mute_roulette(bot, chat_id, finished, mute_service)
+                    await _finish_mute_roulette(bot, chat_id, finished, mute_service, t)
             loop_pass()
         except Exception:
             logger.exception("Mute roulette loop failed")

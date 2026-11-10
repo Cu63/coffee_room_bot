@@ -15,6 +15,7 @@ async def giveaway_loop(bot: Bot, container) -> None:
     """Каждые 60 секунд проверяет и завершает просроченные розыгрыши."""
     from bot.application.giveaway_service import GiveawayService
     from bot.domain.pluralizer import ScorePluralizer
+    from bot.infrastructure.message_formatter import MessageFormatter
     from bot.presentation.handlers.giveaway import _post_results
 
     while True:
@@ -23,6 +24,7 @@ async def giveaway_loop(bot: Bot, container) -> None:
             async with container() as scope:
                 service: GiveawayService = await scope.get(GiveawayService)
                 pluralizer: ScorePluralizer = await scope.get(ScorePluralizer)
+                formatter: MessageFormatter = await scope.get(MessageFormatter)
                 results = await service.finish_expired(datetime.now(TZ_MSK))
 
             for result in results:
@@ -32,6 +34,7 @@ async def giveaway_loop(bot: Bot, container) -> None:
                     result.winners,
                     result.participants_count,
                     pluralizer,
+                    formatter._t,
                 )
                 logger.info(
                     "Auto-finished giveaway %d in chat %d, %d winners",
@@ -48,6 +51,7 @@ async def giveaway_period_loop(bot: Bot, container) -> None:
     """Каждые 60 секунд проверяет периодические розыгрыши и запускает новые раунды."""
     from bot.application.giveaway_service import GiveawayService
     from bot.domain.pluralizer import ScorePluralizer
+    from bot.infrastructure.message_formatter import MessageFormatter
     from bot.infrastructure.redis_store import RedisStore
     from bot.presentation.handlers.giveaway import _format_end_time, _format_prizes, _join_kb
 
@@ -58,6 +62,7 @@ async def giveaway_period_loop(bot: Bot, container) -> None:
                 store: RedisStore = await scope.get(RedisStore)
                 service: GiveawayService = await scope.get(GiveawayService)
                 pluralizer: ScorePluralizer = await scope.get(ScorePluralizer)
+                t = (await scope.get(MessageFormatter))._t
 
                 now = time.time()
                 entries = await store.giveaway_period_all()
@@ -83,14 +88,11 @@ async def giveaway_period_loop(bot: Bot, container) -> None:
                             prizes=prizes,
                             ends_at=ends_at,
                         )
-                        text = (
-                            "🔁 <b>Периодический розыгрыш!</b>\n\n"
-                            f"{_format_prizes(prizes, pluralizer)}\n\n"
-                            f"⏰ Завершение: <b>{_format_end_time(ends_at)}</b>\n"
-                            f"🆔 ID: <code>{giveaway.id}</code>"
+                        text = t["giveaway_period_round"].format(
+                            prizes=_format_prizes(prizes, pluralizer), ends=_format_end_time(ends_at, t), id=giveaway.id
                         )
                         sent = await bot.send_message(
-                            chat_id, text, parse_mode="HTML", reply_markup=_join_kb(giveaway.id, 0)
+                            chat_id, text, parse_mode="HTML", reply_markup=_join_kb(giveaway.id, 0, t)
                         )
                         await service.set_message_id(giveaway.id, sent.message_id)
                         logger.info(

@@ -1,7 +1,6 @@
 """Smoke-тесты: роутеры регистрируются, тексты из кода есть в messages.yaml."""
 
 import ast
-import re
 import string
 from pathlib import Path
 
@@ -33,48 +32,72 @@ def test_routers_move_to_a_new_dispatcher():
     assert not first.sub_routers
 
 
-def test_message_keys_used_in_code_exist():
-    messages = load_messages()
-    pattern = re.compile(r"""_t\[\s*["']([A-Za-z0-9_]+)["']\s*\]""")
-    used: dict[str, str] = {}
-    for path in BOT_DIR.rglob("*.py"):
-        for key in pattern.findall(path.read_text(encoding="utf-8")):
-            used.setdefault(key, str(path.relative_to(BOT_DIR.parent)))
-    missing = {key: where for key, where in used.items() if key not in messages}
-    assert not missing, f"Ключи из кода отсутствуют в configs/messages.yaml: {missing}"
+def _template_lookups(tree: ast.AST):
+    """Обращения к шаблонам messages.yaml: (ключ, вызов .format(...) или None, строка).
 
+    Шаблоны — это <...>._t, а в функции ещё и t/templates: параметр или имя, которому присвоено <...>._t
+    (у /lot, /giveaway и других — «t = formatter._t»). Прочие t вроде переменной цикла не в счёт.
+    """
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    names_in: dict[ast.AST, set[str]] = {}
+    for func in ast.walk(tree):
+        if isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+            names = {a.arg for a in func.args.args + func.args.kwonlyargs if a.arg in ("t", "templates")}
+            for node in ast.walk(func):
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Attribute) and node.value.attr == "_t":
+                    names |= {target.id for target in node.targets if isinstance(target, ast.Name)}
+            names_in[func] = names
 
-def _format_calls(tree: ast.AST):
-    """Вызовы вида <...>["key"].format(...): ключ и имена аргументов (None — есть *args/**kwargs)."""
+    def scope_names(node: ast.AST) -> set[str]:
+        while node in parents:
+            node = parents[node]
+            if node in names_in:
+                return names_in[node]
+        return set()
+
     for node in ast.walk(tree):
         if not (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "format"
-            and isinstance(node.func.value, ast.Subscript)
-            and isinstance(node.func.value.slice, ast.Constant)
-            and isinstance(node.func.value.slice.value, str)
+            isinstance(node, ast.Subscript)
+            and isinstance(node.slice, ast.Constant)
+            and isinstance(node.slice.value, str)
         ):
             continue
-        target = node.func.value.value
-        name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
-        if name not in ("_t", "t", "templates"):
+        target = node.value
+        is_template = (isinstance(target, ast.Attribute) and target.attr == "_t") or (
+            isinstance(target, ast.Name) and target.id in scope_names(node)
+        )
+        if not is_template:
             continue
-        dynamic = bool(node.args) or any(kw.arg is None for kw in node.keywords)
-        yield node.func.value.slice.value, None if dynamic else {kw.arg for kw in node.keywords}, node.lineno
+        call = None
+        attr = parents.get(node)
+        if isinstance(attr, ast.Attribute) and attr.attr == "format" and isinstance(parents.get(attr), ast.Call):
+            call = parents[attr]
+        yield node.slice.value, call, node.lineno
+
+
+def _lookups_in_code():
+    for path in BOT_DIR.rglob("*.py"):
+        for key, call, line in _template_lookups(ast.parse(path.read_text(encoding="utf-8"))):
+            yield f"{path.relative_to(BOT_DIR.parent)}:{line}", key, call
+
+
+def test_message_keys_used_in_code_exist():
+    messages = load_messages()
+    missing = {key: where for where, key, _ in _lookups_in_code() if key not in messages}
+    assert not missing, f"Ключи из кода отсутствуют в configs/messages.yaml: {missing}"
 
 
 def test_message_placeholders_are_passed():
     # Плейсхолдер шаблона, который код не передаёт, — KeyError в момент, когда текст понадобится
     messages = load_messages()
     missing = []
-    for path in BOT_DIR.rglob("*.py"):
-        for key, passed, line in _format_calls(ast.parse(path.read_text(encoding="utf-8"))):
-            if passed is None or key not in messages:
-                continue
-            needed = {
-                field.split(".")[0].split("[")[0] for _, field, _, _ in string.Formatter().parse(messages[key]) if field
-            }
-            if needed - passed:
-                missing.append(f"{path.relative_to(BOT_DIR.parent)}:{line} {key}: нет {sorted(needed - passed)}")
+    for where, key, call in _lookups_in_code():
+        if call is None or key not in messages or call.args or any(kw.arg is None for kw in call.keywords):
+            continue  # без .format или с *args/**kwargs — статически не проверить
+        passed = {kw.arg for kw in call.keywords}
+        needed = {
+            field.split(".")[0].split("[")[0] for _, field, _, _ in string.Formatter().parse(messages[key]) if field
+        }
+        if needed - passed:
+            missing.append(f"{where} {key}: нет {sorted(needed - passed)}")
     assert not missing, "\n".join(missing)

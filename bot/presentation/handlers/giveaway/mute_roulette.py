@@ -19,6 +19,7 @@ from bot.application.mute_service import MuteService
 from bot.domain.bot_utils import is_admin, parse_duration
 from bot.domain.tz import TZ_MSK
 from bot.infrastructure.config_loader import AppConfig
+from bot.infrastructure.message_formatter import MessageFormatter
 from bot.infrastructure.redis_store import RedisStore
 from bot.presentation.handlers._admin_utils import MuteOutcome, apply_mute
 from bot.presentation.utils import callback_message, reply_and_delete, schedule_delete, schedule_delete_id
@@ -31,12 +32,12 @@ router = Router(name="giveaway_mute_roulette")
 # ─── Мут-рулетка ────────────────────────────────────────────────────────────
 
 
-def _mute_roulette_kb(chat_id: int, roulette_id: str, count: int) -> InlineKeyboardMarkup:
+def _mute_roulette_kb(chat_id: int, roulette_id: str, count: int, t: dict[str, str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"🎰 Испытать удачу ({count})",
+                    text=t["mute_roulette_button"].format(count=count),
                     callback_data=f"mutegiveaway:join:{chat_id}:{roulette_id}",
                 )
             ]
@@ -51,27 +52,23 @@ async def cmd_mute_roulette(
     bot: Bot,
     config: FromDishka[AppConfig],
     store: FromDishka[RedisStore],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
+    t = formatter._t
     if message.from_user is None or not is_admin(message.from_user, config.admin.users):
-        await reply_and_delete(message, "Только администраторы могут запускать мут-гивэвей.")
+        await reply_and_delete(message, t["mute_roulette_admins_only"])
         return
 
     args = (message.text or "").split()[1:]
     # /mutegiveaway <время_мута> <кол-во_проигравших> <время_сбора>
     # /mutegiveaway 10m 2 5m
     if len(args) < 3:
-        await reply_and_delete(
-            message,
-            "Использование: <code>/mutegiveaway &lt;мут&gt; &lt;кол-во&gt; &lt;сбор&gt;</code>\n"
-            "Пример: <code>/mutegiveaway 10m 2 5m</code>\n"
-            "= мут 10 минут, 2 проигравших, сбор участников 5 минут.",
-            parse_mode="HTML",
-        )
+        await reply_and_delete(message, t["mute_roulette_usage"], parse_mode="HTML")
         return
 
     mute_secs = parse_duration(args[0])
     if mute_secs is None or mute_secs < 60:
-        await reply_and_delete(message, "Неверное время мута (мин. 1m).")
+        await reply_and_delete(message, t["mute_roulette_bad_mute"])
         return
 
     try:
@@ -79,12 +76,12 @@ async def cmd_mute_roulette(
         if losers_count < 1:
             raise ValueError
     except ValueError:
-        await reply_and_delete(message, "Кол-во проигравших должно быть >= 1.")
+        await reply_and_delete(message, t["mute_roulette_bad_losers"])
         return
 
     collect_secs = parse_duration(args[2])
     if collect_secs is None or collect_secs < 30:
-        await reply_and_delete(message, "Время сбора минимум 30 секунд.")
+        await reply_and_delete(message, t["mute_roulette_bad_collect"])
         return
 
     chat_id = message.chat.id
@@ -101,16 +98,14 @@ async def cmd_mute_roulette(
         ends_at=ends_at,
     )
 
-    collect_str = f"{collect_secs // 60}м" if collect_secs >= 60 else f"{collect_secs}с"
-    text = (
-        f"🎰 <b>Мут-гивэвей!</b>\n\n"
-        f"Время мута: <b>{mute_minutes} мин</b>\n"
-        f"Проигравших: <b>{losers_count}</b>\n"
-        f"Сбор: <b>{collect_str}</b>\n"
-        f"🆔 ID: <code>{roulette_id}</code>\n\n"
-        f"Жми кнопку, если не трус!"
+    if collect_secs >= 60:
+        collect_str = t["giveaway_unit_minutes"].format(n=collect_secs // 60)
+    else:
+        collect_str = t["giveaway_unit_seconds"].format(n=collect_secs)
+    text = t["mute_roulette_started"].format(
+        minutes=mute_minutes, losers=losers_count, collect=collect_str, id=roulette_id
     )
-    sent = await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0))
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=_mute_roulette_kb(chat_id, roulette_id, 0, t))
     await store.mute_roulette_set_message_id(chat_id, roulette_id, sent.message_id)
 
 
@@ -119,6 +114,7 @@ async def cmd_mute_roulette(
 async def cb_mute_roulette_join(
     cb: CallbackQuery,
     store: FromDishka[RedisStore],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
     if cb.data is None:
         await cb.answer()
@@ -130,16 +126,16 @@ async def cb_mute_roulette_join(
 
     joined = await store.mute_roulette_join(chat_id, roulette_id, user_id)
     if not joined:
-        await cb.answer("Ты уже участвуешь или рулетка завершена.", show_alert=False)
+        await cb.answer(formatter._t["mute_roulette_already_joined"], show_alert=False)
         return
 
     count = await store.mute_roulette_count(chat_id, roulette_id)
-    await cb.answer("Ты в игре! Удачи...", show_alert=False)
+    await cb.answer(formatter._t["mute_roulette_joined"], show_alert=False)
 
     message = callback_message(cb)
     if message is not None:
         try:
-            await message.edit_reply_markup(reply_markup=_mute_roulette_kb(chat_id, roulette_id, count))
+            await message.edit_reply_markup(reply_markup=_mute_roulette_kb(chat_id, roulette_id, count, formatter._t))
         except Exception:
             pass
 
@@ -152,9 +148,11 @@ async def cmd_mute_roulette_end(
     config: FromDishka[AppConfig],
     store: FromDishka[RedisStore],
     mute_service: FromDishka[MuteService],
+    formatter: FromDishka[MessageFormatter],
 ) -> None:
+    t = formatter._t
     if message.from_user is None or not is_admin(message.from_user, config.admin.users):
-        await reply_and_delete(message, "Только администраторы.")
+        await reply_and_delete(message, t["mute_roulette_end_admins_only"])
         return
 
     chat_id = message.chat.id
@@ -165,28 +163,30 @@ async def cmd_mute_roulette_end(
     if roulette_id is None:
         active = await store.mute_roulette_list(chat_id)
         if not active:
-            await reply_and_delete(message, "Нет активных мут-гивэвеев.")
+            await reply_and_delete(message, t["mute_roulette_none"])
             return
         if len(active) == 1:
             roulette_id = active[0][0]
         else:
-            lines = ["Несколько активных мут-гивэвеев, укажи ID:\n"]
+            lines = [t["mute_roulette_choose"]]
             for rid, data in active:
                 lines.append(
-                    f"<code>/mutegiveaway_end {rid}</code> — "
-                    f"мут {data['mute_minutes']}м, "
-                    f"проигравших {data['losers_count']}, "
-                    f"участников {len(data['participants'])}"
+                    t["mute_roulette_choose_row"].format(
+                        id=rid,
+                        minutes=data["mute_minutes"],
+                        losers=data["losers_count"],
+                        participants=len(data["participants"]),
+                    )
                 )
             await reply_and_delete(message, "\n".join(lines), parse_mode="HTML")
             return
 
     data = await store.mute_roulette_delete(chat_id, roulette_id)
     if data is None:
-        await reply_and_delete(message, "❌ Мут-гивэвей не найден или уже завершён.")
+        await reply_and_delete(message, t["mute_roulette_not_found"])
         return
 
-    await _finish_mute_roulette(bot, chat_id, data, mute_service)
+    await _finish_mute_roulette(bot, chat_id, data, mute_service, t)
 
 
 async def _finish_mute_roulette(
@@ -194,6 +194,7 @@ async def _finish_mute_roulette(
     chat_id: int,
     data: dict,
     mute_service: MuteService,
+    t: dict[str, str],
 ) -> None:
     """Завершение мут-гивэвея: выбор проигравших и применение мутов."""
     participants = data["participants"]
@@ -204,7 +205,7 @@ async def _finish_mute_roulette(
     lobby_message_id: int = data.get("message_id", 0)
 
     if not participants:
-        result_msg = await bot.send_message(chat_id, "🎰 Мут-гивэвей завершён, но никто не участвовал.")
+        result_msg = await bot.send_message(chat_id, t["mute_roulette_no_participants"])
         schedule_delete(bot, result_msg, delay=30)
         if lobby_message_id:
             schedule_delete_id(bot, chat_id, lobby_message_id, delay=30)
@@ -213,7 +214,7 @@ async def _finish_mute_roulette(
     losers = random.sample(participants, min(losers_count, len(participants)))
     until = datetime.now(TZ_MSK) + timedelta(minutes=mute_minutes)
 
-    lines = [f"🎰 <b>Мут-гивэвей завершён!</b> Участников: {len(participants)}\n"]
+    lines = [t["mute_roulette_results"].format(count=len(participants))]
     for user_id in losers:
         try:
             member = await bot.get_chat_member(chat_id, user_id)
@@ -226,13 +227,13 @@ async def _finish_mute_roulette(
             bot, mute_service, target_id=user_id, chat_id=chat_id, muted_by=creator_id, until=until
         )
         if muted.outcome == MuteOutcome.MUTED:
-            lines.append(f"🔇 {name} — мут {mute_minutes} мин")
+            lines.append(t["mute_roulette_muted"].format(name=name, minutes=mute_minutes))
         elif muted.outcome == MuteOutcome.OWNER:
-            lines.append(f"🛡️ {name} — владелец чата, мут невозможен")
+            lines.append(t["mute_roulette_owner"].format(name=name))
         elif muted.outcome == MuteOutcome.RESTRICTED_BY_ADMIN:
-            lines.append(f"🛡️ {name} — уже ограничен админом")
+            lines.append(t["mute_roulette_restricted"].format(name=name))
         else:
-            lines.append(f"⚠️ {name} — не удалось замутить")
+            lines.append(t["mute_roulette_failed"].format(name=name))
 
     result_msg = await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
     schedule_delete(bot, result_msg, delay=30)
