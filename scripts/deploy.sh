@@ -155,7 +155,8 @@ GIT_COMMIT="$(git rev-parse --short "$TARGET")"
 export GIT_COMMIT
 
 log "rebuilding all services..."
-if docker compose up -d --build; then
+# --remove-orphans: контейнеры сервисов, убранных из docker-compose.yml (Grafana, Loki, Promtail), останавливаются
+if docker compose up -d --build --remove-orphans; then
     echo "$TARGET" > "$STATE_FILE"
     rm -f "$BUILD_FAILED_FILE"
     if wait_bot_healthy; then

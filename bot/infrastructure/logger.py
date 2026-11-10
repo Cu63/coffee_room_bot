@@ -63,7 +63,7 @@ def setup_logger(config: LoggingConfig) -> None:
 def mask_url_credentials(url: str) -> str:
     """URL для лога без пароля: socks5://user:secret@host:1080 → socks5://user:***@host:1080.
 
-    Лог уходит в Loki и в Telegram-чат логов — пароль прокси туда попадать не должен.
+    Лог уходит в docker logs и в Telegram-чат логов — пароль прокси туда попадать не должен.
     """
     from urllib.parse import urlsplit, urlunsplit
 
