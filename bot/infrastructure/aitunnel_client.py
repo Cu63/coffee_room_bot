@@ -7,6 +7,8 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+_ERROR_BODY_LIMIT = 500  # сколько тела ответа с ошибкой попадёт в исключение и лог
+
 
 @dataclass(slots=True)
 class LlmResponse:
@@ -65,7 +67,16 @@ class AiTunnelClient:
 
         for attempt in range(self._MAX_RETRIES):
             async with session.post(f"{self._base_url}/chat/completions", json=payload) as resp:
-                resp.raise_for_status()
+                if resp.status >= 400:
+                    # raise_for_status() дал бы одно «400, Bad Request»: причина — в теле ответа
+                    body = (await resp.text(errors="replace"))[:_ERROR_BODY_LIMIT]
+                    raise aiohttp.ClientResponseError(
+                        resp.request_info,
+                        resp.history,
+                        status=resp.status,
+                        message=f"{resp.reason}: {body}",
+                        headers=resp.headers,
+                    )
                 data = await resp.json()
 
             choice_raw = data["choices"][0]
