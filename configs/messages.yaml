@@ -71,6 +71,13 @@ warn_issued: "⚠️ {target} получает предупреждение {cou
 warn_reason: "\nПричина: <i>{reason}</i>"
 warn_muted: "🔇 Лимит предупреждений — мут на {minutes} мин. Предупреждения сгорели."
 warn_mute_impossible: "Лимит предупреждений набран, но замутить его бот не может."
+# Запись в топик предупреждений трекера (/settopic warn): под текстом, который увидел чат
+warn_tracker_source: "Чат: {chat} · выдал {moderator}"
+warn_tracker_link: " · <a href=\"{url}\">сообщение</a>"
+warn_remove_button: "✅ Снять предупреждение"
+warn_removed: "✅ Снял {moderator}, осталось {count}/{limit}."
+warn_removed_answer: "Предупреждение снято"
+warn_remove_gone: "Этого предупреждения уже нет: его сняли или оно сгорело при муте."
 warns_none: "✅ У {target} нет предупреждений."
 warns_header: "⚠️ Предупреждения {target}: {count}/{limit} за {days} дн."
 warns_row: "{n}. {date} — {reason} (выдал {by})"

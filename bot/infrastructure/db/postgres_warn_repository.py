@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import cast
 
 import asyncpg
 
@@ -17,14 +18,24 @@ class PostgresWarnRepository(IWarnRepository):
             user_id,
         )
 
-    async def add(self, chat_id: int, user_id: int, issued_by: int, reason: str) -> None:
-        await self._conn.execute(
-            "INSERT INTO warnings (chat_id, user_id, issued_by, reason) VALUES ($1, $2, $3, $4)",
-            chat_id,
-            user_id,
-            issued_by,
-            reason,
+    async def add(self, chat_id: int, user_id: int, issued_by: int, reason: str) -> int:
+        # INSERT … RETURNING всегда возвращает строку: None здесь не бывает
+        return cast(
+            int,
+            await self._conn.fetchval(
+                "INSERT INTO warnings (chat_id, user_id, issued_by, reason) VALUES ($1, $2, $3, $4) RETURNING id",
+                chat_id,
+                user_id,
+                issued_by,
+                reason,
+            ),
         )
+
+    async def get(self, warning_id: int) -> WarnEntry | None:
+        row = await self._conn.fetchrow(
+            "SELECT id, chat_id, user_id, issued_by, reason, created_at FROM warnings WHERE id = $1", warning_id
+        )
+        return WarnEntry(**dict(row)) if row is not None else None
 
     async def active(self, chat_id: int, user_id: int, since: datetime) -> list[WarnEntry]:
         rows = await self._conn.fetch(
@@ -54,6 +65,10 @@ class PostgresWarnRepository(IWarnRepository):
             user_id,
             since,
         )
+        return deleted is not None
+
+    async def delete(self, warning_id: int) -> bool:
+        deleted = await self._conn.fetchval("DELETE FROM warnings WHERE id = $1 RETURNING id", warning_id)
         return deleted is not None
 
     async def clear(self, chat_id: int, user_id: int) -> None:

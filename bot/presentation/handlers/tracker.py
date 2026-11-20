@@ -2,7 +2,7 @@
 
 Команды:
   /settracker [tracker_chat_id]  — показать ID чата / привязать трекер
-  /settopic <тип>                — назначить топик (bug|feature|report|changelog)
+  /settopic <тип>                — назначить топик (bug|feature|report|changelog|warn)
   /bug <текст>                   — баг-репорт
   /feature <текст>               — запрос фичи
   /report <текст>                — жалоба (или reply на сообщение)
@@ -17,7 +17,7 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardMarkup, Message
 from dishka.integrations.aiogram import FromDishka, inject
 
 from bot.domain.tz import to_msk
@@ -29,12 +29,13 @@ from bot.presentation.utils import NO_PREVIEW, reply_and_delete
 logger = logging.getLogger(__name__)
 router = Router(name="tracker")
 
-_TOPIC_TYPES = {"bug", "feature", "report", "changelog"}
+_TOPIC_TYPES = {"bug", "feature", "report", "changelog", "warn"}
 _TOPIC_LABELS = {
     "bug": "🐛 Баги",
     "feature": "💡 Фичи",
     "report": "🚨 Репорты",
     "changelog": "📋 Changelog",
+    "warn": "⚠️ Предупреждения",
 }
 _TOPIC_ICONS = {
     "bug": "🐛",
@@ -69,6 +70,38 @@ async def _send_to_tracker(
     except Exception:
         logger.exception("tracker: не удалось отправить в чат %d топик %s", tracker_chat_id, thread_id)
         return None
+
+
+async def send_to_topic(
+    bot: Bot,
+    store: RedisStore,
+    source_chat_id: int,
+    topic_type: str,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> None:
+    """Запись в топик трекера, к которому привязан чат, — только если топик назначен (/settopic).
+
+    Топик не назначен — ничего не шлёт: иначе запись упала бы в общий чат трекера. Пишем о том,
+    что уже случилось, — сбой здесь (и Redis, и Telegram) ничего не откатывает и уходит в лог.
+    """
+    try:
+        tracker_chat_id = await store.tracker_get_tracker_id(source_chat_id)
+        if tracker_chat_id is None:
+            return
+        thread_id = await store.tracker_get_topic(tracker_chat_id, topic_type)
+        if thread_id is None:
+            return
+        await bot.send_message(
+            tracker_chat_id,
+            text,
+            message_thread_id=thread_id,
+            parse_mode=ParseMode.HTML,
+            link_preview_options=NO_PREVIEW,
+            reply_markup=reply_markup,
+        )
+    except Exception:
+        logger.exception("tracker: не удалось отправить «%s» из чата %d", topic_type, source_chat_id)
 
 
 async def _send_report(
@@ -199,7 +232,7 @@ async def cmd_settopic(
     config: FromDishka[AppConfig],
 ) -> None:
     """Назначить текущий топик для типа обращений.
-    Использование (внутри топика): /settopic bug|feature|report|changelog"""
+    Использование (внутри топика): /settopic bug|feature|report|changelog|warn"""
     if not await _is_admin(message, config):
         await reply_and_delete(message, "❌ Только администраторы могут настраивать топики.")
         return

@@ -11,7 +11,12 @@ class IWarnRepository(ABC):
         ...
 
     @abstractmethod
-    async def add(self, chat_id: int, user_id: int, issued_by: int, reason: str) -> None: ...
+    async def add(self, chat_id: int, user_id: int, issued_by: int, reason: str) -> int:
+        """Выдать предупреждение; возвращает его id."""
+        ...
+
+    @abstractmethod
+    async def get(self, warning_id: int) -> WarnEntry | None: ...
 
     @abstractmethod
     async def active(self, chat_id: int, user_id: int, since: datetime) -> list[WarnEntry]:
@@ -21,6 +26,11 @@ class IWarnRepository(ABC):
     @abstractmethod
     async def delete_latest(self, chat_id: int, user_id: int, since: datetime) -> bool:
         """Удалить последнее предупреждение, выданное после since. False — таких нет."""
+        ...
+
+    @abstractmethod
+    async def delete(self, warning_id: int) -> bool:
+        """Удалить предупреждение по id. False — его уже нет."""
         ...
 
     @abstractmethod
