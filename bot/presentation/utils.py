@@ -13,7 +13,7 @@ import redis.asyncio as aioredis
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, LinkPreviewOptions, Message
+from aiogram.types import CallbackQuery, Chat, InlineKeyboardMarkup, LinkPreviewOptions, Message
 
 from bot.infrastructure.background import loop_pass
 from bot.infrastructure.message_formatter import MessageFormatter
@@ -149,6 +149,17 @@ async def check_gameban(
 def callback_message(cb: CallbackQuery) -> Message | None:
     """Сообщение с кнопкой. None — его нет или оно старше 48 часов (InaccessibleMessage): править нечего."""
     return cb.message if isinstance(cb.message, Message) else None
+
+
+def message_url(chat: Chat, message_id: int) -> str | None:
+    """Ссылка на сообщение: у публичного чата — по username, у супергруппы — t.me/c/…
+
+    У обычной группы ссылок на сообщения нет — None.
+    """
+    if chat.username:
+        return f"https://t.me/{chat.username}/{message_id}"
+    raw = str(chat.id)
+    return f"https://t.me/c/{raw.removeprefix('-100')}/{message_id}" if raw.startswith("-100") else None
 
 
 async def edit_callback_message(cb: CallbackQuery, text: str, markup: InlineKeyboardMarkup | None = None) -> None:

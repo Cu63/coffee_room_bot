@@ -13,6 +13,7 @@ from bot.infrastructure.config_loader import WarnConfig
 
 @dataclass(slots=True, frozen=True)
 class WarnResult:
+    id: int  # выданного предупреждения
     count: int  # действующих предупреждений, с этим
     limit: int
 
@@ -33,9 +34,9 @@ class WarnService:
         """Выдать предупреждение. Блокировка до конца транзакции: два модератора, предупредившие
         одновременно, не насчитают лимит дважды и не замутят дважды."""
         await self._repo.lock(chat_id, user_id)
-        await self._repo.add(chat_id, user_id, issued_by, reason)
+        warning_id = await self._repo.add(chat_id, user_id, issued_by, reason)
         count = len(await self._repo.active(chat_id, user_id, self._since()))
-        return WarnResult(count=count, limit=self._cfg.limit)
+        return WarnResult(id=warning_id, count=count, limit=self._cfg.limit)
 
     async def active(self, chat_id: int, user_id: int) -> list[WarnEntry]:
         """Действующие предупреждения — сначала новые."""
@@ -47,6 +48,17 @@ class WarnService:
         if not await self._repo.delete_latest(chat_id, user_id, self._since()):
             return None
         return len(await self._repo.active(chat_id, user_id, self._since()))
+
+    async def get(self, warning_id: int) -> WarnEntry | None:
+        return await self._repo.get(warning_id)
+
+    async def remove(self, entry: WarnEntry) -> int | None:
+        """Снять это предупреждение (кнопка в трекере). Возвращает, сколько осталось действующих;
+        None — его уже нет: сняли или оно сгорело при муте."""
+        await self._repo.lock(entry.chat_id, entry.user_id)
+        if not await self._repo.delete(entry.id):
+            return None
+        return len(await self._repo.active(entry.chat_id, entry.user_id, self._since()))
 
     async def clear(self, chat_id: int, user_id: int) -> None:
         """Предупреждения «сгорают», когда за них выдан мут."""

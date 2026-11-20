@@ -267,10 +267,15 @@ class TelegramHarness:
         self._update_ids = itertools.count(1)
         self._message_ids = itertools.count(1)
 
-    async def send(self, user: User, text: str, reply_to: User | None = None) -> int:
-        """Сообщение пользователя в чат (ответом на сообщение reply_to, если задан); возвращает его message_id."""
+    async def send(self, user: User, text: str, reply_to: User | None = None, *, thread_id: int | None = None) -> int:
+        """Сообщение пользователя в чат; возвращает его message_id.
+
+        reply_to — ответом на сообщение этого участника (оно получает следующий message_id), thread_id — в топик.
+        """
         message_id = next(self._message_ids)
         data = _message_json(message_id, text, sender=user)
+        if thread_id is not None:
+            data |= {"message_thread_id": thread_id, "is_topic_message": True}
         if reply_to is not None:
             data["reply_to_message"] = _message_json(next(self._message_ids), "…", sender=reply_to)
         message = Message.model_validate(data)
@@ -278,16 +283,28 @@ class TelegramHarness:
         return message_id
 
     async def click(self, user: User, message_id: int, data: str) -> None:
-        """Нажатие инлайн-кнопки под сообщением бота."""
+        """Нажатие инлайн-кнопки под сообщением бота: Telegram присылает сообщение с его клавиатурой."""
         update_id = next(self._update_ids)
+        message = _message_json(message_id, "…")
+        markup = self._markup(message_id)
+        if markup is not None:
+            message["reply_markup"] = markup
         callback = CallbackQuery(
             id=str(update_id),
             from_user=user,
             chat_instance="test",
-            message=Message.model_validate(_message_json(message_id, "…")),
+            message=Message.model_validate(message),
             data=data,
         )
         await self.dp.feed_update(self.bot, Update(update_id=update_id, callback_query=callback))
+
+    def _markup(self, message_id: int) -> dict[str, Any] | None:
+        """Клавиатура сообщения бота сейчас: из последнего запроса, который его отправил или изменил."""
+        for method, result in reversed(self.session.log):
+            if getattr(result, "message_id", None) == message_id and hasattr(method, "reply_markup"):
+                markup = method.reply_markup
+                return None if markup is None else markup.model_dump(mode="json", exclude_none=True)
+        return None
 
     def requests(self, method_type: type[M]) -> list[M]:
         return [method for method, _ in self.session.log if isinstance(method, method_type)]
